@@ -1,7 +1,11 @@
 import { analyze } from "./application/analyze.js";
 import type { AnalysisResult } from "./domain/claim.js";
 import { sanitizeText } from "./domain/sanitize.js";
-import { PflExportError, readPflExport } from "./input/pfl-export.js";
+import {
+  PflExportError,
+  readPflExport,
+  readPflExportStdin,
+} from "./input/pfl-export.js";
 import { formatHuman } from "./output/human.js";
 import { formatJson } from "./output/json.js";
 
@@ -23,6 +27,7 @@ export class CliError extends Error {
 
 interface CliOptions {
   readonly inputPath?: string;
+  readonly stdin: boolean;
   readonly format: OutputFormat;
   readonly minConfidence: number;
   readonly help: boolean;
@@ -45,6 +50,7 @@ function optionValue(
 
 function parseArgs(args: readonly string[]): CliOptions {
   let inputPath: string | undefined;
+  let stdin = false;
   let format: OutputFormat = "human";
   let minConfidence = 0;
   let optionsDone = false;
@@ -52,7 +58,7 @@ function parseArgs(args: readonly string[]): CliOptions {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (!optionsDone && (argument === "--help" || argument === "-h"))
-      return { inputPath, format, minConfidence, help: true };
+      return { inputPath, stdin, format, minConfidence, help: true };
     if (!optionsDone && argument === "--") {
       optionsDone = true;
       continue;
@@ -92,6 +98,13 @@ function parseArgs(args: readonly string[]): CliOptions {
       minConfidence = parsed;
       continue;
     }
+    if (!optionsDone && argument === "-") {
+      if (inputPath !== undefined)
+        throw new CliError("only one input file is allowed", EXIT_USAGE);
+      inputPath = argument;
+      stdin = true;
+      continue;
+    }
     if (!optionsDone && argument.startsWith("-"))
       throw new CliError(
         `unknown option: ${argument} (see --help)`,
@@ -101,14 +114,17 @@ function parseArgs(args: readonly string[]): CliOptions {
       throw new CliError("only one input file is allowed", EXIT_USAGE);
     inputPath = argument;
   }
-  return { inputPath, format, minConfidence, help: false };
+  return { inputPath, stdin, format, minConfidence, help: false };
 }
 
 function usage(): string {
   return [
     "Usage: gatefold <input.json> [options]",
+    "       gatefold -               Read the export from standard input",
     "",
     "Analyze a pfl export and print evidence-backed claims.",
+    "Pass '-' as the input to read a pfl export piped on stdin,",
+    "e.g. `pfl report --json | gatefold -`. After '--', '-' names a file.",
     "",
     "Options:",
     "  --format <human|json>        Output format (default: human)",
@@ -142,10 +158,14 @@ export async function runCli(args: readonly string[]): Promise<string> {
   if (options.help) return usage();
   if (options.inputPath === undefined)
     throw new CliError(
-      "an input JSON file is required (see --help)",
+      "an input JSON file or '-' for stdin is required (see --help)",
       EXIT_USAGE,
     );
-  const result = analyze(await readPflExport(options.inputPath));
+  const result = analyze(
+    options.stdin
+      ? await readPflExportStdin()
+      : await readPflExport(options.inputPath),
+  );
   const filtered = filterClaims(result, options.minConfidence);
   return options.format === "json"
     ? formatJson(filtered)

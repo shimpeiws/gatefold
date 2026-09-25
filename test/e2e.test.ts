@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -17,12 +19,12 @@ interface Run {
   readonly stderr: string;
 }
 
-async function gatefold(args: string[]): Promise<Run> {
+async function gatefold(args: string[], cwd = root): Promise<Run> {
   try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,
       [bin, ...args],
-      { cwd: root },
+      { cwd },
     );
     return { code: 0, stdout, stderr };
   } catch (error) {
@@ -33,6 +35,34 @@ async function gatefold(args: string[]): Promise<Run> {
       stderr: e.stderr ?? "",
     };
   }
+}
+
+function gatefoldWithStdin(
+  args: string[],
+  input: string | Buffer,
+): Promise<Run> {
+  return new Promise((resolve) => {
+    const child = execFile(
+      process.execPath,
+      [bin, ...args],
+      { cwd: root },
+      (error, stdout, stderr) => {
+        resolve({
+          code:
+            error === null
+              ? 0
+              : typeof error.code === "number"
+                ? error.code
+                : -1,
+          stdout: stdout ?? "",
+          stderr: stderr ?? "",
+        });
+      },
+    );
+    // The child may destroy stdin early (oversized input); ignore EPIPE.
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(input);
+  });
 }
 
 const schema = JSON.parse(
@@ -177,6 +207,62 @@ describe("gatefold e2e (real process)", () => {
     expect(run.code).toBe(0);
     for (const token of ["--format", "--min-confidence", "Exit codes"]) {
       expect(run.stdout).toContain(token);
+    }
+  });
+
+  it("reads a pfl export from stdin when the input is '-'", async () => {
+    const input = readFileSync(fixture("valid-report.json"), "utf8");
+    const run = await gatefoldWithStdin(["-", "--format", "json"], input);
+    expect(run.code).toBe(0);
+    expect(run.stderr).toBe("");
+    const result = JSON.parse(run.stdout);
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+    expect(result.claims.length).toBeGreaterThan(0);
+    for (const claim of result.claims) {
+      expect(claim.provenance.sourceFile).toBe("<stdin>");
+    }
+  });
+
+  it("produces human-readable claims from stdin", async () => {
+    const input = readFileSync(fixture("valid-report.json"), "utf8");
+    const run = await gatefoldWithStdin(["-"], input);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("1. The export describes");
+    expect(run.stdout).toContain("<stdin>");
+  });
+
+  it("rejects malformed stdin with the input-error exit code", async () => {
+    const run = await gatefoldWithStdin(["-"], "{ not json");
+    expect(run.code).toBe(3);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("not valid JSON");
+  });
+
+  it("rejects oversized stdin with the input-error exit code", async () => {
+    const input = Buffer.alloc(17 * 1024 * 1024, 0x20);
+    const run = await gatefoldWithStdin(["-"], input);
+    expect(run.code).toBe(3);
+    expect(run.stderr).toContain("byte limit");
+  });
+
+  it("reads a file literally named '-' after --", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "gatefold-dash-"));
+    try {
+      writeFileSync(
+        join(tmp, "-"),
+        readFileSync(fixture("valid-report-minimal.json")),
+      );
+      const run = await gatefold(["--", "-"], tmp);
+      expect(run.code).toBe(0);
+      const json = await gatefold(["--format", "json", "--", "-"], tmp);
+      expect(json.code).toBe(0);
+      const result = JSON.parse(json.stdout);
+      for (const claim of result.claims) {
+        expect(claim.provenance.sourceFile).toBe("-");
+      }
+      expect(run.stdout).toContain("The export describes");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
     }
   });
 

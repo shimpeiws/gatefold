@@ -25,7 +25,11 @@ The initial implementation uses only the `pfl` export boundary. Future versions 
 ```text
 gatefold <input.json> --format human
 gatefold <input.json> --format json --min-confidence 0.8
+pfl report --json | gatefold -
 ```
+
+A lone `-` reads the export from standard input. After `--`, `-` names a file
+literally.
 
 `--min-confidence` keeps only claims at or above the threshold. Exit codes are stable: `0` success, `2` usage error, `3` input error, `4` internal error.
 

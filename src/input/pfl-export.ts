@@ -316,6 +316,9 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
 
 class InputTooLargeError extends Error {}
 
+/** provenance.sourceFile recorded for exports read from standard input. */
+export const STDIN_SOURCE = "<stdin>";
+
 /**
  * Reads at most MAX_FILE_BYTES bytes. Regular files are rejected by size
  * before reading; pipes and devices are read in chunks and cut off at the
@@ -343,6 +346,37 @@ async function readBounded(path: string): Promise<Buffer> {
   }
 }
 
+/** Reads standard input under the same byte ceiling as file input. */
+async function readBoundedStdin(): Promise<Buffer> {
+  const stdin = process.stdin;
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of stdin) {
+    total += (chunk as Buffer).length;
+    if (total > MAX_FILE_BYTES) {
+      stdin.destroy();
+      throw new InputTooLargeError();
+    }
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks, total);
+}
+
+function parseExportContent(
+  content: string,
+  invalidJsonMessage: string,
+  sourcePath: string,
+): PflExport {
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    throw new PflExportError("invalid-json", invalidJsonMessage);
+  }
+
+  return parsePflExport(value, sourcePath);
+}
+
 export async function readPflExport(path: string): Promise<PflExport> {
   let content: string;
   try {
@@ -359,15 +393,29 @@ export async function readPflExport(path: string): Promise<PflExport> {
     );
   }
 
-  let value: unknown;
+  return parseExportContent(
+    content,
+    `input file is not valid JSON: ${path}`,
+    path,
+  );
+}
+
+export async function readPflExportStdin(): Promise<PflExport> {
+  let content: string;
   try {
-    value = JSON.parse(content);
-  } catch {
-    throw new PflExportError(
-      "invalid-json",
-      `input file is not valid JSON: ${path}`,
-    );
+    content = (await readBoundedStdin()).toString("utf8");
+  } catch (error) {
+    if (error instanceof InputTooLargeError)
+      throw new PflExportError(
+        "invalid-shape",
+        `standard input exceeds the ${MAX_FILE_BYTES}-byte limit`,
+      );
+    throw new PflExportError("unreadable-file", "cannot read standard input");
   }
 
-  return parsePflExport(value, path);
+  return parseExportContent(
+    content,
+    "standard input is not valid JSON",
+    STDIN_SOURCE,
+  );
 }

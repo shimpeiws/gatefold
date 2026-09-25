@@ -4,14 +4,19 @@ This document defines the exact `pfl` export shape Gatefold v0.1 accepts. It is
 grounded in pfl's frozen v1.0 `--json` document contract
 (`docs/design/pfl-json-contract.md` in the pfl repository, verified against
 `pfl@1.0.0`, `src/cli/report.ts` `ReportData`, on 2026-09-25). Gatefold has no
-runtime dependency on pfl; the export file is the only boundary.
+runtime dependency on pfl; the export document is the only boundary.
 
 ## Accepted document
 
 Gatefold accepts exactly one kind of pfl document: a successful
 `pfl report --json` export — the descriptive interpretation surface (counts,
 facets, findings). Other commands (`inspect`, `list`, `show`, `graph`,
-`snapshots`, `diff`, `gc`) are not accepted in v0.1.
+`snapshots`, `diff`, `gc`) are not accepted.
+
+The document reaches Gatefold as a file argument or on standard input
+(`gatefold -`). Stdin is an additional transport for the same document, not a
+new document kind: identical byte limit, JSON validation, and contract checks
+apply, and claims record `<stdin>` as `provenance.sourceFile`.
 
 ## Envelope
 
