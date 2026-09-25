@@ -195,7 +195,7 @@ describe("gatefold e2e (real process)", () => {
     const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
     expect(pkg.name).toBe("@shimpeiws/gatefold");
     expect(pkg.bin.gatefold).toBe("./bin/gatefold.js");
-    expect(pkg.engines.node).toBe(">=20");
+    expect(pkg.engines.node).toBe(">=22.12.0");
     expect(pkg.license).toBe("MIT");
     expect(pkg.publishConfig.access).toBe("public");
     expect(pkg.scripts.prepack).toBe("npm run build");
