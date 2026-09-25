@@ -46,12 +46,20 @@ function parseArgs(args: readonly string[]): CliOptions {
   let inputPath: string | undefined;
   let format: OutputFormat = "human";
   let minConfidence = 0;
+  let optionsDone = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === "--help" || argument === "-h")
+    if (!optionsDone && (argument === "--help" || argument === "-h"))
       return { inputPath, format, minConfidence, help: true };
-    if (argument === "--format" || argument.startsWith("--format=")) {
+    if (!optionsDone && argument === "--") {
+      optionsDone = true;
+      continue;
+    }
+    if (
+      !optionsDone &&
+      (argument === "--format" || argument.startsWith("--format="))
+    ) {
       const [value, consumed] = optionValue(args, index, "--format");
       index = consumed;
       if (value !== "human" && value !== "json")
@@ -63,13 +71,19 @@ function parseArgs(args: readonly string[]): CliOptions {
       continue;
     }
     if (
-      argument === "--min-confidence" ||
-      argument.startsWith("--min-confidence=")
+      !optionsDone &&
+      (argument === "--min-confidence" ||
+        argument.startsWith("--min-confidence="))
     ) {
       const [value, consumed] = optionValue(args, index, "--min-confidence");
       index = consumed;
+      if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(value))
+        throw new CliError(
+          `--min-confidence must be a decimal number between 0 and 1 (got '${value}')`,
+          EXIT_USAGE,
+        );
       const parsed = Number(value);
-      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1)
+      if (parsed < 0 || parsed > 1)
         throw new CliError(
           `--min-confidence must be a number between 0 and 1 (got '${value}')`,
           EXIT_USAGE,
@@ -77,7 +91,7 @@ function parseArgs(args: readonly string[]): CliOptions {
       minConfidence = parsed;
       continue;
     }
-    if (argument.startsWith("-"))
+    if (!optionsDone && argument.startsWith("-"))
       throw new CliError(
         `unknown option: ${argument} (see --help)`,
         EXIT_USAGE,
@@ -99,12 +113,13 @@ function usage(): string {
     "  --format <human|json>        Output format (default: human)",
     "  --min-confidence <0..1>      Only print claims at or above this confidence (default: 0)",
     "  -h, --help                   Show this help",
+    "  --                           Stop option parsing (paths starting with '-')",
     "",
     "Exit codes: 0 success, 2 usage error, 3 input error, 4 internal error",
   ].join("\n");
 }
 
-function filterClaims(
+export function filterClaims(
   result: AnalysisResult,
   minConfidence: number,
 ): AnalysisResult {
@@ -133,12 +148,13 @@ export async function runCli(args: readonly string[]): Promise<string> {
   const filtered = filterClaims(result, options.minConfidence);
   return options.format === "json"
     ? formatJson(filtered)
-    : formatHuman(filtered);
+    : formatHuman(filtered, options.minConfidence);
 }
 
 export async function main(args: readonly string[]): Promise<number> {
   try {
     process.stdout.write(`${await runCli(args)}\n`);
+    process.exitCode = 0;
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";

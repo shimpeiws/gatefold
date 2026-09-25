@@ -3,16 +3,18 @@ import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CliError,
   EXIT_INPUT,
   EXIT_INTERNAL,
   EXIT_USAGE,
   exitCodeForError,
+  filterClaims,
   main,
   runCli,
 } from "../src/cli.js";
 import type { AnalysisResult } from "../src/domain/claim.js";
-import { CliError } from "../src/cli.js";
 import { PflExportError } from "../src/input/pfl-export.js";
+import { formatHuman } from "../src/output/human.js";
 
 const dir = new URL("fixtures/pfl-export/", import.meta.url);
 const fixture = (name: string): string => fileURLToPath(new URL(name, dir));
@@ -100,12 +102,26 @@ describe("gatefold CLI", () => {
   });
 
   it("rejects invalid --min-confidence values", async () => {
-    for (const value of ["1.5", "-0.1", "abc"]) {
+    for (const value of ["1.5", "-0.1", "abc", "0x1", "1e0", ""]) {
       await expect(
         runCli([valid, "--min-confidence", value]),
       ).rejects.toMatchObject({ exitCode: EXIT_USAGE });
     }
+    for (const arg of ["--min-confidence=", "--min-confidence= "]) {
+      await expect(runCli([valid, arg])).rejects.toMatchObject({
+        exitCode: EXIT_USAGE,
+      });
+    }
     await expect(runCli([valid, "--min-confidence"])).rejects.toMatchObject({
+      exitCode: EXIT_USAGE,
+    });
+  });
+
+  it("treats a bare -- as end of options", async () => {
+    const parsed = await parseJson(["--format", "json", "--", valid]);
+    expect(parsed.schemaVersion).toBe(1);
+    // After --, a leading-dash token is a positional, not an option.
+    await expect(runCli(["--", valid, "--bogus"])).rejects.toMatchObject({
       exitCode: EXIT_USAGE,
     });
   });
@@ -126,6 +142,17 @@ describe("gatefold CLI", () => {
     await expect(runCli([])).rejects.toMatchObject({
       exitCode: EXIT_USAGE,
     });
+  });
+
+  it("produces a schema-valid result when the filter empties the claim set", async () => {
+    const all = await parseJson([valid, "--format", "json"]);
+    const emptied = filterClaims(all, Number.MAX_SAFE_INTEGER);
+    expect(emptied.claims).toEqual([]);
+    expect(validate(emptied), JSON.stringify(validate.errors)).toBe(true);
+    expect(formatHuman(emptied, 0.5)).toBe(
+      "No claims found at or above confidence 0.50.",
+    );
+    expect(formatHuman(emptied)).toBe("No claims found.");
   });
 
   it("maps each failure class to a distinct exit code", () => {
@@ -165,5 +192,20 @@ describe("gatefold CLI main()", () => {
     expect(String(err.mock.calls[0][0])).toContain("gatefold:");
     expect(await main(["--bogus"])).toBe(EXIT_USAGE);
     expect(await main(["--help"])).toBe(0);
+  });
+
+  it("maps a missing input file to the input exit code", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    expect(await main(["/nonexistent/no-such-file.json"])).toBe(EXIT_INPUT);
+  });
+
+  it("resets process.exitCode after a success", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    await main(["--bogus"]);
+    expect(process.exitCode).toBe(EXIT_USAGE);
+    await main([valid]);
+    expect(process.exitCode).toBe(0);
   });
 });

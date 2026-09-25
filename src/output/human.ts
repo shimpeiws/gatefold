@@ -1,7 +1,10 @@
 import type { AnalysisResult } from "../domain/claim.js";
 
-export function formatHuman(result: AnalysisResult): string {
-  if (result.claims.length === 0) return "No claims found.";
+export function formatHuman(result: AnalysisResult, minConfidence = 0): string {
+  if (result.claims.length === 0)
+    return minConfidence > 0
+      ? `No claims found at or above confidence ${minConfidence.toFixed(2)}.`
+      : "No claims found.";
   return result.claims
     .map((claim, index) => {
       const evidence = claim.evidence.map((entry) => entry.pointer).join(", ");
