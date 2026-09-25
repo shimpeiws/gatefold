@@ -21,3 +21,6 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
   the input contract permits (`docs/pfl-export-contract.md`).
 - Provenance records the source file, the export's `pflVersion`, and the
   transform chain `["pfl-report-envelope", "rule:<id>"]`.
+- Strings interpolated into claim text pass through control-character escaping
+  (C0/C1/DEL become `\uXXXX`), so a hostile export cannot inject terminal
+  escape sequences into human output.

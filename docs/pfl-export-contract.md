@@ -62,12 +62,15 @@ the version range, not by guessing.
 Claim evidence `pointer` values (JSON Pointer, RFC 6901) may reference:
 
 - the whole document: `""`
-- envelope fields: `/pflVersion`, `/completeness`, `/diagnostics`, `/diagnostics/<n>`
-- report fields: `/data/runtime`, `/data/project`, `/data/stats`,
-  `/data/stats/<name>`, `/data/stats/byFacet/<facet>`, `/data/findings`,
-  `/data/findings/<n>`, `/data/interpretation`
-- `elementId` on an evidence item names an element id cited by a finding
-  (`/data/findings/<n>/elementIds/<m>`), not a path inside this repository.
+- envelope fields and their items: `/pflVersion`, `/completeness`,
+  `/diagnostics`, `/diagnostics/<n>`
+- the report payload and any subpath of it: `/data`, `/data/<field>`,
+  `/data/<field>/<subpath>` (e.g. `/data/stats/byFacet/<facet>`,
+  `/data/findings/<n>`, `/data/findings/<n>/elementIds/<m>`,
+  `/data/project/displayName`)
+
+`elementId` on an evidence item names an element id cited by a finding
+(`/data/findings/<n>/elementIds/<m>`), not a path inside this repository.
 
 ## Error behavior
 

@@ -24,9 +24,17 @@ function provenance(input: PflExport, ruleId: string): ClaimProvenance {
   };
 }
 
-/** Confidence for claims derived from stats: full unless the export is partial. */
+/** Confidence for stats-derived claims: 1 only when completeness is "complete". */
 function statsConfidence(input: PflExport): number {
   return input.completeness === "complete" ? 1 : 0.8;
+}
+
+/** Escapes control characters in external strings before they reach output. */
+function sanitizeText(text: string): string {
+  return text.replace(
+    /[\x00-\x1F\x7F-\x9F]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
 }
 
 function makeClaim(
@@ -37,7 +45,7 @@ function makeClaim(
   confidence: number,
 ): Claim {
   return {
-    claim,
+    claim: sanitizeText(claim),
     evidence,
     provenance: provenance(input, ruleId),
     confidence,
