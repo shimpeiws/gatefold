@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
+import { sanitizeText } from "../domain/sanitize.js";
 
 export type PflExportErrorCode =
   | "unreadable-file"
@@ -11,8 +12,9 @@ export type PflExportErrorCode =
 export class PflExportError extends Error {
   readonly code: PflExportErrorCode;
 
+  /** The message is sanitized: it may interpolate untrusted export text. */
   constructor(code: PflExportErrorCode, message: string) {
-    super(message);
+    super(sanitizeText(message));
     this.name = "PflExportError";
     this.code = code;
   }
@@ -71,14 +73,6 @@ const MAX_DIAGNOSTICS = 1_000;
 const MAX_FINDINGS = 10_000;
 const MAX_ELEMENT_IDS = 1_000;
 const MAX_BY_FACET_KEYS = 1_000;
-
-/** Escapes control characters before untrusted text reaches error output. */
-function sanitizeText(text: string): string {
-  return text.replace(
-    /[\x00-\x1F\x7F-\x9F]/g,
-    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
-  );
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -312,22 +306,50 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
   };
 }
 
+class InputTooLargeError extends Error {}
+
+/**
+ * Reads at most MAX_FILE_BYTES bytes. Regular files are rejected by size
+ * before reading; pipes and devices are read in chunks and cut off at the
+ * limit, so an oversized or endless input never has to fit in memory.
+ */
+async function readBounded(path: string): Promise<Buffer> {
+  const handle = await open(path, "r");
+  try {
+    const info = await handle.stat();
+    if (info.isFile() && info.size > MAX_FILE_BYTES)
+      throw new InputTooLargeError();
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for (;;) {
+      const chunk = Buffer.alloc(64 * 1024);
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (total > MAX_FILE_BYTES) throw new InputTooLargeError();
+      chunks.push(chunk.subarray(0, bytesRead));
+    }
+    return Buffer.concat(chunks, total);
+  } finally {
+    await handle.close();
+  }
+}
+
 export async function readPflExport(path: string): Promise<PflExport> {
-  const safePath = sanitizeText(path);
   let content: string;
   try {
-    content = await readFile(path, "utf8");
-  } catch {
+    content = (await readBounded(path)).toString("utf8");
+  } catch (error) {
+    if (error instanceof InputTooLargeError)
+      throw new PflExportError(
+        "invalid-shape",
+        `input file exceeds the ${MAX_FILE_BYTES}-byte limit: ${path}`,
+      );
     throw new PflExportError(
       "unreadable-file",
-      `cannot read input file: ${safePath}`,
+      `cannot read input file: ${path}`,
     );
   }
-  if (content.length > MAX_FILE_BYTES)
-    throw new PflExportError(
-      "invalid-shape",
-      `input file exceeds the ${MAX_FILE_BYTES}-byte limit: ${safePath}`,
-    );
 
   let value: unknown;
   try {
@@ -335,7 +357,7 @@ export async function readPflExport(path: string): Promise<PflExport> {
   } catch {
     throw new PflExportError(
       "invalid-json",
-      `input file is not valid JSON: ${safePath}`,
+      `input file is not valid JSON: ${path}`,
     );
   }
 

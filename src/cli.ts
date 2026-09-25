@@ -1,5 +1,6 @@
 import { analyze } from "./application/analyze.js";
 import type { AnalysisResult } from "./domain/claim.js";
+import { sanitizeText } from "./domain/sanitize.js";
 import { PflExportError, readPflExport } from "./input/pfl-export.js";
 import { formatHuman } from "./output/human.js";
 import { formatJson } from "./output/json.js";
@@ -158,11 +159,7 @@ export async function main(args: readonly string[]): Promise<number> {
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    const safe = message.replace(
-      /[\x00-\x1F\x7F-\x9F]/g,
-      (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
-    );
-    process.stderr.write(`gatefold: ${safe}\n`);
+    process.stderr.write(`gatefold: ${sanitizeText(message)}\n`);
     const code = exitCodeForError(error);
     process.exitCode = code;
     return code;

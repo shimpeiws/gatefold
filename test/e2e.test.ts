@@ -196,6 +196,9 @@ describe("gatefold e2e (real process)", () => {
     expect(pkg.name).toBe("@shimpeiws/gatefold");
     expect(pkg.bin.gatefold).toBe("./bin/gatefold.js");
     expect(pkg.engines.node).toBe(">=20");
+    expect(pkg.license).toBe("MIT");
+    expect(pkg.publishConfig.access).toBe("public");
+    expect(pkg.scripts.prepack).toBe("npm run build");
     expect(pkg.exports["."].default).toBe("./dist/src/index.js");
     const binSource = readFileSync(`${root}bin/gatefold.js`, "utf8");
     expect(binSource.startsWith("#!/usr/bin/env node")).toBe(true);
@@ -210,6 +213,7 @@ describe("gatefold e2e (real process)", () => {
     const [{ files }] = JSON.parse(stdout);
     const names = files.map((f: { path: string }) => f.path);
     for (const required of [
+      "LICENSE",
       "bin/gatefold.js",
       "dist/src/cli.js",
       "dist/src/index.js",

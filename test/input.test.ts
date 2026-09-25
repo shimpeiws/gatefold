@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -191,6 +194,48 @@ describe("readPflExport contract", () => {
       await readPflExport(badPath);
     } catch (error) {
       expect((error as Error).message).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
+    }
+  });
+
+  it("sanitizes untrusted export text in PflExportError messages", () => {
+    const cases: Record<string, unknown>[] = [
+      { ...validDoc(), command: "x\x1b[31m\u202e" },
+      { ...validDoc(), pflVersion: "2.0.0\x1b[2J" },
+      {
+        ...validDoc(),
+        ok: false,
+        data: { error: { code: "E\x07", message: "boom\u2028\x1b[0m" } },
+      },
+    ];
+    const withFacet = validDoc();
+    withFacet.data.stats.byFacet = { "evil\x1b[2J\u202e": -1 };
+    cases.push(withFacet);
+    for (const doc of cases) {
+      try {
+        parsePflExport(doc, "inline");
+        expect.unreachable("parsePflExport should have thrown");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PflExportError);
+        expect((error as Error).message).not.toMatch(
+          /[\x00-\x1F\x7F-\x9F\u2028\u202e]/,
+        );
+      }
+    }
+  });
+
+  it("measures the size limit in bytes, not UTF-16 code units", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "gatefold-"));
+    const path = join(tmp, "multibyte.json");
+    try {
+      // 6M three-byte characters: ~18 MiB on disk, but only 6M code units.
+      const doc = { ...validDoc(), pad: "\u3042".repeat(6 * 1024 * 1024) };
+      await writeFile(path, JSON.stringify(doc));
+      await expect(readPflExport(path)).rejects.toMatchObject({
+        code: "invalid-shape",
+        message: expect.stringMatching(/byte limit/),
+      });
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
     }
   });
 
