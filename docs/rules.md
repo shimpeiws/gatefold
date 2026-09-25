@@ -13,6 +13,7 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
 | `finding-reported` | Each finding the export carries: rule id, message, cited element ids. | 1.0 |
 | `diagnostic-reported` | Each `warning`/`error` diagnostic the export carries: its code, message, and path. Emitted only for warning/error diagnostics. | 1.0 |
 | `completeness-reported` | When the export is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete exports. | 1.0 |
+| `observation-status` | How to read the report's observation status: the reported `completeness`, diagnostic counts by severity, and the interpretation origin and classifier version. Emitted once per accepted report. Describes only what the export states — never a cause, quality judgement, or score. | 1.0 |
 
 ## Conventions
 

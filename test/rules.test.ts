@@ -253,6 +253,67 @@ describe("descriptive rules", () => {
     expect(byRule(result, "completeness-reported")).toHaveLength(0);
   });
 
+  it("emits one observation-status claim combining completeness, diagnostics, and origin", async () => {
+    const complete = byRule(
+      analyze(await load("valid-report.json")),
+      "observation-status",
+    );
+    expect(complete).toHaveLength(1);
+    expect(complete[0].ruleId).toBe("observation-status");
+    expect(complete[0].claim).toBe(
+      "The export reports completeness 'complete' with no diagnostics; the interpretation was produced by classifier version '1' with origin 'stored'.",
+    );
+    expect(complete[0].evidence.map((e) => e.pointer)).toEqual([
+      "/completeness",
+      "/diagnostics",
+      "/data/interpretation",
+    ]);
+    expect(complete[0].confidence).toBe(1);
+    expect(complete[0].provenance.observedSnapshotId).toBe("obs-abc123");
+  });
+
+  it("reports diagnostic severities and recomputed origin on partial reports", async () => {
+    const [claim] = byRule(
+      analyze(await load("valid-report-partial.json")),
+      "observation-status",
+    );
+    expect(claim.claim).toBe(
+      "The export reports completeness 'partial' with 1 diagnostic(s) (0 info, 1 warning, 0 error); the interpretation was produced by classifier version '1' with origin 'recomputed'.",
+    );
+  });
+
+  it("describes unknown completeness without inferring a cause", () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "report",
+      ok: true,
+      completeness: "unknown",
+      diagnostics: [
+        { severity: "error", code: "snapshot-missing", message: "gone" },
+      ],
+      data: {
+        runtime: "codex",
+        project: { id: "p", displayName: "d" },
+        stats: {
+          observed: 0,
+          effective: 0,
+          shadowed: 0,
+          conditional: 0,
+          opaque: 0,
+        },
+        findings: [],
+        interpretation: { classifierVersion: "2", origin: "stored" },
+      },
+    };
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "observation-status",
+    );
+    expect(claim.claim).toBe(
+      "The export reports completeness 'unknown' with 1 diagnostic(s) (0 info, 0 warning, 1 error); the interpretation was produced by classifier version '2' with origin 'stored'.",
+    );
+  });
+
   it("escapes control characters in external strings", () => {
     const doc = {
       pflVersion: "1.0.0",

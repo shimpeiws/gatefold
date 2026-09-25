@@ -167,4 +167,32 @@ export const RULES: readonly ClaimRule[] = [
       ];
     },
   },
+  {
+    id: "observation-status",
+    description:
+      "Explains how to read the report's observation status: completeness, diagnostic counts by severity, and interpretation origin.",
+    evaluate: (input) => {
+      const counts = { info: 0, warning: 0, error: 0 };
+      for (const diagnostic of input.diagnostics)
+        counts[diagnostic.severity] += 1;
+      const diagnosticsText =
+        input.diagnostics.length === 0
+          ? "no diagnostics"
+          : `${input.diagnostics.length} diagnostic(s) (${counts.info} info, ${counts.warning} warning, ${counts.error} error)`;
+      const interpretation = input.data.interpretation;
+      return [
+        makeClaim(
+          input,
+          "observation-status",
+          `The export reports completeness '${input.completeness}' with ${diagnosticsText}; the interpretation was produced by classifier version '${interpretation.classifierVersion}' with origin '${interpretation.origin}'.`,
+          [
+            { pointer: "/completeness" },
+            { pointer: "/diagnostics" },
+            { pointer: "/data/interpretation" },
+          ],
+          1,
+        ),
+      ];
+    },
+  },
 ];
