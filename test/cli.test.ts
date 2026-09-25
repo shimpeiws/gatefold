@@ -7,16 +7,18 @@ const input = fileURLToPath(
 );
 
 describe("gatefold CLI", () => {
-  it("returns JSON with an empty claim collection", async () => {
-    await expect(runCli([input, "--format", "json"])).resolves.toBe(
-      '{\n  "schemaVersion": 1,\n  "claims": []\n}',
-    );
+  it("returns JSON with a schema-versioned claim collection", async () => {
+    const output = await runCli([input, "--format", "json"]);
+    const parsed = JSON.parse(output);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(Array.isArray(parsed.claims)).toBe(true);
+    expect(parsed.claims.length).toBeGreaterThan(0);
   });
 
-  it("returns a human-readable empty result", async () => {
-    await expect(runCli([input, "--format=human"])).resolves.toBe(
-      "No claims found.",
-    );
+  it("returns human-readable claims", async () => {
+    const output = await runCli([input, "--format=human"]);
+    expect(output).toContain("1. The export describes a 'codex' harness");
+    expect(output).toContain("pfl observed 0 elements");
   });
 
   it("prints usage for help", async () => {
