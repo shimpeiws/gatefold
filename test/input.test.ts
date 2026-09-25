@@ -8,6 +8,8 @@ import {
   PflExportError,
   parsePflExport,
   readPflExport,
+  readPflExportStdin,
+  STDIN_SOURCE,
 } from "../src/input/pfl-export.js";
 
 const dir = new URL("fixtures/pfl-export/", import.meta.url);
@@ -217,6 +219,60 @@ describe("readPflExport contract", () => {
     })();
     expect(error?.code).toBe("invalid-shape");
     expect(error?.message).toContain("at most 10000");
+  });
+
+  it("rejects metadata strings longer than the per-field character cap", () => {
+    const over = "x".repeat(1_025);
+    for (const mutate of [
+      (doc: Record<string, any>) => {
+        doc.data.interpretation.classifierVersion = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.runtimeName = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.observedSnapshotId = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.resolvedSnapshotId = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.confidence = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.pflVersion = `1.0.${"0".repeat(2_000)}`;
+      },
+    ]) {
+      const doc = validDoc();
+      mutate(doc);
+      expect(() => parsePflExport(doc, "inline")).toThrow(/at most 1024/);
+    }
+    const atCap = validDoc();
+    atCap.data.interpretation.classifierVersion = "x".repeat(1_024);
+    atCap.data.runtimeName = "x".repeat(1_024);
+    atCap.data.observedSnapshotId = "x".repeat(1_024);
+    expect(() => parsePflExport(atCap, "inline")).not.toThrow();
+  });
+
+  it("accepts stdin chunks delivered as strings (setEncoding consumers)", async () => {
+    async function* stringChunks(): AsyncGenerator<string> {
+      const text = JSON.stringify(validDoc());
+      yield text.slice(0, 10);
+      yield text.slice(10);
+    }
+    const result = await readPflExportStdin(stringChunks());
+    expect(result.sourcePath).toBe(STDIN_SOURCE);
+    expect(result.pflVersion).toBe("1.0.0");
+  });
+
+  it("counts stdin bytes, not characters, when chunks arrive as strings", async () => {
+    async function* bigString(): AsyncGenerator<string> {
+      // 'é' is one UTF-16 code unit but two UTF-8 bytes: 9M chars ≈ 18 MB.
+      yield "é".repeat(9_000_000);
+    }
+    await expect(readPflExportStdin(bigString())).rejects.toMatchObject({
+      code: "invalid-shape",
+    });
   });
 
   it("accepts a document with a leading UTF-8 BOM", async () => {

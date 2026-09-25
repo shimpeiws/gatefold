@@ -74,6 +74,13 @@ const MAX_FINDINGS = 10_000;
 const MAX_ELEMENT_IDS = 1_000;
 const MAX_TOTAL_ELEMENT_IDS = 10_000;
 const MAX_BY_FACET_KEYS = 1_000;
+/**
+ * Character ceiling for metadata strings (`pflVersion`, `classifierVersion`,
+ * `runtimeName`, snapshot ids, `confidence`). These values are copied into the
+ * provenance of every claim, so an unbounded string would multiply a small
+ * input into output too large to buffer.
+ */
+const MAX_METADATA_CHARS = 1_024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -115,6 +122,11 @@ function optionalStringField(
   const value = record[key];
   if (value === undefined) return undefined;
   if (typeof value !== "string") throw shapeError(key, "a string");
+  if (value.length > MAX_METADATA_CHARS)
+    throw shapeError(
+      key,
+      `a string of at most ${MAX_METADATA_CHARS} characters`,
+    );
   return value;
 }
 
@@ -211,6 +223,16 @@ function parseReportData(value: unknown): PflReportData {
   const interpretation = value.interpretation;
   if (!isRecord(interpretation))
     throw shapeError("data.interpretation", "an object");
+  const classifierVersion = stringField(
+    interpretation,
+    "classifierVersion",
+    "data.interpretation.classifierVersion",
+  );
+  if (classifierVersion.length > MAX_METADATA_CHARS)
+    throw shapeError(
+      "data.interpretation.classifierVersion",
+      `a string of at most ${MAX_METADATA_CHARS} characters`,
+    );
   const origin = interpretation.origin;
   if (origin !== "stored" && origin !== "recomputed")
     throw shapeError("data.interpretation.origin", '"stored" or "recomputed"');
@@ -248,11 +270,7 @@ function parseReportData(value: unknown): PflReportData {
     },
     findings,
     interpretation: {
-      classifierVersion: stringField(
-        interpretation,
-        "classifierVersion",
-        "data.interpretation.classifierVersion",
-      ),
+      classifierVersion,
       origin,
     },
   };
@@ -282,6 +300,11 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
   const pflVersion = value.pflVersion;
   if (typeof pflVersion !== "string" || pflVersion.length === 0)
     throw shapeError("pflVersion", "a non-empty string");
+  if (pflVersion.length > MAX_METADATA_CHARS)
+    throw shapeError(
+      "pflVersion",
+      `a string of at most ${MAX_METADATA_CHARS} characters`,
+    );
   if (!isSupportedPflVersion(pflVersion))
     throw new PflExportError(
       "unsupported-version",
@@ -351,17 +374,23 @@ async function readBounded(path: string): Promise<Buffer> {
 }
 
 /** Reads standard input under the same byte ceiling as file input. */
-async function readBoundedStdin(): Promise<Buffer> {
-  const stdin = process.stdin;
+async function readBoundedStdin(
+  stream: AsyncIterable<Buffer | string> = process.stdin,
+): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let total = 0;
-  for await (const chunk of stdin) {
-    total += (chunk as Buffer).length;
+  // Chunks are strings when a consumer already called setEncoding('utf8'):
+  // re-encode so the ceiling counts bytes, not UTF-16 code units.
+  for await (const chunk of stream) {
+    const buffer =
+      typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+    total += buffer.length;
     if (total > MAX_FILE_BYTES) {
-      stdin.destroy();
+      const destroy = (stream as { destroy?: unknown }).destroy;
+      if (typeof destroy === "function") (destroy as () => void).call(stream);
       throw new InputTooLargeError();
     }
-    chunks.push(chunk as Buffer);
+    chunks.push(buffer);
   }
   return Buffer.concat(chunks, total);
 }
@@ -407,10 +436,12 @@ export async function readPflExport(path: string): Promise<PflExport> {
   );
 }
 
-export async function readPflExportStdin(): Promise<PflExport> {
+export async function readPflExportStdin(
+  stream: AsyncIterable<Buffer | string> = process.stdin,
+): Promise<PflExport> {
   let content: string;
   try {
-    content = (await readBoundedStdin()).toString("utf8");
+    content = (await readBoundedStdin(stream)).toString("utf8");
   } catch (error) {
     if (error instanceof InputTooLargeError)
       throw new PflExportError(
