@@ -234,10 +234,12 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
       "pfl export must contain an object at the top level",
     );
   const pflVersion = value.pflVersion;
-  if (typeof pflVersion !== "string" || !isSupportedPflVersion(pflVersion))
+  if (typeof pflVersion !== "string" || pflVersion.length === 0)
+    throw shapeError("pflVersion", "a non-empty string");
+  if (!isSupportedPflVersion(pflVersion))
     throw new PflExportError(
       "unsupported-version",
-      `unsupported pflVersion: ${String(pflVersion)} (supported: >=1.0.0 <2.0.0)`,
+      `unsupported pflVersion: ${pflVersion} (supported: >=1.0.0 <2.0.0)`,
     );
   if (value.command !== "report")
     throw new PflExportError(

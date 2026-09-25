@@ -83,6 +83,25 @@ describe("readPflExport contract", () => {
     ).rejects.toThrow("SNAPSHOT_STORE_FAILED");
   });
 
+  it("classifies missing/mistyped pflVersion as invalid-shape", () => {
+    for (const doc of [
+      { command: "report", ok: true },
+      { pflVersion: 1, command: "report", ok: true },
+      { pflVersion: "", command: "report", ok: true },
+    ]) {
+      const error = (() => {
+        try {
+          parsePflExport(doc, "inline");
+          return null;
+        } catch (e) {
+          return e as PflExportError;
+        }
+      })();
+      expect(error?.code).toBe("invalid-shape");
+      expect(error?.message).toContain("pflVersion");
+    }
+  });
+
   it("parsePflExport validates without file I/O", () => {
     const doc = {
       pflVersion: "1.0.0",
