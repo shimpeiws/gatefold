@@ -146,6 +146,12 @@ describe("pfl export contract fixtures", () => {
     expect(() => JSON.parse(text)).toThrow();
   });
 
+  it("empty-file.json has no JSON content", async () => {
+    const text = await readFixture("empty-file.json");
+    expect(text.trim()).toBe("");
+    expect(() => JSON.parse(text)).toThrow();
+  });
+
   it("every fixture on disk is classified by this suite", async () => {
     const { readdir } = await import("node:fs/promises");
     const onDisk = await readdir(fileURLToPath(dir));
