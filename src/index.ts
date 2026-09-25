@@ -1,4 +1,5 @@
 export { analyze } from "./application/analyze.js";
+export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
 export type {
   AnalysisResult,
   Claim,

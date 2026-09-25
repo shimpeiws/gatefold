@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "description": "Evidence-backed judgement for coding-agent harnesses",
   "type": "module",
-  "bin": { "gatefold": "./bin/gatefold.js" },
-  "engines": { "node": ">=20" },
+  "bin": {
+    "gatefold": "./bin/gatefold.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "format:check": "oxfmt --check .",
@@ -15,6 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "ajv": "^8.20.0",
     "oxfmt": "^0.14.0",
     "oxlint": "^1.0.0",
     "typescript": "^5.7.0",

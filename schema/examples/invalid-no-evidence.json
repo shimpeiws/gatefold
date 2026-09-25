@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "claim": "The export declares an MCP server.",
+      "evidence": [],
+      "provenance": {
+        "sourceFile": "export.json",
+        "transform": []
+      },
+      "confidence": 0.9
+    }
+  ]
+}
