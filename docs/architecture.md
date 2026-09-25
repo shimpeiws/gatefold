@@ -18,13 +18,13 @@ human or JSON formatter
 
 ## Module ownership
 
-`src/cli.ts` parses command-line arguments and selects the output format.
+`src/cli.ts` parses command-line arguments, applies `--min-confidence` filtering, maps failures to stable exit codes, and selects the output format.
 
-`src/input/pfl-export.ts` reads JSON and validates the top-level input shape.
+`src/input/pfl-export.ts` reads JSON and validates the full pfl export contract (`docs/pfl-export-contract.md`).
 
-`src/application/analyze.ts` owns the analysis entry point.
+`src/application/analyze.ts` owns the analysis entry point: it runs the `RULES` registry in `src/application/rules.ts` and validates the result against the claim schema before returning.
 
-`src/domain/claim.ts` defines the claim and result types.
+`src/domain/claim.ts` defines the claim and result types; `src/domain/validate.ts` enforces the committed JSON Schema invariants at the analysis boundary.
 
 `src/output/human.ts` and `src/output/json.ts` render an analysis result.
 

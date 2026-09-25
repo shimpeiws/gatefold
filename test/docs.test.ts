@@ -1,6 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 const scopePath = fileURLToPath(
   new URL("../docs/v0.1-scope.md", import.meta.url),
@@ -83,5 +85,62 @@ describe("pfl export contract document", () => {
     expect(doc).toContain(">=1.0.0 <2.0.0");
     expect(doc).toContain('"report"');
     expect(doc).toContain("ok: false");
+  });
+});
+
+describe("release documentation", () => {
+  it("release checklist enumerates every release-gate command", async () => {
+    const checklist = await readFile(
+      `${root}docs/release-checklist.md`,
+      "utf8",
+    );
+    for (const step of [
+      "pnpm install --frozen-lockfile",
+      "pnpm typecheck",
+      "pnpm lint",
+      "pnpm format:check",
+      "pnpm test --run",
+      "pnpm build",
+      "npm pack --dry-run",
+      "npm publish --dry-run",
+    ]) {
+      expect(checklist).toContain(step);
+    }
+  });
+
+  it("README links to every doc in docs/", async () => {
+    const readme = await readFile(`${root}README.md`, "utf8");
+    const docs = (await readdir(`${root}docs`)).filter((f) =>
+      f.endsWith(".md"),
+    );
+    expect(docs.length).toBeGreaterThanOrEqual(7);
+    for (const doc of docs) {
+      expect(readme, doc).toContain(`docs/${doc}`);
+    }
+  });
+
+  it("every relative markdown link in README and docs resolves", async () => {
+    for (const file of [
+      "README.md",
+      ...(await readdir(`${root}docs`)).map((f) => `docs/${f}`),
+    ]) {
+      const text = await readFile(`${root}${file}`, "utf8");
+      for (const [, target] of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+        if (/^[a-z]+:/.test(target) || target.startsWith("#")) continue;
+        const resolved = new URL(target, `file://${root}${file}`);
+        await expect(
+          access(fileURLToPath(resolved)),
+          `${file} -> ${target}`,
+        ).resolves.toBeUndefined();
+      }
+    }
+  });
+
+  it("contains no stale scaffold-era claims", async () => {
+    for (const file of ["README.md", "docs/overview.md"]) {
+      const text = await readFile(`${root}${file}`, "utf8");
+      expect(text).not.toContain("empty claim collection");
+      expect(text).not.toMatch(/scaffold/i);
+    }
   });
 });

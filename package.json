@@ -3,9 +3,24 @@
   "version": "0.1.0",
   "description": "Evidence-backed judgement for coding-agent harnesses",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
   "bin": {
     "gatefold": "./bin/gatefold.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "docs",
+    "schema",
+    "README.md"
+  ],
   "engines": {
     "node": ">=20"
   },

@@ -189,6 +189,49 @@ describe("gatefold e2e (real process)", () => {
     expect(JSON.parse(run.stdout).schemaVersion).toBe(1);
   });
 
+  it("package metadata exposes the gatefold binary and library entry", () => {
+    const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
+    expect(pkg.name).toBe("@shimpeiws/gatefold");
+    expect(pkg.bin.gatefold).toBe("./bin/gatefold.js");
+    expect(pkg.engines.node).toBe(">=20");
+    expect(pkg.exports["."].default).toBe("./dist/src/index.js");
+    const binSource = readFileSync(`${root}bin/gatefold.js`, "utf8");
+    expect(binSource.startsWith("#!/usr/bin/env node")).toBe(true);
+  });
+
+  it("npm pack --dry-run ships the CLI, dist, docs, and schema only", async () => {
+    const { stdout } = await execFileAsync(
+      "npm",
+      ["pack", "--dry-run", "--json"],
+      { cwd: root, timeout: 60_000 },
+    );
+    const [{ files }] = JSON.parse(stdout);
+    const names = files.map((f: { path: string }) => f.path);
+    for (const required of [
+      "bin/gatefold.js",
+      "dist/src/cli.js",
+      "dist/src/index.js",
+      "dist/src/index.d.ts",
+      "docs/overview.md",
+      "docs/release-checklist.md",
+      "schema/claim-result.v1.json",
+      "README.md",
+      "package.json",
+    ]) {
+      expect(names, required).toContain(required);
+    }
+    for (const forbidden of [
+      "test",
+      "node_modules",
+      "src",
+      ".letta",
+      "dist/test",
+    ]) {
+      const hits = names.filter((n: string) => n.split("/")[0] === forbidden);
+      expect(hits, forbidden).toEqual([]);
+    }
+  });
+
   it("package.json ci:all is exactly the documented clean-install gate", () => {
     const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
     const steps = (pkg.scripts["ci:all"] as string)
