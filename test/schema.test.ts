@@ -83,8 +83,12 @@ describe("claim schema validation", () => {
     expect(() => assertValidResult(result)).not.toThrow();
   });
 
-  it("validates the analyze() output against the schema", () => {
-    const result = analyze({});
+  it("validates the analyze() output against the schema", async () => {
+    const fixture = fileURLToPath(
+      new URL("test/fixtures/pfl-export/valid-report-minimal.json", root),
+    );
+    const { readPflExport } = await import("../src/input/pfl-export.js");
+    const result = analyze(await readPflExport(fixture));
     expect(validate(result)).toBe(true);
   });
 });

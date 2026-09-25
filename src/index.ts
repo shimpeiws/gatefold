@@ -6,6 +6,20 @@ export type {
   ClaimProvenance,
   EvidenceReference,
 } from "./domain/claim.js";
-export { readPflExport } from "./input/pfl-export.js";
+export {
+  isSupportedPflVersion,
+  PflExportError,
+  parsePflExport,
+  readPflExport,
+} from "./input/pfl-export.js";
+export type {
+  Completeness,
+  PflDiagnostic,
+  PflExport,
+  PflExportErrorCode,
+  PflFinding,
+  PflReportData,
+  PflReportStats,
+} from "./input/pfl-export.js";
 export { formatHuman } from "./output/human.js";
 export { formatJson } from "./output/json.js";

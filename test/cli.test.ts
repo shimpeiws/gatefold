@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli.js";
 
 const input = fileURLToPath(
-  new URL("fixtures/minimal-pfl-export.json", import.meta.url),
+  new URL("fixtures/pfl-export/valid-report-minimal.json", import.meta.url),
 );
 
 describe("gatefold CLI", () => {
