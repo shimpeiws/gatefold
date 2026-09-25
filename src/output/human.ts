@@ -14,7 +14,13 @@ export function formatHuman(result: AnalysisResult, minConfidence = 0): string {
       : "No claims found.";
   return result.claims
     .map((claim, index) => {
-      const evidence = claim.evidence.map((entry) => entry.pointer).join(", ");
+      const evidence = claim.evidence
+        .map((entry) =>
+          entry.elementId === undefined
+            ? entry.pointer
+            : `${entry.pointer} (${escapeControls(entry.elementId)})`,
+        )
+        .join(", ");
       const version = claim.provenance.exportVersion
         ? ` · export ${claim.provenance.exportVersion}`
         : "";

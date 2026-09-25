@@ -48,6 +48,14 @@ describe("gatefold CLI", () => {
     expect(output).toContain("pfl observed 0 elements");
     expect(output).toContain("confidence: 1.00");
     expect(output).toContain("evidence: /data/");
+    expect(output).toContain("provenance:");
+  });
+
+  it("human output renders cited element ids next to their pointers", async () => {
+    const output = await runCli([valid]);
+    expect(output).toContain(
+      "/data/findings/0/elementIds/0 (claude-code:user:rules/style.md)",
+    );
   });
 
   it("--min-confidence filters claims without changing their contents", async () => {

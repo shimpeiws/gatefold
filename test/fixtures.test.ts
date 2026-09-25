@@ -15,7 +15,10 @@ async function readJson(name: string): Promise<Record<string, unknown>> {
 /** Mirrors the contract's accepted range: pflVersion >=1.0.0 <2.0.0. */
 function inSupportedRange(version: unknown): boolean {
   if (typeof version !== "string") return false;
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  const match =
+    /^(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(
+      version,
+    );
   if (!match) return false;
   return Number(match[1]) === 1;
 }

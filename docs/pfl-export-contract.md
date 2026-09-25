@@ -52,7 +52,8 @@ the version range, not by guessing.
 
 - Accepted `pflVersion` range: `>=1.0.0 <2.0.0`. The document contract is frozen
   for pfl v1.x; a pfl 2.x document may change required fields, so it is rejected
-  rather than guessed at.
+  rather than guessed at. Semver build metadata (`1.2.3+build.1`) is accepted;
+  prereleases (`1.0.0-alpha`) sort below the range and are rejected.
 - The rejection of `ok: false` documents follows the pfl contract: failure
   documents carry `data.error` with a stable `code`, which Gatefold echoes in
   its error message.

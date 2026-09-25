@@ -254,7 +254,12 @@ function parseReportData(value: unknown): PflReportData {
 
 /** Accepted pflVersion range per docs/pfl-export-contract.md: >=1.0.0 <2.0.0. */
 export function isSupportedPflVersion(version: string): boolean {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  // Semver build metadata (+...) carries no precedence; prereleases are
+  // excluded because 1.0.0-alpha sorts below the supported range.
+  const match =
+    /^(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(
+      version,
+    );
   return match !== null && Number(match[1]) === 1;
 }
 

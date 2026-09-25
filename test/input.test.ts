@@ -195,10 +195,25 @@ describe("readPflExport contract", () => {
   });
 
   it("isSupportedPflVersion implements the >=1.0.0 <2.0.0 range", () => {
-    for (const v of ["1.0.0", "1.2.3", "1.99.99"]) {
+    for (const v of [
+      "1.0.0",
+      "1.2.3",
+      "1.99.99",
+      "1.0.0+build.1",
+      "1.0.0+abc-def.123",
+    ]) {
       expect(isSupportedPflVersion(v), v).toBe(true);
     }
-    for (const v of ["0.9.9", "2.0.0", "1.0.0-alpha", "1.0", "v1.0.0", ""]) {
+    for (const v of [
+      "0.9.9",
+      "2.0.0",
+      "1.0.0-alpha",
+      "1.0",
+      "v1.0.0",
+      "",
+      "1.0.0+",
+      "2.0.0+build",
+    ]) {
       expect(isSupportedPflVersion(v), v).toBe(false);
     }
   });
