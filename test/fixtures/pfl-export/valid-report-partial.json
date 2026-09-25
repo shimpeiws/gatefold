@@ -1,0 +1,29 @@
+{
+  "pflVersion": "1.2.3",
+  "command": "report",
+  "ok": true,
+  "completeness": "partial",
+  "futureField": "an unknown envelope field that must be ignored",
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "runtime-version-unverified",
+      "message": "runtime version is newer than verified",
+      "path": "~/.pfl/projects/git-0f214d60555919a5"
+    }
+  ],
+  "data": {
+    "runtime": "claude-code",
+    "project": { "id": "git-partial", "displayName": "partial-project" },
+    "stats": {
+      "observed": 5,
+      "effective": 4,
+      "shadowed": 0,
+      "conditional": 0,
+      "opaque": 1
+    },
+    "findings": [],
+    "interpretation": { "classifierVersion": "1", "origin": "recomputed" },
+    "futureDataField": { "nested": "unknown data field that must be ignored" }
+  }
+}

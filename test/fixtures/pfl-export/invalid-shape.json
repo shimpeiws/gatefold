@@ -1,0 +1,12 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "report",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "runtime": "claude-code",
+    "stats": { "observed": "many" },
+    "interpretation": { "classifierVersion": "1", "origin": "stored" }
+  }
+}

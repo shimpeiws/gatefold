@@ -1,0 +1,20 @@
+{
+  "pflVersion": "2.0.0",
+  "command": "report",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "runtime": "claude-code",
+    "project": { "id": "git-0000", "displayName": "future" },
+    "stats": {
+      "observed": 0,
+      "effective": 0,
+      "shadowed": 0,
+      "conditional": 0,
+      "opaque": 0
+    },
+    "findings": [],
+    "interpretation": { "classifierVersion": "9", "origin": "stored" }
+  }
+}

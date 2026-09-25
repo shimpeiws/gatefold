@@ -1,0 +1,51 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "report",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "runtime": "claude-code",
+    "runtimeName": "Claude Code",
+    "project": {
+      "id": "git-0f214d60555919a5",
+      "displayName": "example-project"
+    },
+    "observedSnapshotId": "obs-abc123",
+    "resolvedSnapshotId": "res-def456",
+    "confidence": "verified",
+    "stats": {
+      "observed": 12,
+      "effective": 10,
+      "shadowed": 1,
+      "conditional": 1,
+      "opaque": 0,
+      "byFacet": {
+        "instructions": 4,
+        "actions": 3,
+        "knowledge": 2,
+        "controls": 1
+      }
+    },
+    "findings": [
+      {
+        "rule": "shadowed-element",
+        "message": "element user-scope-rule is shadowed by a project-scope rule",
+        "elementIds": [
+          "claude-code:user:rules/style.md"
+        ]
+      },
+      {
+        "rule": "memory-enabled",
+        "message": "memory file CLAUDE.md is loaded",
+        "elementIds": [
+          "claude-code:project:CLAUDE.md"
+        ]
+      }
+    ],
+    "interpretation": {
+      "classifierVersion": "1",
+      "origin": "stored"
+    }
+  }
+}

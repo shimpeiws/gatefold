@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "claims": [
+    {
+      "claim": "pfl observed 3 elements: 3 effective, 0 shadowed, 0 conditional, 0 opaque.",
+      "evidence": [
+        {
+          "pointer": "/data/stats",
+          "note": "element counts reported by pfl report"
+        }
+      ],
+      "provenance": {
+        "sourceFile": "export.json",
+        "exportVersion": "1.0.0",
+        "transform": ["pfl-report-envelope", "rule:element-counts"]
+      },
+      "confidence": 1
+    }
+  ]
+}

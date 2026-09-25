@@ -1,11 +1,14 @@
+export const CLAIM_SCHEMA_VERSION = 1;
+
 export interface EvidenceReference {
-  readonly irRef: string;
-  readonly location: string;
+  readonly pointer: string;
+  readonly elementId?: string;
+  readonly note?: string;
 }
 
 export interface ClaimProvenance {
   readonly sourceFile: string;
-  readonly pflVersion?: string;
+  readonly exportVersion?: string;
   readonly transform: readonly string[];
 }
 
@@ -17,5 +20,6 @@ export interface Claim {
 }
 
 export interface AnalysisResult {
+  readonly schemaVersion: typeof CLAIM_SCHEMA_VERSION;
   readonly claims: readonly Claim[];
 }

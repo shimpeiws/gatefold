@@ -1,0 +1,23 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "report",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [
+    { "severity": "warning", "code": "missing-message" },
+    "not-an-object"
+  ],
+  "data": {
+    "runtime": "claude-code",
+    "project": { "id": "git-diag", "displayName": "diag-project" },
+    "stats": {
+      "observed": 0,
+      "effective": 0,
+      "shadowed": 0,
+      "conditional": 0,
+      "opaque": 0
+    },
+    "findings": [],
+    "interpretation": { "classifierVersion": "1", "origin": "stored" }
+  }
+}
