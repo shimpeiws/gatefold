@@ -65,6 +65,21 @@ export interface PflExport {
   readonly data: PflReportData;
 }
 
+/** Resource ceilings for untrusted exports (see docs/pfl-export-contract.md). */
+const MAX_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_DIAGNOSTICS = 1_000;
+const MAX_FINDINGS = 10_000;
+const MAX_ELEMENT_IDS = 1_000;
+const MAX_BY_FACET_KEYS = 1_000;
+
+/** Escapes control characters before untrusted text reaches error output. */
+function sanitizeText(text: string): string {
+  return text.replace(
+    /[\x00-\x1F\x7F-\x9F]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -110,6 +125,11 @@ function optionalStringField(
 
 function parseDiagnostics(value: unknown): readonly PflDiagnostic[] {
   if (!Array.isArray(value)) throw shapeError("diagnostics", "an array");
+  if (value.length > MAX_DIAGNOSTICS)
+    throw shapeError(
+      "diagnostics",
+      `an array with at most ${MAX_DIAGNOSTICS} items`,
+    );
   return value.map((item, index) => {
     const at = `diagnostics[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
@@ -139,7 +159,13 @@ function parseReportData(value: unknown): PflReportData {
   if (byFacetValue !== undefined) {
     if (!isRecord(byFacetValue))
       throw shapeError("data.stats.byFacet", "an object");
-    byFacet = {};
+    if (Object.keys(byFacetValue).length > MAX_BY_FACET_KEYS)
+      throw shapeError(
+        "data.stats.byFacet",
+        `an object with at most ${MAX_BY_FACET_KEYS} keys`,
+      );
+    // Null-prototype object: keeps keys like "__proto__" as real own keys.
+    byFacet = Object.create(null) as Record<string, number>;
     for (const [facet, count] of Object.entries(byFacetValue)) {
       if (typeof count !== "number" || !Number.isInteger(count) || count < 0)
         throw shapeError(
@@ -152,15 +178,24 @@ function parseReportData(value: unknown): PflReportData {
   const findingsValue = value.findings;
   if (!Array.isArray(findingsValue))
     throw shapeError("data.findings", "an array");
+  if (findingsValue.length > MAX_FINDINGS)
+    throw shapeError(
+      "data.findings",
+      `an array with at most ${MAX_FINDINGS} items`,
+    );
   const findings = findingsValue.map((item, index) => {
     const at = `data.findings[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
     const elementIds = item.elementIds;
     if (
       !Array.isArray(elementIds) ||
-      elementIds.some((id) => typeof id !== "string")
+      elementIds.length > MAX_ELEMENT_IDS ||
+      elementIds.some((id) => typeof id !== "string" || id.length === 0)
     )
-      throw shapeError(`${at}.elementIds`, "a string array");
+      throw shapeError(
+        `${at}.elementIds`,
+        `an array of non-empty strings (at most ${MAX_ELEMENT_IDS})`,
+      );
     return {
       rule: stringField(item, "rule", `${at}.rule`),
       message: stringField(item, "message", `${at}.message`),
@@ -264,7 +299,7 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
   )
     throw shapeError("completeness", '"complete", "partial", or "unknown"');
   return {
-    sourcePath,
+    sourcePath: sanitizeText(sourcePath),
     pflVersion,
     completeness,
     diagnostics: parseDiagnostics(value.diagnostics),
@@ -273,15 +308,21 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
 }
 
 export async function readPflExport(path: string): Promise<PflExport> {
+  const safePath = sanitizeText(path);
   let content: string;
   try {
     content = await readFile(path, "utf8");
   } catch {
     throw new PflExportError(
       "unreadable-file",
-      `cannot read input file: ${path}`,
+      `cannot read input file: ${safePath}`,
     );
   }
+  if (content.length > MAX_FILE_BYTES)
+    throw new PflExportError(
+      "invalid-shape",
+      `input file exceeds the ${MAX_FILE_BYTES}-byte limit: ${safePath}`,
+    );
 
   let value: unknown;
   try {
@@ -289,7 +330,7 @@ export async function readPflExport(path: string): Promise<PflExport> {
   } catch {
     throw new PflExportError(
       "invalid-json",
-      `input file is not valid JSON: ${path}`,
+      `input file is not valid JSON: ${safePath}`,
     );
   }
 

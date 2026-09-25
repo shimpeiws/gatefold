@@ -23,18 +23,30 @@ export function assertValidResult(result: AnalysisResult): void {
     if (!Array.isArray(claim.evidence) || claim.evidence.length === 0)
       fail(`${at}.evidence must contain at least one reference`);
     for (const [ei, evidence] of claim.evidence.entries()) {
+      const eat = `${at}.evidence[${ei}]`;
       if (
         typeof evidence.pointer !== "string" ||
         !POINTER_PATTERN.test(evidence.pointer)
       )
-        fail(`${at}.evidence[${ei}].pointer must be a JSON Pointer`);
+        fail(`${eat}.pointer must be a JSON Pointer`);
+      if (
+        evidence.elementId !== undefined &&
+        (typeof evidence.elementId !== "string" ||
+          evidence.elementId.length === 0)
+      )
+        fail(`${eat}.elementId must be a non-empty string when present`);
+      if (evidence.note !== undefined && typeof evidence.note !== "string")
+        fail(`${eat}.note must be a string when present`);
     }
     const provenance = claim.provenance;
     if (
       provenance === undefined ||
       typeof provenance.sourceFile !== "string" ||
       provenance.sourceFile.length === 0 ||
-      !Array.isArray(provenance.transform)
+      !Array.isArray(provenance.transform) ||
+      provenance.transform.some((t: unknown) => typeof t !== "string") ||
+      (provenance.exportVersion !== undefined &&
+        typeof provenance.exportVersion !== "string")
     )
       fail(`${at}.provenance must carry sourceFile and transform`);
     if (

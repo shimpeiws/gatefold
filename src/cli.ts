@@ -158,7 +158,11 @@ export async function main(args: readonly string[]): Promise<number> {
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    process.stderr.write(`gatefold: ${message}\n`);
+    const safe = message.replace(
+      /[\x00-\x1F\x7F-\x9F]/g,
+      (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    );
+    process.stderr.write(`gatefold: ${safe}\n`);
     const code = exitCodeForError(error);
     process.exitCode = code;
     return code;

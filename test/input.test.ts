@@ -17,6 +17,29 @@ const VALID = [
   "empty-report.json",
 ];
 
+function validDoc(): Record<string, any> {
+  return {
+    pflVersion: "1.0.0",
+    command: "report",
+    ok: true,
+    completeness: "complete",
+    diagnostics: [],
+    data: {
+      runtime: "codex",
+      project: { id: "p", displayName: "d" },
+      stats: {
+        observed: 0,
+        effective: 0,
+        shadowed: 0,
+        conditional: 0,
+        opaque: 0,
+      },
+      findings: [],
+      interpretation: { classifierVersion: "1", origin: "stored" },
+    },
+  };
+}
+
 describe("readPflExport contract", () => {
   it("loads every valid fixture as typed data", async () => {
     for (const name of VALID) {
@@ -125,6 +148,50 @@ describe("readPflExport contract", () => {
     };
     const result = parsePflExport(doc, "inline");
     expect(result.sourcePath).toBe("inline");
+  });
+
+  it("keeps prototype-named byFacet keys as real own keys", () => {
+    const doc = validDoc();
+    doc.data.stats.byFacet = JSON.parse('{"__proto__": 2, "actions": 1}');
+    const result = parsePflExport(doc, "inline");
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        result.data.stats.byFacet,
+        "__proto__",
+      ),
+    ).toBe(true);
+    expect(result.data.stats.byFacet?.["__proto__"]).toBe(2);
+  });
+
+  it("rejects empty strings in finding elementIds", () => {
+    const doc = validDoc();
+    doc.data.findings = [{ rule: "r", message: "m", elementIds: [""] }];
+    expect(() => parsePflExport(doc, "inline")).toThrow(
+      /elementIds.*non-empty/,
+    );
+  });
+
+  it("rejects exports that exceed the resource ceilings", () => {
+    const doc = validDoc();
+    doc.data.findings = Array.from({ length: 10_001 }, () => ({
+      rule: "r",
+      message: "m",
+      elementIds: [],
+    }));
+    expect(() => parsePflExport(doc, "inline")).toThrow(/at most/);
+  });
+
+  it("sanitizes control characters in the input path on errors", async () => {
+    const badPath = "missing-\x1b[2J-file.json";
+    await expect(readPflExport(badPath)).rejects.toMatchObject({
+      code: "unreadable-file",
+    });
+    await expect(readPflExport(badPath)).rejects.toThrow(/\\u001b/);
+    try {
+      await readPflExport(badPath);
+    } catch (error) {
+      expect((error as Error).message).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
+    }
   });
 
   it("isSupportedPflVersion implements the >=1.0.0 <2.0.0 range", () => {

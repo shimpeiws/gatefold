@@ -95,6 +95,8 @@ describe("gatefold e2e (real process)", () => {
     expect(run.stdout).toContain("1. The export describes");
     expect(run.stdout).toContain("confidence:");
     expect(run.stdout).toContain("evidence:");
+    expect(run.stdout).toContain("provenance:");
+    expect(run.stdout).toContain("rule:");
   });
 
   it("--min-confidence filters end-to-end without altering claims", async () => {

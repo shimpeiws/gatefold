@@ -23,7 +23,7 @@ Every accepted document is a JSON object with these top-level fields:
 | `command` | string | Must be `"report"`. Any other value is rejected. |
 | `ok` | boolean | Must be `true`. A failure document (`ok: false`, with `data.error`) is rejected and its `error.code`/`error.message` are surfaced. |
 | `completeness` | string | One of `"complete"`, `"partial"`, `"unknown"`. `"partial"` is accepted — best-effort results are normal operation — and is recorded for provenance. |
-| `diagnostics` | array | Must be an array. Items carry `severity` (`"info"`/`"warning"`/`"error"`), `code` (string), `message` (string), optional `path` (string). Items with other shapes are rejected. |
+| `diagnostics` | array | Must be an array of at most 1,000 items. Items carry `severity` (`"info"`/`"warning"`/`"error"`), `code` (string), `message` (string), optional `path` (string). Items with other shapes are rejected. |
 | `data` | object | The report payload; see below. |
 
 ## `data` payload
@@ -34,8 +34,8 @@ Required fields:
 | --- | --- | --- |
 | `runtime` | string | Runtime id observed by pfl (e.g. `"claude-code"`, `"codex"`, `"opencode"`). |
 | `project` | object | `{ id: string, displayName: string }`. |
-| `stats` | object | `{ observed, effective, shadowed, conditional, opaque }` — non-negative integers — plus optional `byFacet`, a record of facet name → non-negative integer. |
-| `findings` | array | Items `{ rule: string, message: string, elementIds: string[] }`. May be empty. |
+| `stats` | object | `{ observed, effective, shadowed, conditional, opaque }` — non-negative integers — plus optional `byFacet`, a record of facet name → non-negative integer (at most 1,000 keys; facet names are arbitrary strings, including prototype-like names). |
+| `findings` | array | Items `{ rule: string, message: string, elementIds: string[] }` (at most 10,000 findings; at most 1,000 non-empty `elementIds` per finding). May be empty. |
 | `interpretation` | object | `{ classifierVersion: string, origin: "stored" \| "recomputed" }`. |
 
 Recognized optional fields (captured for provenance when present):
@@ -72,12 +72,21 @@ Claim evidence `pointer` values (JSON Pointer, RFC 6901) may reference:
 `elementId` on an evidence item names an element id cited by a finding
 (`/data/findings/<n>/elementIds/<m>`), not a path inside this repository.
 
+## Limits
+
+pfl exports are untrusted input, so the reader enforces resource ceilings:
+input files larger than 16 MiB, more than 1,000 `diagnostics`, more than
+10,000 `findings`, more than 1,000 `elementIds` per finding, or more than
+1,000 `byFacet` keys are rejected with `invalid-shape` errors.
+
 ## Error behavior
 
 Unreadable file, invalid JSON, non-object top level, unsupported command,
-`ok: false`, out-of-range `pflVersion`, and missing/wrongly-typed required
-fields all fail with deterministic, distinct, actionable errors (issue #4
-implements them; issue #6 assigns exit codes).
+`ok: false`, out-of-range `pflVersion`, missing/wrongly-typed required
+fields, and limit violations all fail with deterministic, distinct,
+actionable errors (issue #4 implements them; issue #6 assigns exit codes).
+External strings — including the input file path — are sanitized for control
+characters before they reach error messages or claim text.
 
 ## Fixtures
 
@@ -97,3 +106,4 @@ Committed fixtures under `test/fixtures/pfl-export/`:
 | `invalid-diagnostics.json` | rejected (malformed `diagnostics` items) |
 | `non-object.json` | rejected (top level is not an object) |
 | `malformed.json` | rejected (not valid JSON) |
+| `empty-file.json` | rejected (no JSON content) |

@@ -85,10 +85,10 @@ describe("descriptive rules", () => {
       "facet-composition",
     );
     expect(claims.map((c) => c.claim)).toEqual([
-      "The harness declares 2 'hook' element(s).",
-      "The harness declares 1 'mcp' element(s).",
-      "The harness declares 3 'skill' element(s).",
-      "The harness declares 4 'tool' element(s).",
+      "The harness declares 3 'actions' element(s).",
+      "The harness declares 1 'controls' element(s).",
+      "The harness declares 4 'instructions' element(s).",
+      "The harness declares 2 'knowledge' element(s).",
     ]);
   });
 
@@ -147,7 +147,6 @@ describe("descriptive rules", () => {
     };
     const result = analyze(parsePflExport(doc, "inline"));
     for (const claim of result.claims) {
-      // eslint-disable-next-line no-control-regex
       expect(claim.claim).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
     }
     const [runtime] = byRule(result, "runtime-described");
