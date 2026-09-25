@@ -219,6 +219,47 @@ describe("readPflExport contract", () => {
     expect(error?.message).toContain("at most 10000");
   });
 
+  it("accepts a document with a leading UTF-8 BOM", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "gatefold-bom-"));
+    const path = join(tmp, "bom.json");
+    try {
+      await writeFile(path, "\uFEFF" + JSON.stringify(validDoc()), "utf8");
+      const result = await readPflExport(path);
+      expect(result.pflVersion).toBe("1.0.0");
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("still rejects a BOM appearing after the first character", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "gatefold-bom-"));
+    const path = join(tmp, "mid-bom.json");
+    try {
+      const doc = JSON.stringify(validDoc());
+      await writeFile(path, doc.slice(0, 1) + "\uFEFF" + doc.slice(1), "utf8");
+      await expect(readPflExport(path)).rejects.toMatchObject({
+        code: "invalid-json",
+      });
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects non-safe integers in stats and byFacet counts", () => {
+    const unsafe = validDoc();
+    unsafe.data.stats.observed = 2 ** 53;
+    expect(() => parsePflExport(unsafe, "inline")).toThrow(/safe integer/);
+
+    const unsafeFacet = validDoc();
+    unsafeFacet.data.stats.byFacet = { actions: Number.MAX_SAFE_INTEGER + 1 };
+    expect(() => parsePflExport(unsafeFacet, "inline")).toThrow(/safe integer/);
+
+    const safe = validDoc();
+    safe.data.stats.observed = Number.MAX_SAFE_INTEGER;
+    safe.data.stats.byFacet = { actions: Number.MAX_SAFE_INTEGER };
+    expect(() => parsePflExport(safe, "inline")).not.toThrow();
+  });
+
   it("sanitizes control characters in the input path on errors", async () => {
     const badPath = "missing-\x1b[2J-file.json";
     await expect(readPflExport(badPath)).rejects.toMatchObject({

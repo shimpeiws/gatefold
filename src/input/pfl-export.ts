@@ -103,8 +103,8 @@ function nonNegativeIntField(
   path = key,
 ): number {
   const value = record[key];
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0)
-    throw shapeError(path, "a non-negative integer");
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+    throw shapeError(path, "a non-negative safe integer");
   return value;
 }
 
@@ -162,10 +162,14 @@ function parseReportData(value: unknown): PflReportData {
     // Null-prototype object: keeps keys like "__proto__" as real own keys.
     byFacet = Object.create(null) as Record<string, number>;
     for (const [facet, count] of Object.entries(byFacetValue)) {
-      if (typeof count !== "number" || !Number.isInteger(count) || count < 0)
+      if (
+        typeof count !== "number" ||
+        !Number.isSafeInteger(count) ||
+        count < 0
+      )
         throw shapeError(
           `data.stats.byFacet.${facet}`,
-          "a non-negative integer",
+          "a non-negative safe integer",
         );
       byFacet[facet] = count;
     }
@@ -367,9 +371,12 @@ function parseExportContent(
   invalidJsonMessage: string,
   sourcePath: string,
 ): PflExport {
+  // A leading UTF-8 BOM (U+FEFF) is part of the transport encoding, not the
+  // document: strip exactly one. A BOM anywhere else stays invalid JSON.
+  const text = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
   let value: unknown;
   try {
-    value = JSON.parse(content);
+    value = JSON.parse(text);
   } catch {
     throw new PflExportError("invalid-json", invalidJsonMessage);
   }

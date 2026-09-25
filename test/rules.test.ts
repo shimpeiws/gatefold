@@ -6,6 +6,7 @@ import { RULES } from "../src/application/rules.js";
 import type { Claim } from "../src/domain/claim.js";
 import { assertValidResult } from "../src/domain/validate.js";
 import { parsePflExport, readPflExport } from "../src/input/pfl-export.js";
+import { formatJson } from "../src/output/json.js";
 
 const dir = new URL("fixtures/pfl-export/", import.meta.url);
 const fixture = (name: string): string => fileURLToPath(new URL(name, dir));
@@ -224,6 +225,38 @@ describe("descriptive rules", () => {
     const [finding] = byRule(result, "finding-reported");
     expect(finding.claim).toContain("\\u202e");
     expect(finding.claim).toContain("\\u2028");
+  });
+
+  it("keeps the literal \\uXXXX text in JSON output, distinct from JSON escaping", () => {
+    const input = {
+      sourcePath: "inline",
+      pflVersion: "1.0.0",
+      completeness: "complete" as const,
+      diagnostics: [],
+      data: {
+        runtime: "claude-code",
+        project: { id: "p", displayName: "d" },
+        stats: {
+          observed: 0,
+          effective: 0,
+          shadowed: 0,
+          conditional: 0,
+          opaque: 0,
+        },
+        findings: [{ rule: "r", message: "bad ‮text", elementIds: [] }],
+        interpretation: { classifierVersion: "1", origin: "stored" as const },
+      },
+    };
+    const json = formatJson(analyze(input));
+    // In the serialized JSON the normalized character reads as \\u202e;
+    // parsing the document yields the literal \u202e text, not the raw char.
+    expect(json).toContain("\\\\u202e");
+    const parsed = JSON.parse(json);
+    const finding = parsed.claims.find((c: Claim) =>
+      c.claim.includes("finding"),
+    );
+    expect(finding.claim).toContain("\\u202e");
+    expect(finding.claim).not.toContain("‮");
   });
 
   it("every registered rule id is documented in docs/rules.md", async () => {

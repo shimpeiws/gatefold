@@ -20,7 +20,9 @@ apply, and claims record `<stdin>` as `provenance.sourceFile`.
 
 ## Envelope
 
-Every accepted document is a JSON object with these top-level fields:
+Every accepted document is a JSON object with these top-level fields. A single
+leading UTF-8 BOM is tolerated as part of the transport encoding and stripped
+before parsing; a BOM anywhere else is invalid JSON.
 
 | Field | Type | Requirement |
 | --- | --- | --- |
@@ -39,7 +41,7 @@ Required fields:
 | --- | --- | --- |
 | `runtime` | string | Runtime id observed by pfl (e.g. `"claude-code"`, `"codex"`, `"opencode"`). |
 | `project` | object | `{ id: string, displayName: string }`. |
-| `stats` | object | `{ observed, effective, shadowed, conditional, opaque }` — non-negative integers — plus optional `byFacet`, a record of facet name → non-negative integer (at most 1,000 keys; facet names are arbitrary strings, including prototype-like names). |
+| `stats` | object | `{ observed, effective, shadowed, conditional, opaque }` — non-negative safe integers — plus optional `byFacet`, a record of facet name → non-negative safe integer (at most 1,000 keys; facet names are arbitrary strings, including prototype-like names). |
 | `findings` | array | Items `{ rule: string, message: string, elementIds: string[] }` (at most 10,000 findings; at most 1,000 non-empty `elementIds` per finding). May be empty. |
 | `interpretation` | object | `{ classifierVersion: string, origin: "stored" \| "recomputed" }`. |
 

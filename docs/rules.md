@@ -21,7 +21,12 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
   the input contract permits (`docs/pfl-export-contract.md`).
 - Provenance records the source file, the export's `pflVersion`, and the
   transform chain `["pfl-report-envelope", "rule:<id>"]`.
-- Strings interpolated into claim text pass through escaping (C0/C1/DEL,
-  zero-width and bidi formatting characters, line/paragraph separators, and
-  U+FEFF become `\uXXXX`), so a hostile export cannot inject terminal escape
-  sequences or reorder displayed text in human output.
+- Strings interpolated into claim text pass through Gatefold's canonical
+  claim-text normalization: C0/C1/DEL, zero-width and bidi formatting
+  characters, line/paragraph separators, and U+FEFF become the literal text
+  `\uXXXX`. This normalization is distinct from JSON serialization escaping:
+  in `--format json` output the sequence appears as `\\uXXXX` inside the JSON
+  string, and a consumer that parses the JSON still sees the literal `\uXXXX`
+  text rather than the original character. A hostile export therefore cannot
+  inject terminal escape sequences or reorder displayed text in either output
+  format.

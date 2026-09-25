@@ -231,6 +231,13 @@ describe("gatefold e2e (real process)", () => {
     expect(run.stdout).toContain("<stdin>");
   });
 
+  it("accepts a BOM-prefixed export on stdin", async () => {
+    const input = readFileSync(fixture("valid-report.json"), "utf8");
+    const run = await gatefoldWithStdin(["-"], "\uFEFF" + input);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("The export describes");
+  });
+
   it("rejects malformed stdin with the input-error exit code", async () => {
     const run = await gatefoldWithStdin(["-"], "{ not json");
     expect(run.code).toBe(3);

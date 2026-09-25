@@ -158,9 +158,19 @@ describe("gatefold CLI", () => {
     expect(emptied.claims).toEqual([]);
     expect(validate(emptied), JSON.stringify(validate.errors)).toBe(true);
     expect(formatHuman(emptied, 0.5)).toBe(
-      "No claims found at or above confidence 0.50.",
+      "No claims found at or above confidence 0.5.",
     );
     expect(formatHuman(emptied)).toBe("No claims found.");
+  });
+
+  it("displays the exact --min-confidence threshold without rounding", () => {
+    const emptied: AnalysisResult = { schemaVersion: 1, claims: [] };
+    expect(formatHuman(emptied, 0.999)).toBe(
+      "No claims found at or above confidence 0.999.",
+    );
+    expect(formatHuman(emptied, 0.85)).toBe(
+      "No claims found at or above confidence 0.85.",
+    );
   });
 
   it("maps each failure class to a distinct exit code", () => {
