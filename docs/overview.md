@@ -24,7 +24,9 @@ The initial implementation uses only the `pfl` export boundary. Future versions 
 
 ```text
 gatefold <input.json> --format human
-gatefold <input.json> --format json
+gatefold <input.json> --format json --min-confidence 0.8
 ```
 
-The initial scaffold returns an empty claim collection. Analysis rules will be added after the input and claim schemas are stable.
+`--min-confidence` keeps only claims at or above the threshold. Exit codes are stable: `0` success, `2` usage error, `3` input error, `4` internal error.
+
+The descriptive rule set is documented in [rules](rules.md).

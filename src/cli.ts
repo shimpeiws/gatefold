@@ -1,66 +1,150 @@
 import { analyze } from "./application/analyze.js";
-import { readPflExport } from "./input/pfl-export.js";
+import type { AnalysisResult } from "./domain/claim.js";
+import { PflExportError, readPflExport } from "./input/pfl-export.js";
 import { formatHuman } from "./output/human.js";
 import { formatJson } from "./output/json.js";
 
 type OutputFormat = "human" | "json";
 
+export const EXIT_USAGE = 2;
+export const EXIT_INPUT = 3;
+export const EXIT_INTERNAL = 4;
+
+export class CliError extends Error {
+  constructor(
+    message: string,
+    readonly exitCode: number,
+  ) {
+    super(message);
+    this.name = "CliError";
+  }
+}
+
 interface CliOptions {
   readonly inputPath?: string;
   readonly format: OutputFormat;
+  readonly minConfidence: number;
   readonly help: boolean;
+}
+
+function optionValue(
+  args: readonly string[],
+  index: number,
+  name: string,
+): [string, number] {
+  const argument = args[index];
+  const prefix = `${name}=`;
+  if (argument.startsWith(prefix))
+    return [argument.slice(prefix.length), index];
+  const value = args[index + 1];
+  if (value === undefined)
+    throw new CliError(`${name} requires a value`, EXIT_USAGE);
+  return [value, index + 1];
 }
 
 function parseArgs(args: readonly string[]): CliOptions {
   let inputPath: string | undefined;
   let format: OutputFormat = "human";
+  let minConfidence = 0;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--help" || argument === "-h")
-      return { inputPath, format, help: true };
+      return { inputPath, format, minConfidence, help: true };
     if (argument === "--format" || argument.startsWith("--format=")) {
-      const value =
-        argument === "--format"
-          ? args[++index]
-          : argument.slice("--format=".length);
+      const [value, consumed] = optionValue(args, index, "--format");
+      index = consumed;
       if (value !== "human" && value !== "json")
-        throw new Error("--format must be either human or json");
+        throw new CliError(
+          `--format must be either human or json (got '${value}')`,
+          EXIT_USAGE,
+        );
       format = value;
       continue;
     }
+    if (
+      argument === "--min-confidence" ||
+      argument.startsWith("--min-confidence=")
+    ) {
+      const [value, consumed] = optionValue(args, index, "--min-confidence");
+      index = consumed;
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1)
+        throw new CliError(
+          `--min-confidence must be a number between 0 and 1 (got '${value}')`,
+          EXIT_USAGE,
+        );
+      minConfidence = parsed;
+      continue;
+    }
     if (argument.startsWith("-"))
-      throw new Error(`unknown option: ${argument}`);
+      throw new CliError(
+        `unknown option: ${argument} (see --help)`,
+        EXIT_USAGE,
+      );
     if (inputPath !== undefined)
-      throw new Error("only one input file is allowed");
+      throw new CliError("only one input file is allowed", EXIT_USAGE);
     inputPath = argument;
   }
-  return { inputPath, format, help: false };
+  return { inputPath, format, minConfidence, help: false };
 }
 
 function usage(): string {
   return [
-    "Usage: gatefold <input.json> [--format human|json]",
+    "Usage: gatefold <input.json> [options]",
     "",
     "Analyze a pfl export and print evidence-backed claims.",
+    "",
+    "Options:",
+    "  --format <human|json>        Output format (default: human)",
+    "  --min-confidence <0..1>      Only print claims at or above this confidence (default: 0)",
+    "  -h, --help                   Show this help",
+    "",
+    "Exit codes: 0 success, 2 usage error, 3 input error, 4 internal error",
   ].join("\n");
+}
+
+function filterClaims(
+  result: AnalysisResult,
+  minConfidence: number,
+): AnalysisResult {
+  if (minConfidence <= 0) return result;
+  return {
+    ...result,
+    claims: result.claims.filter((claim) => claim.confidence >= minConfidence),
+  };
+}
+
+export function exitCodeForError(error: unknown): number {
+  if (error instanceof CliError) return error.exitCode;
+  if (error instanceof PflExportError) return EXIT_INPUT;
+  return EXIT_INTERNAL;
 }
 
 export async function runCli(args: readonly string[]): Promise<string> {
   const options = parseArgs(args);
   if (options.help) return usage();
   if (options.inputPath === undefined)
-    throw new Error("an input JSON file is required");
+    throw new CliError(
+      "an input JSON file is required (see --help)",
+      EXIT_USAGE,
+    );
   const result = analyze(await readPflExport(options.inputPath));
-  return options.format === "json" ? formatJson(result) : formatHuman(result);
+  const filtered = filterClaims(result, options.minConfidence);
+  return options.format === "json"
+    ? formatJson(filtered)
+    : formatHuman(filtered);
 }
 
-export async function main(args: readonly string[]): Promise<void> {
+export async function main(args: readonly string[]): Promise<number> {
   try {
     process.stdout.write(`${await runCli(args)}\n`);
+    return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     process.stderr.write(`gatefold: ${message}\n`);
-    process.exitCode = 1;
+    const code = exitCodeForError(error);
+    process.exitCode = code;
+    return code;
   }
 }
