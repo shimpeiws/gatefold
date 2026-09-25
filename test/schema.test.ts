@@ -4,6 +4,8 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 import { CLAIM_SCHEMA_VERSION } from "../src/domain/claim.js";
 import type { AnalysisResult } from "../src/domain/claim.js";
+import { assertValidResult } from "../src/domain/validate.js";
+import { analyze } from "../src/application/analyze.js";
 
 const root = new URL("../", import.meta.url);
 const schemaPath = fileURLToPath(new URL("schema/claim-result.v1.json", root));
@@ -37,7 +39,11 @@ describe("claim schema validation", () => {
     const invalid = files.filter((f) => f.startsWith("invalid-"));
     expect(invalid.length).toBeGreaterThanOrEqual(3);
     for (const file of invalid) {
-      expect(validate(await readExample(file)), file).toBe(false);
+      const doc = await readExample(file);
+      expect(validate(doc), file).toBe(false);
+      expect(() => assertValidResult(doc as AnalysisResult), file).toThrow(
+        "invalid analysis result",
+      );
     }
   });
 
@@ -73,6 +79,12 @@ describe("claim schema validation", () => {
         },
       ],
     };
+    expect(validate(result)).toBe(true);
+    expect(() => assertValidResult(result)).not.toThrow();
+  });
+
+  it("validates the analyze() output against the schema", () => {
+    const result = analyze({});
     expect(validate(result)).toBe(true);
   });
 });

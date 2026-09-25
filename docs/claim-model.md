@@ -60,7 +60,8 @@ silently add contract-breaking fields.
 ## Invalid claims
 
 A claim that fails the schema — most importantly a claim with empty `evidence`
-— is a defect, not a warning. Gatefold must not emit it: if analysis ever
-produces a schema-invalid claim, the run fails rather than shipping invalid
-JSON. Committed fixtures under `schema/examples/` pin this behavior:
-`valid-result.json` validates; every `invalid-*.json` fails.
+— is a defect, not a warning. Gatefold must not emit it: `analyze` runs
+`assertValidResult` (`src/domain/validate.ts`) over every result, so a
+schema-invalid claim fails the run instead of reaching the output. The checker
+and the schema are pinned to the same behavior by `schema/examples/`:
+`valid-result.json` validates; every `invalid-*.json` fails both.
