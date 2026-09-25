@@ -40,6 +40,7 @@ const INVALID_FIXTURES = [
   "invalid-diagnostics.json",
   "non-object.json",
   "malformed.json",
+  "empty-file.json",
 ];
 
 describe("pfl export contract fixtures", () => {

@@ -187,7 +187,7 @@ describe("gatefold CLI main()", () => {
     const err = vi
       .spyOn(process.stderr, "write")
       .mockImplementation(() => true);
-    expect(await main([fixture("malformed-json.json")])).toBe(EXIT_INPUT);
+    expect(await main([fixture("malformed.json")])).toBe(EXIT_INPUT);
     expect(out).not.toHaveBeenCalled();
     expect(String(err.mock.calls[0][0])).toContain("gatefold:");
     expect(await main(["--bogus"])).toBe(EXIT_USAGE);
