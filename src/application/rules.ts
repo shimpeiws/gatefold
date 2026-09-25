@@ -19,15 +19,17 @@ function escapePointer(segment: string): string {
 
 function provenance(input: PflExport, ruleId: string): ClaimProvenance {
   const data = input.data;
+  const text = (value: string | undefined): string | undefined =>
+    value === undefined ? undefined : sanitizeText(value);
   return {
     sourceFile: input.sourcePath,
     exportVersion: input.pflVersion,
     transform: ["pfl-report-envelope", `rule:${ruleId}`],
-    classifierVersion: data.interpretation.classifierVersion,
+    classifierVersion: sanitizeText(data.interpretation.classifierVersion),
     interpretationOrigin: data.interpretation.origin,
-    observedSnapshotId: data.observedSnapshotId,
-    resolvedSnapshotId: data.resolvedSnapshotId,
-    runtimeName: data.runtimeName,
+    observedSnapshotId: text(data.observedSnapshotId),
+    resolvedSnapshotId: text(data.resolvedSnapshotId),
+    runtimeName: text(data.runtimeName),
   };
 }
 

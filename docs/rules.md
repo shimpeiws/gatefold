@@ -1,4 +1,4 @@
-# v0.1 rule catalog
+# Rule catalog
 
 The analyzer (`src/application/rules.ts`) registers an explicit list of
 descriptive rules. Each rule emits claims about what the export contains —
@@ -28,8 +28,10 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
   chain `["pfl-report-envelope", "rule:<id>"]`, and the export's interpretation
   metadata: `classifierVersion`, `interpretationOrigin`, and — when the export
   carries them — `observedSnapshotId`, `resolvedSnapshotId`, and `runtimeName`.
-- Strings interpolated into claim text pass through Gatefold's canonical
-  claim-text normalization: C0/C1/DEL, zero-width and bidi formatting
+- Strings interpolated into claim text — and provenance strings copied from
+  the export (`classifierVersion`, `observedSnapshotId`,
+  `resolvedSnapshotId`, `runtimeName`) — pass through Gatefold's canonical
+  normalization: C0/C1/DEL, zero-width and bidi formatting
   characters, line/paragraph separators, and U+FEFF become the literal text
   `\uXXXX`. This normalization is distinct from JSON serialization escaping:
   in `--format json` output the sequence appears as `\\uXXXX` inside the JSON

@@ -1,6 +1,7 @@
-# Supported pfl export contract (v0.1)
+# Supported pfl export contract
 
-This document defines the exact `pfl` export shape Gatefold v0.1 accepts. It is
+This document defines the exact `pfl` export shape Gatefold accepts (current
+release: v0.2). It is
 grounded in pfl's frozen v1.0 `--json` document contract
 (`docs/design/pfl-json-contract.md` in the pfl repository, verified against
 `pfl@1.0.0`, `src/cli/report.ts` `ReportData`, on 2026-09-25). Gatefold has no
@@ -45,8 +46,10 @@ Required fields:
 | `findings` | array | Items `{ rule: string, message: string, elementIds: string[] }` (at most 10,000 findings; at most 1,000 non-empty `elementIds` per finding). May be empty. |
 | `interpretation` | object | `{ classifierVersion: string, origin: "stored" \| "recomputed" }`. |
 
-Recognized optional fields (captured for provenance when present):
-`runtimeName`, `observedSnapshotId`, `resolvedSnapshotId`, `confidence`.
+Recognized optional fields: `runtimeName`, `observedSnapshotId`,
+`resolvedSnapshotId` — surfaced in claim `provenance` when present — and
+`confidence`, which is accepted for forward compatibility but not surfaced in
+output.
 
 ## Unknown fields
 

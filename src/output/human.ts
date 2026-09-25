@@ -1,10 +1,14 @@
 import type { AnalysisResult } from "../domain/claim.js";
 import { sanitizeText } from "../domain/sanitize.js";
 
-export function formatHuman(result: AnalysisResult, minConfidence = 0): string {
+export function formatHuman(
+  result: AnalysisResult,
+  minConfidence = 0,
+  minConfidenceDisplay = String(minConfidence),
+): string {
   if (result.claims.length === 0)
     return minConfidence > 0
-      ? `No claims found at or above confidence ${minConfidence}.`
+      ? `No claims found at or above confidence ${minConfidenceDisplay}.`
       : "No claims found.";
   return result.claims
     .map((claim, index) => {

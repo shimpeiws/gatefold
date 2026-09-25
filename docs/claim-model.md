@@ -4,8 +4,11 @@ A claim is one evidence-backed statement about a harness representation.
 
 The machine-readable form is defined by the versioned JSON Schema at
 [`schema/claim-result.v1.json`](../schema/claim-result.v1.json). The TypeScript
-types in `src/domain/claim.ts` mirror that schema; a typed `AnalysisResult`
-validates against it.
+types in `src/domain/claim.ts` mirror that schema with one deliberate
+difference: the `Claim` interface marks `ruleId` required because Gatefold
+always emits it, while the schema and the runtime validator keep it optional
+so results written before `ruleId` existed stay valid. A typed
+`AnalysisResult` still validates against the schema.
 
 ## Result envelope
 

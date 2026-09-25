@@ -239,6 +239,40 @@ describe("descriptive rules", () => {
     }
   });
 
+  it("normalizes unsafe characters in provenance strings copied from the export", () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "report",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        runtime: "codex",
+        runtimeName: "cli\u202eengine",
+        project: { id: "p", displayName: "d" },
+        observedSnapshotId: "snap\u2028shot",
+        resolvedSnapshotId: "res\ufeffid",
+        stats: {
+          observed: 0,
+          effective: 0,
+          shadowed: 0,
+          conditional: 0,
+          opaque: 0,
+        },
+        findings: [],
+        interpretation: { classifierVersion: "v\x7f1", origin: "stored" },
+      },
+    };
+    const result = analyze(parsePflExport(doc, "inline"));
+    expect(result.claims.length).toBeGreaterThan(0);
+    for (const claim of result.claims) {
+      expect(claim.provenance.runtimeName).toBe("cli\\u202eengine");
+      expect(claim.provenance.observedSnapshotId).toBe("snap\\u2028shot");
+      expect(claim.provenance.resolvedSnapshotId).toBe("res\\ufeffid");
+      expect(claim.provenance.classifierVersion).toBe("v\\u007f1");
+    }
+  });
+
   it("downgrades stats-derived confidence on partial exports", async () => {
     const result = analyze(await load("valid-report-partial.json"));
     const [counts] = byRule(result, "element-counts");

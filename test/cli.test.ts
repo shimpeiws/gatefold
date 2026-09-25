@@ -171,6 +171,9 @@ describe("gatefold CLI", () => {
     expect(formatHuman(emptied, 0.85)).toBe(
       "No claims found at or above confidence 0.85.",
     );
+    expect(formatHuman(emptied, 0.5, "0.50")).toBe(
+      "No claims found at or above confidence 0.50.",
+    );
   });
 
   it("maps each failure class to a distinct exit code", () => {

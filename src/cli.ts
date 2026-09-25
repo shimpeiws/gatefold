@@ -30,6 +30,8 @@ interface CliOptions {
   readonly stdin: boolean;
   readonly format: OutputFormat;
   readonly minConfidence: number;
+  /** The --min-confidence token exactly as supplied, for display. */
+  readonly minConfidenceText: string;
   readonly help: boolean;
 }
 
@@ -53,12 +55,20 @@ function parseArgs(args: readonly string[]): CliOptions {
   let stdin = false;
   let format: OutputFormat = "human";
   let minConfidence = 0;
+  let minConfidenceText = "0";
   let optionsDone = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (!optionsDone && (argument === "--help" || argument === "-h"))
-      return { inputPath, stdin, format, minConfidence, help: true };
+      return {
+        inputPath,
+        stdin,
+        format,
+        minConfidence,
+        minConfidenceText,
+        help: true,
+      };
     if (!optionsDone && argument === "--") {
       optionsDone = true;
       continue;
@@ -96,6 +106,7 @@ function parseArgs(args: readonly string[]): CliOptions {
           EXIT_USAGE,
         );
       minConfidence = parsed;
+      minConfidenceText = value;
       continue;
     }
     if (!optionsDone && argument === "-") {
@@ -114,7 +125,14 @@ function parseArgs(args: readonly string[]): CliOptions {
       throw new CliError("only one input file is allowed", EXIT_USAGE);
     inputPath = argument;
   }
-  return { inputPath, stdin, format, minConfidence, help: false };
+  return {
+    inputPath,
+    stdin,
+    format,
+    minConfidence,
+    minConfidenceText,
+    help: false,
+  };
 }
 
 function usage(): string {
@@ -169,7 +187,7 @@ export async function runCli(args: readonly string[]): Promise<string> {
   const filtered = filterClaims(result, options.minConfidence);
   return options.format === "json"
     ? formatJson(filtered)
-    : formatHuman(filtered, options.minConfidence);
+    : formatHuman(filtered, options.minConfidence, options.minConfidenceText);
 }
 
 export async function main(args: readonly string[]): Promise<number> {
