@@ -18,7 +18,7 @@ Errors are written to stderr only.
 
 ## Development
 
-Gatefold uses Node.js 20 or later and pnpm.
+Gatefold uses Node.js 22 or later and pnpm.
 
 ```text
 pnpm install

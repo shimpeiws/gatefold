@@ -41,7 +41,7 @@ Also confirm in `package.json`:
 - `name` is `@shimpeiws/gatefold`
 - `version` is the intended release version
 - `bin.gatefold` points to `./bin/gatefold.js`
-- `engines.node` is `>=20`
+- `engines.node` is `>=22` (Node.js 20 reached end-of-life in April 2026)
 - `license` is `MIT` and `publishConfig.access` is `public` (required for the
   first publish of a scoped package)
 
