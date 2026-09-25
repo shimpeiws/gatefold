@@ -34,3 +34,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [pfl export contract](docs/pfl-export-contract.md)
 - [Descriptive rules](docs/rules.md)
 - [Release checklist](docs/release-checklist.md)
+
+## License
+
+[MIT](LICENSE)

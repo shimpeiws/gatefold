@@ -2,6 +2,12 @@
   "name": "@shimpeiws/gatefold",
   "version": "0.1.0",
   "description": "Evidence-backed judgement for coding-agent harnesses",
+  "license": "MIT",
+  "author": "Shimpei Takamatsu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shimpeiws/gatefold.git"
+  },
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
@@ -25,13 +31,17 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
     "test": "vitest",
     "typecheck": "tsc --noEmit --project tsconfig.json",
-    "ci:all": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test --run && pnpm build"
+    "ci:all": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test --run && pnpm build",
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -3,6 +3,7 @@ import type {
   ClaimProvenance,
   EvidenceReference,
 } from "../domain/claim.js";
+import { sanitizeText } from "../domain/sanitize.js";
 import type { PflExport } from "../input/pfl-export.js";
 
 /** One descriptive rule. Emits zero or more claims; never judges quality. */
@@ -27,14 +28,6 @@ function provenance(input: PflExport, ruleId: string): ClaimProvenance {
 /** Confidence for stats-derived claims: 1 only when completeness is "complete". */
 function statsConfidence(input: PflExport): number {
   return input.completeness === "complete" ? 1 : 0.8;
-}
-
-/** Escapes control characters in external strings before they reach output. */
-function sanitizeText(text: string): string {
-  return text.replace(
-    /[\x00-\x1F\x7F-\x9F]/g,
-    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
-  );
 }
 
 function makeClaim(

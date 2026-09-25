@@ -76,7 +76,8 @@ Claim evidence `pointer` values (JSON Pointer, RFC 6901) may reference:
 ## Limits
 
 pfl exports are untrusted input, so the reader enforces resource ceilings:
-input files larger than 16 MiB, more than 1,000 `diagnostics`, more than
+input files larger than 16 MiB (measured in bytes; regular files are rejected
+by size before reading, and pipes are cut off at the limit), more than 1,000 `diagnostics`, more than
 10,000 `findings`, more than 1,000 `elementIds` per finding, or more than
 1,000 `byFacet` keys are rejected with `invalid-shape` errors.
 
@@ -86,8 +87,10 @@ Unreadable file, invalid JSON, non-object top level, unsupported command,
 `ok: false`, out-of-range `pflVersion`, missing/wrongly-typed required
 fields, and limit violations all fail with deterministic, distinct,
 actionable errors (issue #4 implements them; issue #6 assigns exit codes).
-External strings — including the input file path — are sanitized for control
-characters before they reach error messages or claim text.
+External strings — including the input file path — are sanitized before they
+reach error messages or claim text: C0/C1 control characters, DEL, zero-width
+and bidi formatting characters, line/paragraph separators, and U+FEFF are
+escaped as literal `\uXXXX`.
 
 ## Fixtures
 

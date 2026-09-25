@@ -28,7 +28,9 @@ release gate in [v0.1 scope](v0.1-scope.md).
 npm pack --dry-run --json
 ```
 
-Confirm the tarball contains `bin/gatefold.js`, `dist/` (compiled output and
+`prepack` runs `npm run build`, so the tarball always carries a fresh `dist/`
+even from a clean checkout. Confirm the tarball contains `LICENSE`,
+`bin/gatefold.js`, `dist/` (compiled output and
 `.d.ts` files), `docs/`, `schema/` (including `schema/examples/`), `README.md`,
 and `package.json`. All of `docs/` is shipped intentionally — keep only
 public-facing documentation in that directory. The tarball must not contain
@@ -40,6 +42,8 @@ Also confirm in `package.json`:
 - `version` is the intended release version
 - `bin.gatefold` points to `./bin/gatefold.js`
 - `engines.node` is `>=20`
+- `license` is `MIT` and `publishConfig.access` is `public` (required for the
+  first publish of a scoped package)
 
 ## 4. Publish dry-run
 
@@ -63,4 +67,5 @@ npm uninstall -g @shimpeiws/gatefold
 ## 6. Tag and publish
 
 Only after steps 1–5 pass: tag the release commit and run the real publish
-from a clean checkout.
+from a clean checkout. No manual build is needed first: `prepack` builds
+`dist/` before the tarball is created.

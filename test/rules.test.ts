@@ -155,6 +155,41 @@ describe("descriptive rules", () => {
     expect(finding.claim).toContain("\\u001b");
   });
 
+  it("escapes bidi, zero-width, and line-separator characters", () => {
+    const input = {
+      sourcePath: "inline",
+      pflVersion: "1.0.0",
+      completeness: "complete" as const,
+      diagnostics: [],
+      data: {
+        runtime: "claude-code",
+        project: { id: "p", displayName: "p\u200bq" },
+        stats: {
+          observed: 0,
+          effective: 0,
+          shadowed: 0,
+          conditional: 0,
+          opaque: 0,
+        },
+        findings: [
+          {
+            rule: "r",
+            message: "ok \u202egnirts\u202c\u2028next\ufeff",
+            elementIds: [],
+          },
+        ],
+        interpretation: { classifierVersion: "1", origin: "stored" as const },
+      },
+    };
+    const result = analyze(input);
+    for (const claim of result.claims) {
+      expect(claim.claim).not.toMatch(/[\u200b\u2028\u202c\u202e\ufeff]/);
+    }
+    const [finding] = byRule(result, "finding-reported");
+    expect(finding.claim).toContain("\\u202e");
+    expect(finding.claim).toContain("\\u2028");
+  });
+
   it("every registered rule id is documented in docs/rules.md", async () => {
     const doc = await readFile(
       fileURLToPath(new URL("../docs/rules.md", import.meta.url)),

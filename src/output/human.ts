@@ -1,11 +1,5 @@
 import type { AnalysisResult } from "../domain/claim.js";
-
-function escapeControls(text: string): string {
-  return text.replace(
-    /[\x00-\x1F\x7F-\x9F]/g,
-    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
-  );
-}
+import { sanitizeText } from "../domain/sanitize.js";
 
 export function formatHuman(result: AnalysisResult, minConfidence = 0): string {
   if (result.claims.length === 0)
@@ -18,7 +12,7 @@ export function formatHuman(result: AnalysisResult, minConfidence = 0): string {
         .map((entry) =>
           entry.elementId === undefined
             ? entry.pointer
-            : `${entry.pointer} (${escapeControls(entry.elementId)})`,
+            : `${entry.pointer} (${sanitizeText(entry.elementId)})`,
         )
         .join(", ");
       const version = claim.provenance.exportVersion
@@ -28,7 +22,7 @@ export function formatHuman(result: AnalysisResult, minConfidence = 0): string {
         `${index + 1}. ${claim.claim}`,
         `   confidence: ${claim.confidence.toFixed(2)}`,
         `   evidence: ${evidence}`,
-        `   provenance: ${escapeControls(claim.provenance.sourceFile)}${version} · ${claim.provenance.transform.join(" → ")}`,
+        `   provenance: ${sanitizeText(claim.provenance.sourceFile)}${version} · ${claim.provenance.transform.join(" → ")}`,
       ].join("\n");
     })
     .join("\n");
