@@ -9,7 +9,8 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
-    }
+    },
+    "./schema/*": "./schema/*"
   },
   "bin": {
     "gatefold": "./bin/gatefold.js"

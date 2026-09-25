@@ -89,11 +89,12 @@ describe("pfl export contract document", () => {
 });
 
 describe("release documentation", () => {
-  it("release checklist enumerates every release-gate command", async () => {
+  it("release checklist enumerates every release-gate command in order", async () => {
     const checklist = await readFile(
       `${root}docs/release-checklist.md`,
       "utf8",
     );
+    let position = 0;
     for (const step of [
       "pnpm install --frozen-lockfile",
       "pnpm typecheck",
@@ -101,10 +102,12 @@ describe("release documentation", () => {
       "pnpm format:check",
       "pnpm test --run",
       "pnpm build",
-      "npm pack --dry-run",
+      "npm pack",
       "npm publish --dry-run",
     ]) {
-      expect(checklist).toContain(step);
+      const found = checklist.indexOf(step, position);
+      expect(found, step).toBeGreaterThanOrEqual(position);
+      position = found;
     }
   });
 
@@ -115,7 +118,7 @@ describe("release documentation", () => {
     );
     expect(docs.length).toBeGreaterThanOrEqual(7);
     for (const doc of docs) {
-      expect(readme, doc).toContain(`docs/${doc}`);
+      expect(readme, doc).toContain(`](docs/${doc})`);
     }
   });
 
@@ -125,7 +128,10 @@ describe("release documentation", () => {
       ...(await readdir(`${root}docs`)).map((f) => `docs/${f}`),
     ]) {
       const text = await readFile(`${root}${file}`, "utf8");
-      for (const [, target] of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+      const linkPattern =
+        /\]\(\s*(<[^>\n]+>|[^)\s]+)(?:\s+["'][^"']*["'])?\s*\)/g;
+      for (const [, raw] of text.matchAll(linkPattern)) {
+        const target = raw.replace(/^<|>$/g, "");
         if (/^[a-z]+:/.test(target) || target.startsWith("#")) continue;
         const resolved = new URL(target, `file://${root}${file}`);
         await expect(
@@ -137,10 +143,15 @@ describe("release documentation", () => {
   });
 
   it("contains no stale scaffold-era claims", async () => {
-    for (const file of ["README.md", "docs/overview.md"]) {
+    for (const file of [
+      "README.md",
+      ...(await readdir(`${root}docs`))
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => `docs/${f}`),
+    ]) {
       const text = await readFile(`${root}${file}`, "utf8");
-      expect(text).not.toContain("empty claim collection");
-      expect(text).not.toMatch(/scaffold/i);
+      expect(text, file).not.toContain("empty claim collection");
+      expect(text, file).not.toMatch(/scaffold/i);
     }
   });
 });

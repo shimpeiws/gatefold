@@ -28,10 +28,11 @@ release gate in [v0.1 scope](v0.1-scope.md).
 npm pack --dry-run --json
 ```
 
-Confirm the tarball contains exactly: `bin/gatefold.js`, `dist/` (compiled
-output and `.d.ts` files), `docs/`, `schema/` (including `schema/examples/`),
-`README.md`, and `package.json`. It must not contain `test/`, `node_modules/`,
-`src/`, or any agent or review artifacts.
+Confirm the tarball contains `bin/gatefold.js`, `dist/` (compiled output and
+`.d.ts` files), `docs/`, `schema/` (including `schema/examples/`), `README.md`,
+and `package.json`. All of `docs/` is shipped intentionally — keep only
+public-facing documentation in that directory. The tarball must not contain
+`test/`, `node_modules/`, `src/`, or any agent or review artifacts.
 
 Also confirm in `package.json`:
 
@@ -52,8 +53,8 @@ the file list, and the bin entry against the real registry client.
 ## 5. Smoke test the packed artifact
 
 ```text
-npm pack
-npm install -g ./shimpeiws-gatefold-<version>.tgz
+TARBALL=$(npm pack --json | jq -r '.[0].filename')
+npm install -g "./$TARBALL"
 gatefold --help
 gatefold path/to/pfl-export.json --format json
 npm uninstall -g @shimpeiws/gatefold

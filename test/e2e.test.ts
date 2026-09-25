@@ -227,7 +227,9 @@ describe("gatefold e2e (real process)", () => {
       ".letta",
       "dist/test",
     ]) {
-      const hits = names.filter((n: string) => n.split("/")[0] === forbidden);
+      const hits = names.filter(
+        (n: string) => n === forbidden || n.startsWith(`${forbidden}/`),
+      );
       expect(hits, forbidden).toEqual([]);
     }
   });
