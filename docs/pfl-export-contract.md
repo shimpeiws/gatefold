@@ -2,7 +2,8 @@
 
 This document defines the exact `pfl` export shape Gatefold v0.1 accepts. It is
 grounded in pfl's frozen v1.0 `--json` document contract
-(`docs/design/pfl-json-contract.md` in the pfl repository). Gatefold has no
+(`docs/design/pfl-json-contract.md` in the pfl repository, verified against
+`pfl@1.0.0`, `src/cli/report.ts` `ReportData`, on 2026-09-25). Gatefold has no
 runtime dependency on pfl; the export file is the only boundary.
 
 ## Accepted document
@@ -83,9 +84,13 @@ Committed fixtures under `test/fixtures/pfl-export/`:
 | --- | --- |
 | `valid-report.json` | accepted; representative report with findings |
 | `valid-report-minimal.json` | accepted; smallest valid document |
+| `valid-report-partial.json` | accepted; `partial` completeness, non-empty diagnostics, and unknown envelope/`data` fields |
 | `empty-report.json` | accepted; zero findings, zero stats |
 | `unsupported-version.json` | rejected (`pflVersion` 2.x) |
+| `unsupported-version-low.json` | rejected (`pflVersion` below 1.0.0) |
 | `wrong-command.json` | rejected (`command` is not `report`) |
 | `failure-document.json` | rejected (`ok: false`) |
 | `invalid-shape.json` | rejected (missing required `data` fields) |
+| `invalid-diagnostics.json` | rejected (malformed `diagnostics` items) |
+| `non-object.json` | rejected (top level is not an object) |
 | `malformed.json` | rejected (not valid JSON) |
