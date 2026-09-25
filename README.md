@@ -20,4 +20,4 @@ gatefold path/to/pfl-export.json --format json
 
 The scaffold validates the input JSON and returns an empty claim collection. It does not yet implement descriptive analysis rules.
 
-Read the [project overview](docs/overview.md), [architecture](docs/architecture.md), and [claim model](docs/claim-model.md) for the design.
+Read the [project overview](docs/overview.md), [v0.1 scope](docs/v0.1-scope.md), [architecture](docs/architecture.md), and [claim model](docs/claim-model.md) for the design.

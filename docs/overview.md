@@ -12,6 +12,8 @@ The first release describes what the export contains. It does not decide whether
 
 The first release excludes declared intent, `yuurei` trace input, and score calculation.
 
+The full boundary — supported input, output guarantees, exclusions, compatibility policy, and the release gate — is defined in [v0.1 scope](v0.1-scope.md).
+
 ## Tool relationships
 
 `pfl` provides the encoded harness representation. `yuurei` provides observed execution traces. Gatefold interprets these inputs.
