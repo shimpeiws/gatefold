@@ -11,7 +11,11 @@ not score or rank harnesses.
 gatefold <input.json>                          # human-readable claims
 gatefold <input.json> --format json            # machine-readable, schema-validated
 gatefold <input.json> --min-confidence 0.8     # drop claims below the threshold
+pfl report --json | gatefold -                 # read the export from stdin
 ```
+
+Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
+confidence score — see [the claim model](docs/claim-model.md).
 
 Exit codes: `0` success, `2` usage error, `3` input error, `4` internal error.
 Errors are written to stderr only.
@@ -29,6 +33,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 
 - [Project overview](docs/overview.md)
 - [v0.1 scope and acceptance criteria](docs/v0.1-scope.md)
+- [v0.2 scope and acceptance criteria](docs/v0.2-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [pfl export contract](docs/pfl-export-contract.md)

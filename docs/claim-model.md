@@ -4,8 +4,11 @@ A claim is one evidence-backed statement about a harness representation.
 
 The machine-readable form is defined by the versioned JSON Schema at
 [`schema/claim-result.v1.json`](../schema/claim-result.v1.json). The TypeScript
-types in `src/domain/claim.ts` mirror that schema; a typed `AnalysisResult`
-validates against it.
+types in `src/domain/claim.ts` mirror that schema with one deliberate
+difference: the `Claim` interface marks `ruleId` required because Gatefold
+always emits it, while the schema and the runtime validator keep it optional
+so results written before `ruleId` existed stay valid. A typed
+`AnalysisResult` still validates against the schema.
 
 ## Result envelope
 
@@ -19,6 +22,7 @@ validates against it.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `claim` | string, non-empty | The statement in natural language. Descriptive only — never a judgement of quality. |
+| `ruleId` | string, non-empty | Stable identifier of the producing rule. Always emitted by Gatefold; optional in the schema so results written before `ruleId` existed stay valid. |
 | `evidence` | array, min 1 item | References to concrete locations in the input representation. |
 | `provenance` | object | The source file, the export version, and the transformations used. |
 | `confidence` | number in [0, 1] | The certainty that the evidence supports the claim. |
@@ -35,11 +39,20 @@ Each evidence item carries:
 
 ### Provenance
 
-- `sourceFile` (required) — the path of the input export file.
+- `sourceFile` (required) — the path of the input export file, or `<stdin>`
+  when the export was read from standard input.
 - `exportVersion` (optional) — the version the export reports (for a `pfl`
   document, its `pflVersion`), when the export carries one.
 - `transform` (required, may be empty) — names of the transformations applied
   between the raw input and the claim, in application order.
+- `classifierVersion` (optional) — the version of the export's interpretation
+  classifier (for a `pfl` document, `data.interpretation.classifierVersion`).
+- `interpretationOrigin` (optional) — how the export's interpretation was
+  produced (for a `pfl` document, `data.interpretation.origin`).
+- `observedSnapshotId` / `resolvedSnapshotId` (optional) — snapshot identifiers
+  the export carries.
+- `runtimeName` (optional) — the display name of the runtime the export
+  describes, when the export carries one.
 
 ### Confidence
 

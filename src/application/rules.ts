@@ -18,10 +18,18 @@ function escapePointer(segment: string): string {
 }
 
 function provenance(input: PflExport, ruleId: string): ClaimProvenance {
+  const data = input.data;
+  const text = (value: string | undefined): string | undefined =>
+    value === undefined ? undefined : sanitizeText(value);
   return {
     sourceFile: input.sourcePath,
     exportVersion: input.pflVersion,
     transform: ["pfl-report-envelope", `rule:${ruleId}`],
+    classifierVersion: sanitizeText(data.interpretation.classifierVersion),
+    interpretationOrigin: data.interpretation.origin,
+    observedSnapshotId: text(data.observedSnapshotId),
+    resolvedSnapshotId: text(data.resolvedSnapshotId),
+    runtimeName: text(data.runtimeName),
   };
 }
 
@@ -39,6 +47,7 @@ function makeClaim(
 ): Claim {
   return {
     claim: sanitizeText(claim),
+    ruleId,
     evidence,
     provenance: provenance(input, ruleId),
     confidence,
@@ -120,6 +129,30 @@ export const RULES: readonly ClaimRule[] = [
       ),
   },
   {
+    id: "diagnostic-reported",
+    description:
+      "Reports each warning or error diagnostic the export carries: code, message, and path.",
+    evaluate: (input) =>
+      input.diagnostics.flatMap((diagnostic, index) => {
+        if (
+          diagnostic.severity !== "warning" &&
+          diagnostic.severity !== "error"
+        )
+          return [];
+        const atPath =
+          diagnostic.path === undefined ? "" : ` at '${diagnostic.path}'`;
+        return [
+          makeClaim(
+            input,
+            "diagnostic-reported",
+            `The export reports diagnostic '${diagnostic.code}' (${diagnostic.severity})${atPath}: ${diagnostic.message}`,
+            [{ pointer: `/diagnostics/${index}` }],
+            1,
+          ),
+        ];
+      }),
+  },
+  {
     id: "completeness-reported",
     description:
       "Reports when the export is not complete and how many diagnostics it carries.",
@@ -131,6 +164,34 @@ export const RULES: readonly ClaimRule[] = [
           "completeness-reported",
           `The export is marked '${input.completeness}' with ${input.diagnostics.length} diagnostic(s) recorded.`,
           [{ pointer: "/completeness" }, { pointer: "/diagnostics" }],
+          1,
+        ),
+      ];
+    },
+  },
+  {
+    id: "observation-status",
+    description:
+      "Explains how to read the report's observation status: completeness, diagnostic counts by severity, and interpretation origin.",
+    evaluate: (input) => {
+      const counts = { info: 0, warning: 0, error: 0 };
+      for (const diagnostic of input.diagnostics)
+        counts[diagnostic.severity] += 1;
+      const diagnosticsText =
+        input.diagnostics.length === 0
+          ? "no diagnostics"
+          : `${input.diagnostics.length} diagnostic(s) (${counts.info} info, ${counts.warning} warning, ${counts.error} error)`;
+      const interpretation = input.data.interpretation;
+      return [
+        makeClaim(
+          input,
+          "observation-status",
+          `The export reports completeness '${input.completeness}' with ${diagnosticsText}; the interpretation was produced by classifier version '${interpretation.classifierVersion}' with origin '${interpretation.origin}'.`,
+          [
+            { pointer: "/completeness" },
+            { pointer: "/diagnostics" },
+            { pointer: "/data/interpretation" },
+          ],
           1,
         ),
       ];

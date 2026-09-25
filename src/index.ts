@@ -11,6 +11,8 @@ export {
   PflExportError,
   parsePflExport,
   readPflExport,
+  readPflExportStdin,
+  STDIN_SOURCE,
 } from "./input/pfl-export.js";
 export type {
   Completeness,

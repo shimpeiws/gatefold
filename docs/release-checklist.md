@@ -1,6 +1,7 @@
-# v0.1 release checklist
+# Release checklist
 
-Reproducible steps to cut the v0.1 release. Every step must pass in order.
+Reproducible steps to cut the current release (v0.2). Every step must pass in
+order.
 
 ## 1. Clean install
 
@@ -20,7 +21,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.1 scope](v0.1-scope.md).
+release gate in [v0.2 scope](v0.2-scope.md).
 
 ## 3. Package validation
 
@@ -62,8 +63,12 @@ TARBALL=$(npm pack --json | jq -r '.[0].filename')
 npm install -g "./$TARBALL"
 gatefold --help
 gatefold path/to/pfl-export.json --format json
+pfl report --json | gatefold -        # stdin transport
 npm uninstall -g @shimpeiws/gatefold
 ```
+
+Confirm every claim in the JSON output carries a `ruleId`, evidence pointers,
+and provenance.
 
 ## 6. Tag and publish
 

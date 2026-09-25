@@ -10,10 +10,16 @@ export interface ClaimProvenance {
   readonly sourceFile: string;
   readonly exportVersion?: string;
   readonly transform: readonly string[];
+  readonly classifierVersion?: string;
+  readonly interpretationOrigin?: string;
+  readonly observedSnapshotId?: string;
+  readonly resolvedSnapshotId?: string;
+  readonly runtimeName?: string;
 }
 
 export interface Claim {
   readonly claim: string;
+  readonly ruleId: string;
   readonly evidence: readonly EvidenceReference[];
   readonly provenance: ClaimProvenance;
   readonly confidence: number;

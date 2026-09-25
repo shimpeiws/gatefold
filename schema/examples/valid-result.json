@@ -3,6 +3,7 @@
   "claims": [
     {
       "claim": "pfl observed 3 elements: 3 effective, 0 shadowed, 0 conditional, 0 opaque.",
+      "ruleId": "element-counts",
       "evidence": [
         {
           "pointer": "/data/stats",
@@ -12,7 +13,12 @@
       "provenance": {
         "sourceFile": "export.json",
         "exportVersion": "1.0.0",
-        "transform": ["pfl-report-envelope", "rule:element-counts"]
+        "transform": ["pfl-report-envelope", "rule:element-counts"],
+        "classifierVersion": "1",
+        "interpretationOrigin": "recomputed",
+        "observedSnapshotId": "snap-observed-1",
+        "resolvedSnapshotId": "snap-resolved-1",
+        "runtimeName": "Claude Code"
       },
       "confidence": 1
     }

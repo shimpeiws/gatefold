@@ -72,7 +72,15 @@ const MAX_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_DIAGNOSTICS = 1_000;
 const MAX_FINDINGS = 10_000;
 const MAX_ELEMENT_IDS = 1_000;
+const MAX_TOTAL_ELEMENT_IDS = 10_000;
 const MAX_BY_FACET_KEYS = 1_000;
+/**
+ * Character ceiling for metadata strings (`pflVersion`, `classifierVersion`,
+ * `runtimeName`, snapshot ids, `confidence`). These values are copied into the
+ * provenance of every claim, so an unbounded string would multiply a small
+ * input into output too large to buffer.
+ */
+const MAX_METADATA_CHARS = 1_024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -102,8 +110,8 @@ function nonNegativeIntField(
   path = key,
 ): number {
   const value = record[key];
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0)
-    throw shapeError(path, "a non-negative integer");
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+    throw shapeError(path, "a non-negative safe integer");
   return value;
 }
 
@@ -114,6 +122,11 @@ function optionalStringField(
   const value = record[key];
   if (value === undefined) return undefined;
   if (typeof value !== "string") throw shapeError(key, "a string");
+  if (value.length > MAX_METADATA_CHARS)
+    throw shapeError(
+      key,
+      `a string of at most ${MAX_METADATA_CHARS} characters`,
+    );
   return value;
 }
 
@@ -161,10 +174,14 @@ function parseReportData(value: unknown): PflReportData {
     // Null-prototype object: keeps keys like "__proto__" as real own keys.
     byFacet = Object.create(null) as Record<string, number>;
     for (const [facet, count] of Object.entries(byFacetValue)) {
-      if (typeof count !== "number" || !Number.isInteger(count) || count < 0)
+      if (
+        typeof count !== "number" ||
+        !Number.isSafeInteger(count) ||
+        count < 0
+      )
         throw shapeError(
           `data.stats.byFacet.${facet}`,
-          "a non-negative integer",
+          "a non-negative safe integer",
         );
       byFacet[facet] = count;
     }
@@ -177,6 +194,7 @@ function parseReportData(value: unknown): PflReportData {
       "data.findings",
       `an array with at most ${MAX_FINDINGS} items`,
     );
+  let totalElementIds = 0;
   const findings = findingsValue.map((item, index) => {
     const at = `data.findings[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
@@ -190,6 +208,12 @@ function parseReportData(value: unknown): PflReportData {
         `${at}.elementIds`,
         `an array of non-empty strings (at most ${MAX_ELEMENT_IDS})`,
       );
+    totalElementIds += elementIds.length;
+    if (totalElementIds > MAX_TOTAL_ELEMENT_IDS)
+      throw shapeError(
+        "data.findings[*].elementIds",
+        `at most ${MAX_TOTAL_ELEMENT_IDS} ids in total across all findings`,
+      );
     return {
       rule: stringField(item, "rule", `${at}.rule`),
       message: stringField(item, "message", `${at}.message`),
@@ -199,6 +223,16 @@ function parseReportData(value: unknown): PflReportData {
   const interpretation = value.interpretation;
   if (!isRecord(interpretation))
     throw shapeError("data.interpretation", "an object");
+  const classifierVersion = stringField(
+    interpretation,
+    "classifierVersion",
+    "data.interpretation.classifierVersion",
+  );
+  if (classifierVersion.length > MAX_METADATA_CHARS)
+    throw shapeError(
+      "data.interpretation.classifierVersion",
+      `a string of at most ${MAX_METADATA_CHARS} characters`,
+    );
   const origin = interpretation.origin;
   if (origin !== "stored" && origin !== "recomputed")
     throw shapeError("data.interpretation.origin", '"stored" or "recomputed"');
@@ -236,11 +270,7 @@ function parseReportData(value: unknown): PflReportData {
     },
     findings,
     interpretation: {
-      classifierVersion: stringField(
-        interpretation,
-        "classifierVersion",
-        "data.interpretation.classifierVersion",
-      ),
+      classifierVersion,
       origin,
     },
   };
@@ -270,6 +300,11 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
   const pflVersion = value.pflVersion;
   if (typeof pflVersion !== "string" || pflVersion.length === 0)
     throw shapeError("pflVersion", "a non-empty string");
+  if (pflVersion.length > MAX_METADATA_CHARS)
+    throw shapeError(
+      "pflVersion",
+      `a string of at most ${MAX_METADATA_CHARS} characters`,
+    );
   if (!isSupportedPflVersion(pflVersion))
     throw new PflExportError(
       "unsupported-version",
@@ -308,6 +343,9 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
 
 class InputTooLargeError extends Error {}
 
+/** provenance.sourceFile recorded for exports read from standard input. */
+export const STDIN_SOURCE = "<stdin>";
+
 /**
  * Reads at most MAX_FILE_BYTES bytes. Regular files are rejected by size
  * before reading; pipes and devices are read in chunks and cut off at the
@@ -335,6 +373,46 @@ async function readBounded(path: string): Promise<Buffer> {
   }
 }
 
+/** Reads standard input under the same byte ceiling as file input. */
+async function readBoundedStdin(
+  stream: AsyncIterable<Buffer | string> = process.stdin,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  // Chunks are strings when a consumer already called setEncoding('utf8'):
+  // re-encode so the ceiling counts bytes, not UTF-16 code units.
+  for await (const chunk of stream) {
+    const buffer =
+      typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+    total += buffer.length;
+    if (total > MAX_FILE_BYTES) {
+      const destroy = (stream as { destroy?: unknown }).destroy;
+      if (typeof destroy === "function") (destroy as () => void).call(stream);
+      throw new InputTooLargeError();
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks, total);
+}
+
+function parseExportContent(
+  content: string,
+  invalidJsonMessage: string,
+  sourcePath: string,
+): PflExport {
+  // A leading UTF-8 BOM (U+FEFF) is part of the transport encoding, not the
+  // document: strip exactly one. A BOM anywhere else stays invalid JSON.
+  const text = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new PflExportError("invalid-json", invalidJsonMessage);
+  }
+
+  return parsePflExport(value, sourcePath);
+}
+
 export async function readPflExport(path: string): Promise<PflExport> {
   let content: string;
   try {
@@ -351,15 +429,31 @@ export async function readPflExport(path: string): Promise<PflExport> {
     );
   }
 
-  let value: unknown;
+  return parseExportContent(
+    content,
+    `input file is not valid JSON: ${path}`,
+    path,
+  );
+}
+
+export async function readPflExportStdin(
+  stream: AsyncIterable<Buffer | string> = process.stdin,
+): Promise<PflExport> {
+  let content: string;
   try {
-    value = JSON.parse(content);
-  } catch {
-    throw new PflExportError(
-      "invalid-json",
-      `input file is not valid JSON: ${path}`,
-    );
+    content = (await readBoundedStdin(stream)).toString("utf8");
+  } catch (error) {
+    if (error instanceof InputTooLargeError)
+      throw new PflExportError(
+        "invalid-shape",
+        `standard input exceeds the ${MAX_FILE_BYTES}-byte limit`,
+      );
+    throw new PflExportError("unreadable-file", "cannot read standard input");
   }
 
-  return parsePflExport(value, path);
+  return parseExportContent(
+    content,
+    "standard input is not valid JSON",
+    STDIN_SOURCE,
+  );
 }

@@ -1,21 +1,29 @@
-# Supported pfl export contract (v0.1)
+# Supported pfl export contract
 
-This document defines the exact `pfl` export shape Gatefold v0.1 accepts. It is
+This document defines the exact `pfl` export shape Gatefold accepts (current
+release: v0.2). It is
 grounded in pfl's frozen v1.0 `--json` document contract
 (`docs/design/pfl-json-contract.md` in the pfl repository, verified against
 `pfl@1.0.0`, `src/cli/report.ts` `ReportData`, on 2026-09-25). Gatefold has no
-runtime dependency on pfl; the export file is the only boundary.
+runtime dependency on pfl; the export document is the only boundary.
 
 ## Accepted document
 
 Gatefold accepts exactly one kind of pfl document: a successful
 `pfl report --json` export — the descriptive interpretation surface (counts,
 facets, findings). Other commands (`inspect`, `list`, `show`, `graph`,
-`snapshots`, `diff`, `gc`) are not accepted in v0.1.
+`snapshots`, `diff`, `gc`) are not accepted.
+
+The document reaches Gatefold as a file argument or on standard input
+(`gatefold -`). Stdin is an additional transport for the same document, not a
+new document kind: identical byte limit, JSON validation, and contract checks
+apply, and claims record `<stdin>` as `provenance.sourceFile`.
 
 ## Envelope
 
-Every accepted document is a JSON object with these top-level fields:
+Every accepted document is a JSON object with these top-level fields. A single
+leading UTF-8 BOM is tolerated as part of the transport encoding and stripped
+before parsing; a BOM anywhere else is invalid JSON.
 
 | Field | Type | Requirement |
 | --- | --- | --- |
@@ -34,12 +42,14 @@ Required fields:
 | --- | --- | --- |
 | `runtime` | string | Runtime id observed by pfl (e.g. `"claude-code"`, `"codex"`, `"opencode"`). |
 | `project` | object | `{ id: string, displayName: string }`. |
-| `stats` | object | `{ observed, effective, shadowed, conditional, opaque }` — non-negative integers — plus optional `byFacet`, a record of facet name → non-negative integer (at most 1,000 keys; facet names are arbitrary strings, including prototype-like names). |
+| `stats` | object | `{ observed, effective, shadowed, conditional, opaque }` — non-negative safe integers — plus optional `byFacet`, a record of facet name → non-negative safe integer (at most 1,000 keys; facet names are arbitrary strings, including prototype-like names). |
 | `findings` | array | Items `{ rule: string, message: string, elementIds: string[] }` (at most 10,000 findings; at most 1,000 non-empty `elementIds` per finding). May be empty. |
 | `interpretation` | object | `{ classifierVersion: string, origin: "stored" \| "recomputed" }`. |
 
-Recognized optional fields (captured for provenance when present):
-`runtimeName`, `observedSnapshotId`, `resolvedSnapshotId`, `confidence`.
+Recognized optional fields: `runtimeName`, `observedSnapshotId`,
+`resolvedSnapshotId` — surfaced in claim `provenance` when present — and
+`confidence`, which is accepted for forward compatibility but not surfaced in
+output.
 
 ## Unknown fields
 
@@ -78,8 +88,21 @@ Claim evidence `pointer` values (JSON Pointer, RFC 6901) may reference:
 pfl exports are untrusted input, so the reader enforces resource ceilings:
 input files larger than 16 MiB (measured in bytes; regular files are rejected
 by size before reading, and pipes are cut off at the limit), more than 1,000 `diagnostics`, more than
-10,000 `findings`, more than 1,000 `elementIds` per finding, or more than
-1,000 `byFacet` keys are rejected with `invalid-shape` errors.
+10,000 `findings`, more than 1,000 `elementIds` per finding, more than
+10,000 `elementIds` in total across all findings, or more than
+1,000 `byFacet` keys are rejected with `invalid-shape` errors. Metadata
+strings copied into every claim's provenance — `pflVersion`,
+`data.interpretation.classifierVersion`, `data.runtimeName`,
+`data.observedSnapshotId`, `data.resolvedSnapshotId`, and `data.confidence` —
+are capped at 1,024 characters each, since they repeat per claim.
+
+The aggregate `elementIds` and metadata limits bound the maximum output
+amplification. Every accepted report keeps all cited element ids as evidence,
+so the largest accepted report can emit roughly 12,000 claims carrying roughly
+22,000 evidence references (findings dominate: at most 10,000 finding claims
+with one pointer each plus one pointer per cited element id), each with at
+most a few KiB of provenance metadata. Output size therefore stays
+proportional to the input's declared item counts.
 
 ## Error behavior
 

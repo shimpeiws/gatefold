@@ -8,6 +8,8 @@ import {
   PflExportError,
   parsePflExport,
   readPflExport,
+  readPflExportStdin,
+  STDIN_SOURCE,
 } from "../src/input/pfl-export.js";
 
 const dir = new URL("fixtures/pfl-export/", import.meta.url);
@@ -182,6 +184,136 @@ describe("readPflExport contract", () => {
       elementIds: [],
     }));
     expect(() => parsePflExport(doc, "inline")).toThrow(/at most/);
+  });
+
+  it("accepts a report citing exactly 10,000 element ids in total", () => {
+    const doc = validDoc();
+    doc.data.findings = Array.from({ length: 10 }, (_, f) => ({
+      rule: "r",
+      message: "m",
+      elementIds: Array.from({ length: 1_000 }, (_, i) => `f${f}-e${i}`),
+    }));
+    const result = parsePflExport(doc, "inline");
+    expect(
+      result.data.findings.reduce((n, f) => n + f.elementIds.length, 0),
+    ).toBe(10_000);
+  });
+
+  it("rejects more than 10,000 element ids spread across findings", () => {
+    const doc = validDoc();
+    doc.data.findings = [
+      ...Array.from({ length: 10 }, (_, f) => ({
+        rule: "r",
+        message: "m",
+        elementIds: Array.from({ length: 1_000 }, (_, i) => `f${f}-e${i}`),
+      })),
+      { rule: "r", message: "m", elementIds: ["one-too-many"] },
+    ];
+    const error = (() => {
+      try {
+        parsePflExport(doc, "inline");
+        return null;
+      } catch (e) {
+        return e as PflExportError;
+      }
+    })();
+    expect(error?.code).toBe("invalid-shape");
+    expect(error?.message).toContain("at most 10000");
+  });
+
+  it("rejects metadata strings longer than the per-field character cap", () => {
+    const over = "x".repeat(1_025);
+    for (const mutate of [
+      (doc: Record<string, any>) => {
+        doc.data.interpretation.classifierVersion = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.runtimeName = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.observedSnapshotId = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.resolvedSnapshotId = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.confidence = over;
+      },
+      (doc: Record<string, any>) => {
+        doc.pflVersion = `1.0.${"0".repeat(2_000)}`;
+      },
+    ]) {
+      const doc = validDoc();
+      mutate(doc);
+      expect(() => parsePflExport(doc, "inline")).toThrow(/at most 1024/);
+    }
+    const atCap = validDoc();
+    atCap.data.interpretation.classifierVersion = "x".repeat(1_024);
+    atCap.data.runtimeName = "x".repeat(1_024);
+    atCap.data.observedSnapshotId = "x".repeat(1_024);
+    expect(() => parsePflExport(atCap, "inline")).not.toThrow();
+  });
+
+  it("accepts stdin chunks delivered as strings (setEncoding consumers)", async () => {
+    async function* stringChunks(): AsyncGenerator<string> {
+      const text = JSON.stringify(validDoc());
+      yield text.slice(0, 10);
+      yield text.slice(10);
+    }
+    const result = await readPflExportStdin(stringChunks());
+    expect(result.sourcePath).toBe(STDIN_SOURCE);
+    expect(result.pflVersion).toBe("1.0.0");
+  });
+
+  it("counts stdin bytes, not characters, when chunks arrive as strings", async () => {
+    async function* bigString(): AsyncGenerator<string> {
+      // 'é' is one UTF-16 code unit but two UTF-8 bytes: 9M chars ≈ 18 MB.
+      yield "é".repeat(9_000_000);
+    }
+    await expect(readPflExportStdin(bigString())).rejects.toMatchObject({
+      code: "invalid-shape",
+    });
+  });
+
+  it("accepts a document with a leading UTF-8 BOM", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "gatefold-bom-"));
+    const path = join(tmp, "bom.json");
+    try {
+      await writeFile(path, "\uFEFF" + JSON.stringify(validDoc()), "utf8");
+      const result = await readPflExport(path);
+      expect(result.pflVersion).toBe("1.0.0");
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("still rejects a BOM appearing after the first character", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "gatefold-bom-"));
+    const path = join(tmp, "mid-bom.json");
+    try {
+      const doc = JSON.stringify(validDoc());
+      await writeFile(path, doc.slice(0, 1) + "\uFEFF" + doc.slice(1), "utf8");
+      await expect(readPflExport(path)).rejects.toMatchObject({
+        code: "invalid-json",
+      });
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects non-safe integers in stats and byFacet counts", () => {
+    const unsafe = validDoc();
+    unsafe.data.stats.observed = 2 ** 53;
+    expect(() => parsePflExport(unsafe, "inline")).toThrow(/safe integer/);
+
+    const unsafeFacet = validDoc();
+    unsafeFacet.data.stats.byFacet = { actions: Number.MAX_SAFE_INTEGER + 1 };
+    expect(() => parsePflExport(unsafeFacet, "inline")).toThrow(/safe integer/);
+
+    const safe = validDoc();
+    safe.data.stats.observed = Number.MAX_SAFE_INTEGER;
+    safe.data.stats.byFacet = { actions: Number.MAX_SAFE_INTEGER };
+    expect(() => parsePflExport(safe, "inline")).not.toThrow();
   });
 
   it("sanitizes control characters in the input path on errors", async () => {
