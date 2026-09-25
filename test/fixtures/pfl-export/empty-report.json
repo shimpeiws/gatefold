@@ -1,0 +1,23 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "report",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "runtime": "claude-code",
+    "runtimeName": "Claude Code",
+    "project": { "id": "git-empty", "displayName": "empty-project" },
+    "confidence": "verified",
+    "stats": {
+      "observed": 0,
+      "effective": 0,
+      "shadowed": 0,
+      "conditional": 0,
+      "opaque": 0,
+      "byFacet": {}
+    },
+    "findings": [],
+    "interpretation": { "classifierVersion": "1", "origin": "stored" }
+  }
+}

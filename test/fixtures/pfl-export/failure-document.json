@@ -1,0 +1,13 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "report",
+  "ok": false,
+  "completeness": "unknown",
+  "diagnostics": [],
+  "data": {
+    "error": {
+      "code": "SNAPSHOT_STORE_FAILED",
+      "message": "reading ~/.pfl/ failed"
+    }
+  }
+}

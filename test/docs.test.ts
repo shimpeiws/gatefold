@@ -6,6 +6,9 @@ const scopePath = fileURLToPath(
   new URL("../docs/v0.1-scope.md", import.meta.url),
 );
 const packagePath = fileURLToPath(new URL("../package.json", import.meta.url));
+const contractPath = fileURLToPath(
+  new URL("../docs/pfl-export-contract.md", import.meta.url),
+);
 
 describe("v0.1 scope document", () => {
   it("exists and covers the required scope topics in English", async () => {
@@ -60,5 +63,25 @@ describe("v0.1 scope document", () => {
   it("records out-of-scope work for a later milestone", async () => {
     const doc = await readFile(scopePath, "utf8");
     expect(doc).toContain("## Out-of-scope record");
+  });
+});
+
+describe("pfl export contract document", () => {
+  it("covers the acceptance-relevant rules", async () => {
+    const doc = await readFile(contractPath, "utf8");
+    for (const section of [
+      "## Accepted document",
+      "## Envelope",
+      "## Unknown fields",
+      "## Compatibility",
+      "## Evidence locations",
+      "## Error behavior",
+      "## Fixtures",
+    ]) {
+      expect(doc).toContain(section);
+    }
+    expect(doc).toContain(">=1.0.0 <2.0.0");
+    expect(doc).toContain('"report"');
+    expect(doc).toContain("ok: false");
   });
 });

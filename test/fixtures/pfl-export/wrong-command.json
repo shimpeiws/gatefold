@@ -1,0 +1,12 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "list",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "count": 0,
+    "elements": [],
+    "interpretation": { "classifierVersion": "1", "origin": "stored" }
+  }
+}
