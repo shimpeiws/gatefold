@@ -68,6 +68,73 @@ describe("v0.1 scope document", () => {
   });
 });
 
+describe("v0.2 scope document", () => {
+  const v02ScopePath = fileURLToPath(
+    new URL("../docs/v0.2-scope.md", import.meta.url),
+  );
+
+  it("exists and covers the required scope topics in English", async () => {
+    const doc = await readFile(v02ScopePath, "utf8");
+    for (const section of [
+      "## Supported input",
+      "## Output guarantees",
+      "## Observation-certainty claims",
+      "## Excluded features",
+      "## Compatibility policy",
+      "## Release gate",
+    ]) {
+      expect(doc).toContain(section);
+    }
+    for (const excluded of [
+      "declared intent",
+      "yuurei",
+      "scoring",
+      "optimization",
+    ]) {
+      expect(doc.toLowerCase()).toContain(excluded.toLowerCase());
+    }
+  });
+
+  it("defines claim bounds for every completeness value", async () => {
+    const doc = await readFile(v02ScopePath, "utf8");
+    const section = doc.slice(doc.indexOf("## Observation-certainty claims"));
+    for (const value of ["`complete`", "`partial`", "`unknown`"]) {
+      expect(section).toContain(value);
+    }
+  });
+
+  it("keeps the release gate in sync with pnpm ci:all", async () => {
+    const doc = await readFile(v02ScopePath, "utf8");
+    const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+    const ciAll = pkg.scripts["ci:all"];
+    for (const check of [
+      "pnpm typecheck",
+      "pnpm lint",
+      "pnpm format:check",
+      "pnpm test --run",
+      "pnpm build",
+    ]) {
+      expect(doc).toContain(`\`${check}\``);
+      expect(ciAll).toContain(check);
+    }
+    expect(doc).toContain("npm publish --dry-run");
+    expect(doc).toContain("npm pack");
+  });
+
+  it("maps every v0.2 issue to the scope", async () => {
+    const doc = await readFile(v02ScopePath, "utf8");
+    const mapping = doc.slice(doc.indexOf("## Issue mapping"));
+    for (const issue of [12, 13, 14, 15, 16, 17, 18, 19]) {
+      expect(mapping).toContain(`#${issue}`);
+    }
+  });
+
+  it("records out-of-scope work for a later milestone", async () => {
+    const doc = await readFile(v02ScopePath, "utf8");
+    expect(doc).toContain("## Out-of-scope record");
+  });
+});
+
 describe("pfl export contract document", () => {
   it("covers the acceptance-relevant rules", async () => {
     const doc = await readFile(contractPath, "utf8");
