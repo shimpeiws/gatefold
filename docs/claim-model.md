@@ -19,6 +19,7 @@ validates against it.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `claim` | string, non-empty | The statement in natural language. Descriptive only — never a judgement of quality. |
+| `ruleId` | string, non-empty | Stable identifier of the producing rule. Always emitted by Gatefold; optional in the schema so results written before `ruleId` existed stay valid. |
 | `evidence` | array, min 1 item | References to concrete locations in the input representation. |
 | `provenance` | object | The source file, the export version, and the transformations used. |
 | `confidence` | number in [0, 1] | The certainty that the evidence supports the claim. |

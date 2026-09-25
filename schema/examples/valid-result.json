@@ -3,6 +3,7 @@
   "claims": [
     {
       "claim": "pfl observed 3 elements: 3 effective, 0 shadowed, 0 conditional, 0 opaque.",
+      "ruleId": "element-counts",
       "evidence": [
         {
           "pointer": "/data/stats",

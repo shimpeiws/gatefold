@@ -29,6 +29,11 @@ export function assertValidResult(result: AnalysisResult): void {
     const at = `claims[${index}]`;
     if (typeof claim.claim !== "string" || claim.claim.length === 0)
       fail(`${at}.claim must be a non-empty string`);
+    if (
+      claim.ruleId !== undefined &&
+      (typeof claim.ruleId !== "string" || claim.ruleId.length === 0)
+    )
+      fail(`${at}.ruleId must be a non-empty string when present`);
     if (!Array.isArray(claim.evidence) || claim.evidence.length === 0)
       fail(`${at}.evidence must contain at least one reference`);
     for (const [ei, evidence] of claim.evidence.entries()) {

@@ -56,6 +56,27 @@ describe("descriptive rules", () => {
     }
   });
 
+  it("stamps every claim with its producing rule's stable ruleId", async () => {
+    for (const name of [
+      "valid-report.json",
+      "valid-report-minimal.json",
+      "valid-report-partial.json",
+      "empty-report.json",
+    ]) {
+      const result = analyze(await load(name));
+      for (const claim of result.claims) {
+        expect(claim.ruleId.length, name).toBeGreaterThan(0);
+        expect(claim.provenance.transform, `${name} ${claim.ruleId}`).toContain(
+          `rule:${claim.ruleId}`,
+        );
+        expect(
+          RULES.some((rule) => rule.id === claim.ruleId),
+          `${name} ${claim.ruleId}`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it("describes the runtime and project", async () => {
     const [claim] = byRule(
       analyze(await load("valid-report.json")),

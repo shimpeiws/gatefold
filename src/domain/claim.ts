@@ -19,6 +19,7 @@ export interface ClaimProvenance {
 
 export interface Claim {
   readonly claim: string;
+  readonly ruleId: string;
   readonly evidence: readonly EvidenceReference[];
   readonly provenance: ClaimProvenance;
   readonly confidence: number;

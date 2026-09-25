@@ -52,6 +52,25 @@ describe("claim schema validation", () => {
     expect(validate(doc)).toBe(false);
   });
 
+  it("accepts results without ruleId and rejects empty or mistyped ruleId", async () => {
+    const valid = (await readExample("valid-result.json")) as {
+      claims: Record<string, unknown>[];
+    };
+    const legacy = JSON.parse(JSON.stringify(valid));
+    delete legacy.claims[0].ruleId;
+    expect(validate(legacy)).toBe(true);
+    expect(() => assertValidResult(legacy as AnalysisResult)).not.toThrow();
+
+    for (const bad of ["", 5, null]) {
+      const doc = JSON.parse(JSON.stringify(valid));
+      doc.claims[0].ruleId = bad;
+      expect(validate(doc), JSON.stringify(bad)).toBe(false);
+      expect(() => assertValidResult(doc as AnalysisResult)).toThrow(
+        "invalid analysis result",
+      );
+    }
+  });
+
   it("defines no scoring, intent, or trace fields", () => {
     const claimProps = Object.keys(schema.$defs.claim.properties);
     for (const banned of ["score", "quality", "intent", "trace"]) {

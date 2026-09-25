@@ -94,6 +94,10 @@ describe("gatefold e2e (real process)", () => {
     expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
     expect(result.schemaVersion).toBe(1);
     expect(result.claims.length).toBeGreaterThan(0);
+    for (const claim of result.claims) {
+      expect(typeof claim.ruleId).toBe("string");
+      expect(claim.ruleId.length).toBeGreaterThan(0);
+    }
   });
 
   it("emits one finding claim per pfl finding with provenance", async () => {

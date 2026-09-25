@@ -45,6 +45,7 @@ function makeClaim(
 ): Claim {
   return {
     claim: sanitizeText(claim),
+    ruleId,
     evidence,
     provenance: provenance(input, ruleId),
     confidence,

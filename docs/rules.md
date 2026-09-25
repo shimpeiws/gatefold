@@ -18,6 +18,9 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
 
 - Claim order is deterministic: registry order, then document order within a
   rule. `facet-composition` emits facets sorted by facet name.
+- Every claim carries `ruleId`, the stable id from the table above. JSON
+  consumers should select claims by `ruleId` instead of parsing claim text or
+  `provenance.transform`.
 - Evidence pointers are JSON Pointers into the export document at the locations
   the input contract permits (`docs/pfl-export-contract.md`).
 - Provenance records the source file, the export's `pflVersion`, the transform
