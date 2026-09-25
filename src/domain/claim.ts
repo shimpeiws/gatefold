@@ -10,6 +10,11 @@ export interface ClaimProvenance {
   readonly sourceFile: string;
   readonly exportVersion?: string;
   readonly transform: readonly string[];
+  readonly classifierVersion?: string;
+  readonly interpretationOrigin?: string;
+  readonly observedSnapshotId?: string;
+  readonly resolvedSnapshotId?: string;
+  readonly runtimeName?: string;
 }
 
 export interface Claim {

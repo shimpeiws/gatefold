@@ -35,11 +35,20 @@ Each evidence item carries:
 
 ### Provenance
 
-- `sourceFile` (required) — the path of the input export file.
+- `sourceFile` (required) — the path of the input export file, or `<stdin>`
+  when the export was read from standard input.
 - `exportVersion` (optional) — the version the export reports (for a `pfl`
   document, its `pflVersion`), when the export carries one.
 - `transform` (required, may be empty) — names of the transformations applied
   between the raw input and the claim, in application order.
+- `classifierVersion` (optional) — the version of the export's interpretation
+  classifier (for a `pfl` document, `data.interpretation.classifierVersion`).
+- `interpretationOrigin` (optional) — how the export's interpretation was
+  produced (for a `pfl` document, `data.interpretation.origin`).
+- `observedSnapshotId` / `resolvedSnapshotId` (optional) — snapshot identifiers
+  the export carries.
+- `runtimeName` (optional) — the display name of the runtime the export
+  describes, when the export carries one.
 
 ### Confidence
 

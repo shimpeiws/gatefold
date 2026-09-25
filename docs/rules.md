@@ -11,6 +11,7 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
 | `element-counts` | The observed/effective/shadowed/conditional/opaque element counts. | 1.0 when `completeness` is `complete`, else 0.8 |
 | `facet-composition` | Per-facet element counts from `stats.byFacet`. | same as `element-counts` |
 | `finding-reported` | Each finding the export carries: rule id, message, cited element ids. | 1.0 |
+| `diagnostic-reported` | Each `warning`/`error` diagnostic the export carries: its code, message, and path. Emitted only for warning/error diagnostics. | 1.0 |
 | `completeness-reported` | When the export is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete exports. | 1.0 |
 
 ## Conventions
@@ -19,8 +20,10 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
   rule. `facet-composition` emits facets sorted by facet name.
 - Evidence pointers are JSON Pointers into the export document at the locations
   the input contract permits (`docs/pfl-export-contract.md`).
-- Provenance records the source file, the export's `pflVersion`, and the
-  transform chain `["pfl-report-envelope", "rule:<id>"]`.
+- Provenance records the source file, the export's `pflVersion`, the transform
+  chain `["pfl-report-envelope", "rule:<id>"]`, and the export's interpretation
+  metadata: `classifierVersion`, `interpretationOrigin`, and — when the export
+  carries them — `observedSnapshotId`, `resolvedSnapshotId`, and `runtimeName`.
 - Strings interpolated into claim text pass through Gatefold's canonical
   claim-text normalization: C0/C1/DEL, zero-width and bidi formatting
   characters, line/paragraph separators, and U+FEFF become the literal text

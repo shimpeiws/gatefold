@@ -141,6 +141,83 @@ describe("descriptive rules", () => {
     expect(ids).toContain("f9-e999");
   });
 
+  it("reports each warning/error diagnostic with code, severity, path, and message", async () => {
+    const result = analyze(await load("valid-report-partial.json"));
+    const claims = byRule(result, "diagnostic-reported");
+    expect(claims).toHaveLength(1);
+    expect(claims[0].claim).toBe(
+      "The export reports diagnostic 'runtime-version-unverified' (warning) at '~/.pfl/projects/git-0f214d60555919a5': runtime version is newer than verified",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/diagnostics/0",
+    ]);
+    expect(claims[0].confidence).toBe(1);
+  });
+
+  it("reports error diagnostics on a partial export", () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "report",
+      ok: true,
+      completeness: "partial",
+      diagnostics: [
+        {
+          severity: "info",
+          code: "cache-warm",
+          message: "cache was warm",
+        },
+        {
+          severity: "error",
+          code: "snapshot-truncated",
+          message: "snapshot was truncated",
+          path: "/data/stats",
+        },
+        { severity: "warning", code: "degraded", message: "partial coverage" },
+      ],
+      data: {
+        runtime: "codex",
+        project: { id: "p", displayName: "d" },
+        stats: {
+          observed: 0,
+          effective: 0,
+          shadowed: 0,
+          conditional: 0,
+          opaque: 0,
+        },
+        findings: [],
+        interpretation: { classifierVersion: "1", origin: "recomputed" },
+      },
+    };
+    const claims = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diagnostic-reported",
+    );
+    expect(claims.map((c) => c.claim)).toEqual([
+      "The export reports diagnostic 'snapshot-truncated' (error) at '/data/stats': snapshot was truncated",
+      "The export reports diagnostic 'degraded' (warning): partial coverage",
+    ]);
+    expect(claims.map((c) => c.evidence[0].pointer)).toEqual([
+      "/diagnostics/1",
+      "/diagnostics/2",
+    ]);
+  });
+
+  it("records interpretation metadata in provenance", async () => {
+    const result = analyze(await load("valid-report.json"));
+    for (const claim of result.claims) {
+      expect(claim.provenance.classifierVersion).toBe("1");
+      expect(claim.provenance.interpretationOrigin).toBe("stored");
+      expect(claim.provenance.observedSnapshotId).toBe("obs-abc123");
+      expect(claim.provenance.runtimeName).toBe("Claude Code");
+    }
+    const minimal = analyze(await load("valid-report-minimal.json"));
+    for (const claim of minimal.claims) {
+      expect(claim.provenance.interpretationOrigin).toBe("recomputed");
+      expect(claim.provenance.observedSnapshotId).toBeUndefined();
+      expect(claim.provenance.runtimeName).toBeUndefined();
+    }
+  });
+
   it("downgrades stats-derived confidence on partial exports", async () => {
     const result = analyze(await load("valid-report-partial.json"));
     const [counts] = byRule(result, "element-counts");

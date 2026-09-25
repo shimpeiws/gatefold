@@ -82,6 +82,26 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Names of the transformations applied between the raw input and this claim, in application order. Empty when the claim reads the input directly."
+        },
+        "classifierVersion": {
+          "type": "string",
+          "description": "Version of the export's interpretation classifier, when the export carries one."
+        },
+        "interpretationOrigin": {
+          "type": "string",
+          "description": "How the export's interpretation was produced (e.g. 'stored' or 'recomputed' for a pfl document), when the export carries one."
+        },
+        "observedSnapshotId": {
+          "type": "string",
+          "description": "Identifier of the snapshot the export observed, when the export carries one."
+        },
+        "resolvedSnapshotId": {
+          "type": "string",
+          "description": "Identifier of the snapshot the export resolved, when the export carries one."
+        },
+        "runtimeName": {
+          "type": "string",
+          "description": "Display name of the runtime the export describes, when the export carries one."
         }
       }
     }

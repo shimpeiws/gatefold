@@ -3,6 +3,15 @@ import type { AnalysisResult } from "./claim.js";
 
 const POINTER_PATTERN = /^$|^(?:\/(?:[^/~]|~0|~1)*)*$/;
 
+const OPTIONAL_PROVENANCE_STRINGS = [
+  "exportVersion",
+  "classifierVersion",
+  "interpretationOrigin",
+  "observedSnapshotId",
+  "resolvedSnapshotId",
+  "runtimeName",
+] as const;
+
 function fail(message: string): never {
   throw new Error(`invalid analysis result: ${message}`);
 }
@@ -45,8 +54,11 @@ export function assertValidResult(result: AnalysisResult): void {
       provenance.sourceFile.length === 0 ||
       !Array.isArray(provenance.transform) ||
       provenance.transform.some((t: unknown) => typeof t !== "string") ||
-      (provenance.exportVersion !== undefined &&
-        typeof provenance.exportVersion !== "string")
+      OPTIONAL_PROVENANCE_STRINGS.some(
+        (field) =>
+          provenance[field] !== undefined &&
+          typeof provenance[field] !== "string",
+      )
     )
       fail(`${at}.provenance must carry sourceFile and transform`);
     if (
