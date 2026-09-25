@@ -78,8 +78,16 @@ Claim evidence `pointer` values (JSON Pointer, RFC 6901) may reference:
 pfl exports are untrusted input, so the reader enforces resource ceilings:
 input files larger than 16 MiB (measured in bytes; regular files are rejected
 by size before reading, and pipes are cut off at the limit), more than 1,000 `diagnostics`, more than
-10,000 `findings`, more than 1,000 `elementIds` per finding, or more than
+10,000 `findings`, more than 1,000 `elementIds` per finding, more than
+10,000 `elementIds` in total across all findings, or more than
 1,000 `byFacet` keys are rejected with `invalid-shape` errors.
+
+The aggregate `elementIds` limit bounds the maximum output amplification.
+Every accepted report keeps all cited element ids as evidence, so the largest
+accepted report can emit roughly 12,000 claims carrying roughly 22,000
+evidence references (findings dominate: at most 10,000 finding claims with one
+pointer each plus one pointer per cited element id). Output size therefore
+stays proportional to the input's declared item counts.
 
 ## Error behavior
 

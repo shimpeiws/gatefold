@@ -72,6 +72,7 @@ const MAX_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_DIAGNOSTICS = 1_000;
 const MAX_FINDINGS = 10_000;
 const MAX_ELEMENT_IDS = 1_000;
+const MAX_TOTAL_ELEMENT_IDS = 10_000;
 const MAX_BY_FACET_KEYS = 1_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -177,6 +178,7 @@ function parseReportData(value: unknown): PflReportData {
       "data.findings",
       `an array with at most ${MAX_FINDINGS} items`,
     );
+  let totalElementIds = 0;
   const findings = findingsValue.map((item, index) => {
     const at = `data.findings[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
@@ -189,6 +191,12 @@ function parseReportData(value: unknown): PflReportData {
       throw shapeError(
         `${at}.elementIds`,
         `an array of non-empty strings (at most ${MAX_ELEMENT_IDS})`,
+      );
+    totalElementIds += elementIds.length;
+    if (totalElementIds > MAX_TOTAL_ELEMENT_IDS)
+      throw shapeError(
+        "data.findings[*].elementIds",
+        `at most ${MAX_TOTAL_ELEMENT_IDS} ids in total across all findings`,
       );
     return {
       rule: stringField(item, "rule", `${at}.rule`),

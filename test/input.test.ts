@@ -184,6 +184,41 @@ describe("readPflExport contract", () => {
     expect(() => parsePflExport(doc, "inline")).toThrow(/at most/);
   });
 
+  it("accepts a report citing exactly 10,000 element ids in total", () => {
+    const doc = validDoc();
+    doc.data.findings = Array.from({ length: 10 }, (_, f) => ({
+      rule: "r",
+      message: "m",
+      elementIds: Array.from({ length: 1_000 }, (_, i) => `f${f}-e${i}`),
+    }));
+    const result = parsePflExport(doc, "inline");
+    expect(
+      result.data.findings.reduce((n, f) => n + f.elementIds.length, 0),
+    ).toBe(10_000);
+  });
+
+  it("rejects more than 10,000 element ids spread across findings", () => {
+    const doc = validDoc();
+    doc.data.findings = [
+      ...Array.from({ length: 10 }, (_, f) => ({
+        rule: "r",
+        message: "m",
+        elementIds: Array.from({ length: 1_000 }, (_, i) => `f${f}-e${i}`),
+      })),
+      { rule: "r", message: "m", elementIds: ["one-too-many"] },
+    ];
+    const error = (() => {
+      try {
+        parsePflExport(doc, "inline");
+        return null;
+      } catch (e) {
+        return e as PflExportError;
+      }
+    })();
+    expect(error?.code).toBe("invalid-shape");
+    expect(error?.message).toContain("at most 10000");
+  });
+
   it("sanitizes control characters in the input path on errors", async () => {
     const badPath = "missing-\x1b[2J-file.json";
     await expect(readPflExport(badPath)).rejects.toMatchObject({

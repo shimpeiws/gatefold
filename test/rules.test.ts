@@ -104,6 +104,42 @@ describe("descriptive rules", () => {
     ]);
   });
 
+  it("keeps every cited element id as evidence on an accepted worst-case report", () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "report",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        runtime: "codex",
+        project: { id: "p", displayName: "d" },
+        stats: {
+          observed: 0,
+          effective: 0,
+          shadowed: 0,
+          conditional: 0,
+          opaque: 0,
+        },
+        findings: Array.from({ length: 10 }, (_, f) => ({
+          rule: "r",
+          message: "m",
+          elementIds: Array.from({ length: 1_000 }, (_, i) => `f${f}-e${i}`),
+        })),
+        interpretation: { classifierVersion: "1", origin: "stored" },
+      },
+    };
+    const result = analyze(parsePflExport(doc, "inline"));
+    const ids = byRule(result, "finding-reported").flatMap((claim) =>
+      claim.evidence.flatMap((e) =>
+        e.elementId === undefined ? [] : [e.elementId],
+      ),
+    );
+    expect(ids).toHaveLength(10_000);
+    expect(new Set(ids).size).toBe(10_000);
+    expect(ids).toContain("f9-e999");
+  });
+
   it("downgrades stats-derived confidence on partial exports", async () => {
     const result = analyze(await load("valid-report-partial.json"));
     const [counts] = byRule(result, "element-counts");
