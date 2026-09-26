@@ -769,6 +769,18 @@ describe("pfl export snapshot contract", () => {
       list: Array.from({ length: 10_001 }, () => 0),
     };
     expect(() => parsePflExport(wide, "inline")).toThrow(/at most/);
+
+    const longKey = validExportDoc();
+    longKey.data.elements[0].observed.metadata = {
+      nested: { ["k".repeat(4_097)]: true },
+    };
+    expect(() => parsePflExport(longKey, "inline")).toThrow(/at most 4096/);
+    const atKey = validExportDoc();
+    atKey.data.elements[0].observed.metadata = {
+      ["k".repeat(4_096)]: true,
+    };
+    expect(() => parsePflExport(atKey, "inline")).not.toThrow();
+
     const atNodes = validExportDoc();
     atNodes.data.elements[0].observed.metadata = {
       list: Array.from({ length: 9_998 }, () => 0),

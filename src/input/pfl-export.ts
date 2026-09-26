@@ -622,8 +622,14 @@ function checkMetadata(
         path,
         `metadata nested no deeper than ${MAX_METADATA_DEPTH} levels`,
       );
-    for (const [key, item] of Object.entries(value))
+    for (const [key, item] of Object.entries(value)) {
+      if (key.length > MAX_SCALAR_CHARS)
+        throw shapeError(
+          `${path}.${key.slice(0, 32)}…`,
+          `a metadata key of at most ${MAX_SCALAR_CHARS} characters`,
+        );
       checkMetadata(item, `${path}.${key}`, depth + 1, budget);
+    }
     return;
   }
   throw shapeError(

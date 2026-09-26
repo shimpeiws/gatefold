@@ -86,8 +86,10 @@ over the snapshot's own elements.
 
 Element `observed.metadata` is bounded safe JSON: strings, numbers, booleans,
 null, arrays, and string-keyed objects, nested at most 12 levels deep and at
-most 10,000 nodes per element. Every scalar string in the export payload —
-element ids, paths, kinds, messages, `resolution.semanticsVersion` — is
+most 10,000 nodes per element; metadata object keys count as scalar strings.
+Every scalar string in the export payload —
+element ids, metadata keys, paths, kinds, messages,
+`resolution.semanticsVersion` — is
 capped at 4,096 characters; the provenance-repeated fields
 (`snapshot.observedSnapshotId`, `snapshot.resolvedSnapshotId`,
 `interpretation.classifier.version`) are capped at 1,024 characters each
