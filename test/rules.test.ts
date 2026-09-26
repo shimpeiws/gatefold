@@ -1021,6 +1021,7 @@ describe("diff comparison rules", () => {
     expect(removed.evidence.map((e) => e.pointer)).toEqual([
       "/data/findings/removed/0/rule",
       "/data/findings/removed/0/message",
+      "/data/findings/removed/0/elementIds",
       "/data/findings/removed/0/elementIds/0",
       "/data/findings/removed/0/elementIds/1",
     ]);
@@ -1061,6 +1062,7 @@ describe("diff comparison rules", () => {
     expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
       "/data/findings/added/0/rule",
       "/data/findings/added/0/message",
+      "/data/findings/added/0/elementIds",
       "/data/findings/added/0/elementIds/0",
       "/data/findings/removed/0",
     ]);
@@ -1075,10 +1077,40 @@ describe("diff comparison rules", () => {
     expect(removed[0].evidence.map((e) => e.pointer)).toEqual([
       "/data/findings/removed/0/rule",
       "/data/findings/removed/0/message",
+      "/data/findings/removed/0/elementIds",
       "/data/findings/removed/0/elementIds/0",
       "/data/findings/added/0",
     ]);
     expect(removed[1].claim).not.toContain("add-plus-remove");
+  });
+
+  it("pairs reworded findings even when element ids are reordered", () => {
+    const doc = diffDoc({
+      findings: {
+        added: [
+          {
+            rule: "r",
+            message: "reworded message",
+            elementIds: ["el_b", "el_a"],
+          },
+        ],
+        removed: [
+          {
+            rule: "r",
+            message: "original message",
+            elementIds: ["el_a", "el_b"],
+          },
+        ],
+      },
+    });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-finding-added",
+    );
+    expect(claim.claim).toContain("add-plus-remove pair");
+    expect(claim.evidence.map((e) => e.pointer)).toContain(
+      "/data/findings/removed/0",
+    );
   });
 
   it("caps the listed element ids inside a finding claim", () => {

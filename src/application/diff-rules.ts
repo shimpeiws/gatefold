@@ -4,7 +4,7 @@ import type {
   EvidenceReference,
 } from "../domain/claim.js";
 import { sanitizeText } from "../domain/sanitize.js";
-import type { PflDiffDocument } from "../input/pfl-export.js";
+import type { PflDiffDocument, PflFinding } from "../input/pfl-export.js";
 
 /** One descriptive rule over a `pfl diff` A → B comparison document. */
 export interface DiffClaimRule {
@@ -82,8 +82,27 @@ function findingList(elementIds: readonly string[]): string {
   return rest > 0 ? `${shown}, and ${rest} more` : shown;
 }
 
-function sameElementIds(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((id, i) => id === b[i]);
+function findingKey(finding: PflFinding): string {
+  return `${finding.rule}\u0000${[...finding.elementIds].sort().join("\u0001")}`;
+}
+
+function pairQueues(findings: readonly PflFinding[]): Map<string, number[]> {
+  const map = new Map<string, number[]>();
+  findings.forEach((finding, index) => {
+    const key = findingKey(finding);
+    const queue = map.get(key);
+    if (queue === undefined) map.set(key, [index]);
+    else queue.push(index);
+  });
+  return map;
+}
+
+function takePair(
+  queues: Map<string, number[]>,
+  finding: PflFinding,
+): number | undefined {
+  const queue = queues.get(findingKey(finding));
+  return queue === undefined || queue.length === 0 ? undefined : queue.shift();
 }
 
 export const DIFF_RULES: readonly DiffClaimRule[] = [
@@ -345,11 +364,12 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
     description:
       "Each finding present on side B but not on side A; a same-rule, same-elements removal is noted as a reworded pair.",
     evaluate: (input) => {
-      const usedRemoved = new Set<number>();
+      const removedPairs = pairQueues(input.data.findings.removed);
       return input.data.findings.added.map((finding, index) => {
         const evidence: EvidenceReference[] = [
           { pointer: `/data/findings/added/${index}/rule` },
           { pointer: `/data/findings/added/${index}/message` },
+          { pointer: `/data/findings/added/${index}/elementIds` },
           ...finding.elementIds
             .slice(0, MAX_LISTED_FINDING_IDS)
             .map((id, j) => ({
@@ -358,19 +378,13 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
             })),
         ];
         let paired = "";
-        const removed = input.data.findings.removed;
-        for (const [i, other] of removed.entries()) {
-          if (
-            !usedRemoved.has(i) &&
-            other.rule === finding.rule &&
-            sameElementIds(other.elementIds, finding.elementIds)
-          ) {
-            usedRemoved.add(i);
-            paired =
-              "; a removed finding with the same rule and element references exists — pfl treats a reworded finding as an add-plus-remove pair, so this does not by itself prove a harness change";
-            evidence.push({ pointer: `/data/findings/removed/${i}` });
-            break;
-          }
+        const pairedIndex = takePair(removedPairs, finding);
+        if (pairedIndex !== undefined) {
+          paired =
+            "; a removed finding with the same rule and element references exists — pfl treats a reworded finding as an add-plus-remove pair, so this does not by itself prove a harness change";
+          evidence.push({
+            pointer: `/data/findings/removed/${pairedIndex}`,
+          });
         }
         const ids =
           finding.elementIds.length === 0
@@ -391,11 +405,12 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
     description:
       "Each finding present on side A but not on side B; a same-rule, same-elements addition is noted as a reworded pair.",
     evaluate: (input) => {
-      const usedAdded = new Set<number>();
+      const addedPairs = pairQueues(input.data.findings.added);
       return input.data.findings.removed.map((finding, index) => {
         const evidence: EvidenceReference[] = [
           { pointer: `/data/findings/removed/${index}/rule` },
           { pointer: `/data/findings/removed/${index}/message` },
+          { pointer: `/data/findings/removed/${index}/elementIds` },
           ...finding.elementIds
             .slice(0, MAX_LISTED_FINDING_IDS)
             .map((id, j) => ({
@@ -404,19 +419,11 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
             })),
         ];
         let paired = "";
-        const added = input.data.findings.added;
-        for (const [i, other] of added.entries()) {
-          if (
-            !usedAdded.has(i) &&
-            other.rule === finding.rule &&
-            sameElementIds(other.elementIds, finding.elementIds)
-          ) {
-            usedAdded.add(i);
-            paired =
-              "; an added finding with the same rule and element references exists — pfl treats a reworded finding as an add-plus-remove pair, so this does not by itself prove a harness change";
-            evidence.push({ pointer: `/data/findings/added/${i}` });
-            break;
-          }
+        const pairedIndex = takePair(addedPairs, finding);
+        if (pairedIndex !== undefined) {
+          paired =
+            "; an added finding with the same rule and element references exists — pfl treats a reworded finding as an add-plus-remove pair, so this does not by itself prove a harness change";
+          evidence.push({ pointer: `/data/findings/added/${pairedIndex}` });
         }
         const ids =
           finding.elementIds.length === 0
