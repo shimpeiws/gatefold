@@ -1065,3 +1065,116 @@ describe("compare review fixes (devin-review PR #49)", () => {
     );
   });
 });
+
+describe("compare review fixes (devin-review round 2)", () => {
+  function compare(
+    before: { doc: PflExportDocument },
+    after: { doc: PflExportDocument },
+    diff: { doc: PflDiffDocument },
+  ) {
+    return compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+  }
+
+  it("derives an activation-only change for an element in both exports", () => {
+    const before = makeExport(
+      exportData([element("x", { activation: "always" })], {}, "a"),
+    );
+    const after = makeExport(
+      exportData([element("x", { activation: "on-demand" })], {}, "b"),
+    );
+    const diff = makeDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 0,
+          activationChanged: 1,
+          statusChanges: [],
+        },
+      }),
+    );
+    const result = compare(before, after, diff);
+    const claims = result.claims.filter(
+      (c) => c.ruleId === "compare-activation-change",
+    );
+    expect(claims).toHaveLength(1);
+    expect(claims[0].claim).toContain("'x'");
+    expect(claims[0].claim).toContain("'always'");
+    expect(claims[0].claim).toContain("'on-demand'");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("derives a facet-only change for an element in both exports", () => {
+    const before = makeExport(
+      exportData([element("x", { facets: ["instructions"] })], {}, "a"),
+    );
+    const after = makeExport(
+      exportData(
+        [element("x", { facets: ["instructions", "glossary"] })],
+        {},
+        "b",
+      ),
+    );
+    const diff = makeDiff(diffData({ facetDeltas: { glossary: 1 } }));
+    const result = compare(before, after, diff);
+    const claims = result.claims.filter(
+      (c) => c.ruleId === "compare-facet-change",
+    );
+    expect(claims).toHaveLength(1);
+    expect(claims[0].claim).toContain("'glossary'");
+  });
+
+  it("pairs reworded findings deterministically under array permutation", () => {
+    const removed = [
+      { rule: "r", message: "old-1", elementIds: ["x"] },
+      { rule: "r", message: "old-2", elementIds: ["x"] },
+    ];
+    const added = [
+      { rule: "r", message: "new-1", elementIds: ["x"] },
+      { rule: "r", message: "new-2", elementIds: ["x"] },
+    ];
+    const build = (removedList: typeof removed, addedList: typeof added) =>
+      makeDiff(
+        diffData({
+          findings: { added: addedList, removed: removedList },
+        }),
+      );
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const result1 = compare(before, after, build(removed, added));
+    const result2 = compare(
+      before,
+      after,
+      build([...removed].reverse(), [...added].reverse()),
+    );
+    const reworded = (result: typeof result1) =>
+      result.claims
+        .filter((c) => c.ruleId === "compare-finding-reworded")
+        .map((c) => c.claim);
+    expect(reworded(result1)).toHaveLength(2);
+    expect(reworded(result1)).toEqual(reworded(result2));
+  });
+
+  it("orders version-note claims independently of diff array order", () => {
+    const build = (notes: string[]) =>
+      makeDiff(diffData({ versionNotes: notes }));
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([], {}, "b"));
+    const notes = ["runtime changed", "classifier changed"];
+    const result1 = compare(before, after, build(notes));
+    const result2 = compare(before, after, build([...notes].reverse()));
+    const noteClaims = (result: typeof result1) =>
+      result.claims
+        .filter((c) => c.claim.includes("version note"))
+        .map((c) => c.claim);
+    expect(noteClaims(result1)).toHaveLength(2);
+    expect(noteClaims(result1)).toEqual(noteClaims(result2));
+  });
+});

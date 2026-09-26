@@ -1,8 +1,9 @@
 # Rule catalog
 
 The analyzer registers an explicit list of descriptive rules per input
-command: `src/application/rules.ts` for `report` documents and
-`src/application/export-rules.ts` for `export` documents. Each rule emits
+command: `src/application/rules.ts` for `report` documents,
+`src/application/export-rules.ts` for `export` and `diff` documents, and
+`src/application/compare-rules.ts` for `compare` results. Each rule emits
 claims about what the document contains — never a judgement of whether the
 harness is good or bad. Every claim carries evidence, provenance, and
 confidence per `schema/claim-result.v2.json`.
@@ -60,10 +61,36 @@ vocabulary: every command rule set may emit them, and their provenance
 | `diagnostic-reported` | Each `warning`/`error` diagnostic the diff carries: its code, message, and path. Emitted only for warning/error diagnostics. | 1.0 |
 | `completeness-reported` | When the diff is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete diffs. | 1.0 |
 
+## `compare` rules
+
+Emitted in this order by `gatefold compare` (schema v3); each evidence
+reference names `before`, `after`, or `diff` explicitly.
+
+| Rule id | What it claims | Confidence |
+| --- | --- | --- |
+| `compare-inputs` | The three documents form one A → B comparison of one project on one runtime, with both sides' snapshot ids. | 1.0 |
+| `compare-completeness` | Per input captured with `partial` or `unknown` completeness: absence on that side may be unobserved. | 1.0 |
+| `compare-version-drift` | Version caveats: differing pfl versions, resolution semantics versions, classifier versions (export-vs-export and export-vs-matching-diff-side), differing runtime versions (only when both are known), and each `versionNotes` entry quoted verbatim. | 1.0 |
+| `compare-element-added` | Per `addedIds` entry: the B-side element description (or hedged absence) and the A-side context. | 1.0 |
+| `compare-element-removed` | Per `removedIds` entry: the A-side element description (or hedged absence) and the B-side context. | 1.0 |
+| `compare-element-changed` | Per `changedIds` entry: both sides' element descriptions (or hedged absence). | 1.0 |
+| `compare-status-transition` | Per `statusChanges` entry: the recorded from/to statuses plus what each export actually resolves. `effective` is phrased as static potential, never runtime use. | 1.0 |
+| `compare-activation-change` | Per element present in both exports whose resolved activation differs; derived from the exports because the diff carries only an aggregate count. | 1.0 |
+| `compare-facet-change` | Per element present in both exports whose interpretation facets differ; added/removed facet names only. | 1.0 |
+| `compare-relation-added` | Per added relation record: type and endpoints with each side's element context; a recorded link, never a cause. | 1.0 |
+| `compare-relation-removed` | Per removed relation record, same shape as `compare-relation-added`. | 1.0 |
+| `compare-finding-added` | Per added finding: rule, message, cited element ids (capped at five), and B-side element context. | 1.0 |
+| `compare-finding-removed` | Per removed finding, same shape as `compare-finding-added`; a same-rule, same-elements addition is cross-referenced. | 1.0 |
+| `compare-finding-reworded` | A removed finding paired with an added finding of the same rule and element ids but different message — consistent with rewording, never proof the condition resolved. | 1.0 |
+| `compare-contradiction` | Each recorded disagreement between the diff's assertions and the exports' contents. | 1.0 |
+
 ## Conventions
 
 - Claim order is deterministic: registry order, then document order within a
-  rule. `facet-composition` emits facets sorted by facet name.
+  rule. `facet-composition` emits facets sorted by facet name. For `compare`,
+  order within a rule is element id / claim identity, independent of the
+  diff's array order (records keep their source indexes for evidence
+  pointers).
 - Every claim carries `ruleId`, the stable id from the table above. JSON
   consumers should select claims by `ruleId` instead of parsing claim text or
   `provenance.transform`.

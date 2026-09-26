@@ -101,6 +101,20 @@ export interface ComparisonView {
   readonly findings: readonly FindingReconciliation[];
 }
 
+const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Finding identity for deterministic ordering: rule, sorted ids, message. */
+const findingIdentity = (finding: {
+  rule: string;
+  message: string;
+  elementIds: readonly string[];
+}): string =>
+  JSON.stringify([
+    finding.rule,
+    [...finding.elementIds].sort(),
+    finding.message,
+  ]);
+
 function indexElements(document: PflExportDocument): Map<string, number> {
   const index = new Map<string, number>();
   document.data.elements.forEach((element, i) => index.set(element.id, i));
@@ -161,6 +175,10 @@ export function reconcileDocuments(
     ...bucketIndexes.changed.keys(),
     ...statusChanges.keys(),
   ]);
+  // Elements present in both exports but absent from every diff list still
+  // carry derived activation/facet changes: the diff records those only as
+  // aggregate counts, so the comparison derives them from export context.
+  for (const id of beforeIndex.keys()) if (afterIndex.has(id)) ids.add(id);
 
   const elements: ElementReconciliation[] = [...ids].sort().map((id) => {
     // The reader enforces pairwise disjointness of the structural lists, so
@@ -450,7 +468,9 @@ export function reconcileDocuments(
   // A removed finding pairs with an added finding for the same rule and the
   // same element set when the message differs — the diff-visible shape of a
   // reworded finding (removal plus addition). Each added finding pairs with
-  // at most one removed finding, in diff order.
+  // at most one removed finding. Both the queue and the removed indexes are
+  // sorted by message before pairing so the assignment cannot depend on the
+  // diff's array order; `index` breaks ties between identical messages.
   const addedFindingQueues = new Map<string, number[]>();
   diff.data.findings.added.forEach((finding, index) => {
     const key = JSON.stringify([finding.rule, [...finding.elementIds].sort()]);
@@ -458,43 +478,57 @@ export function reconcileDocuments(
     if (queue === undefined) addedFindingQueues.set(key, [index]);
     else queue.push(index);
   });
+  for (const queue of addedFindingQueues.values())
+    queue.sort(
+      (a, b) =>
+        byString(
+          diff.data.findings.added[a].message,
+          diff.data.findings.added[b].message,
+        ) || a - b,
+    );
+  const counterpartOf = new Map<number, number>();
+  const removedIndexes = diff.data.findings.removed
+    .map((_, index) => index)
+    .sort(
+      (a, b) =>
+        byString(
+          findingIdentity(diff.data.findings.removed[a]),
+          findingIdentity(diff.data.findings.removed[b]),
+        ) || a - b,
+    );
+  for (const index of removedIndexes) {
+    const finding = diff.data.findings.removed[index];
+    const queue =
+      addedFindingQueues.get(
+        JSON.stringify([finding.rule, [...finding.elementIds].sort()]),
+      ) ?? [];
+    const position = queue.findIndex(
+      (i) => diff.data.findings.added[i].message !== finding.message,
+    );
+    if (position !== -1) counterpartOf.set(index, queue.splice(position, 1)[0]);
+  }
   const findings: FindingReconciliation[] = (
     ["added", "removed"] as const
   ).flatMap((direction) =>
-    diff.data.findings[direction].map((finding, index) => {
-      let counterpart: number | null = null;
-      if (direction === "removed") {
-        const key = JSON.stringify([
-          finding.rule,
-          [...finding.elementIds].sort(),
-        ]);
-        const queue = addedFindingQueues.get(key) ?? [];
-        const position = queue.findIndex(
-          (i) => diff.data.findings.added[i].message !== finding.message,
-        );
-        if (position !== -1) counterpart = queue.splice(position, 1)[0];
-      }
-      return {
-        direction,
-        index,
-        rule: finding.rule,
-        message: finding.message,
-        elementIds: finding.elementIds,
-        elementIndexes: finding.elementIds.map((id) => ({
-          id,
-          beforeIndex: beforeIndex.get(id) ?? null,
-          afterIndex: afterIndex.get(id) ?? null,
-        })),
-        counterpart,
-      };
-    }),
+    diff.data.findings[direction].map((finding, index) => ({
+      direction,
+      index,
+      rule: finding.rule,
+      message: finding.message,
+      elementIds: finding.elementIds,
+      elementIndexes: finding.elementIds.map((id) => ({
+        id,
+        beforeIndex: beforeIndex.get(id) ?? null,
+        afterIndex: afterIndex.get(id) ?? null,
+      })),
+      counterpart:
+        direction === "removed" ? (counterpartOf.get(index) ?? null) : null,
+    })),
   );
 
   // Sort by stable identifying fields so a permutation of the diff arrays
   // does not reorder claims; `index` keeps evidence pointers bound to the
   // original record and breaks ties between identical records.
-  const byString = (a: string, b: string): number =>
-    a < b ? -1 : a > b ? 1 : 0;
   const relationsSorted = [...relations].sort(
     (a, b) =>
       byString(a.from, b.from) ||
@@ -502,16 +536,10 @@ export function reconcileDocuments(
       byString(a.type, b.type) ||
       a.index - b.index,
   );
-  const findingKey = (finding: FindingReconciliation): string =>
-    JSON.stringify([
-      finding.rule,
-      [...finding.elementIds].sort(),
-      finding.message,
-    ]);
   const findingsSorted = [...findings].sort(
     (a, b) =>
       byString(a.direction, b.direction) ||
-      byString(findingKey(a), findingKey(b)) ||
+      byString(findingIdentity(a), findingIdentity(b)) ||
       a.index - b.index,
   );
 

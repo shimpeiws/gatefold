@@ -538,7 +538,14 @@ export const COMPARE_RULES: readonly CompareRule[] = [
             ],
           ),
         );
-      for (const [index, note] of view.diff.data.versionNotes.entries())
+      const notes = view.diff.data.versionNotes
+        .map((note, index) => ({ note, index }))
+        .sort(
+          (a, b) =>
+            (a.note < b.note ? -1 : a.note > b.note ? 1 : 0) ||
+            a.index - b.index,
+        );
+      for (const { note, index } of notes)
         claims.push(
           claim(
             "compare-version-drift",
