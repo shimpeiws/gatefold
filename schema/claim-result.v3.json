@@ -60,7 +60,29 @@
         "command": { "type": "string", "const": "export" },
         "pflVersion": { "type": "string", "minLength": 1 },
         "observedSnapshotId": { "type": "string", "minLength": 1 },
-        "resolvedSnapshotId": { "type": "string", "minLength": 1 }
+        "resolvedSnapshotId": { "type": "string", "minLength": 1 },
+        "completeness": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"],
+          "description": "The document's envelope completeness."
+        },
+        "runtimeVersion": {
+          "type": ["string", "null"],
+          "description": "data.runtime.version of the export, when recorded; null is preserved as null."
+        },
+        "semanticsVersion": {
+          "type": "string",
+          "description": "data.resolution.semanticsVersion of the export."
+        },
+        "classifierVersion": {
+          "type": "string",
+          "description": "data.interpretation.classifier.version of the export."
+        },
+        "interpretationOrigin": {
+          "type": "string",
+          "enum": ["stored", "recomputed"],
+          "description": "data.interpretation.origin of the export."
+        }
       }
     },
     "diffInput": {
@@ -86,7 +108,30 @@
         "observedSnapshotIdA": { "type": "string", "minLength": 1 },
         "observedSnapshotIdB": { "type": "string", "minLength": 1 },
         "resolvedSnapshotIdA": { "type": "string", "minLength": 1 },
-        "resolvedSnapshotIdB": { "type": "string", "minLength": 1 }
+        "resolvedSnapshotIdB": { "type": "string", "minLength": 1 },
+        "completeness": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"],
+          "description": "The document's envelope completeness."
+        },
+        "classifierVersionA": {
+          "type": "string",
+          "description": "data.interpretation.a.classifierVersion of the diff."
+        },
+        "classifierVersionB": {
+          "type": "string",
+          "description": "data.interpretation.b.classifierVersion of the diff."
+        },
+        "interpretationOriginA": {
+          "type": "string",
+          "enum": ["stored", "recomputed"],
+          "description": "data.interpretation.a.origin of the diff."
+        },
+        "interpretationOriginB": {
+          "type": "string",
+          "enum": ["stored", "recomputed"],
+          "description": "data.interpretation.b.origin of the diff."
+        }
       }
     },
     "claim": {
