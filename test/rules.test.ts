@@ -23,7 +23,7 @@ function byRule(result: { claims: readonly Claim[] }, ruleId: string) {
 }
 
 const ALLOWED_POINTER =
-  /^(|\/data(\/|$)|\/pflVersion|\/completeness|\/diagnostics(\/\d+)?$)/;
+  /^(?:|\/data(?:\/.*)?|\/pflVersion|\/completeness|\/diagnostics(?:\/\d+)?)$/;
 
 describe("descriptive rules", () => {
   it("emits only schema-valid claims for every valid fixture", async () => {
@@ -918,14 +918,18 @@ describe("diff comparison rules", () => {
       "Element 'el_changed' resolved status went from 'shadowed' in A to 'effective' in B; it is also listed among the changed element ids.",
     );
     expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
-      "/data/effective/statusChanges/0",
+      "/data/effective/statusChanges/0/id",
+      "/data/effective/statusChanges/0/from",
+      "/data/effective/statusChanges/0/to",
       "/data/structural/changedIds/0",
     ]);
     expect(claims[1].claim).toBe(
       "Element 'el_other' resolved status went from 'effective' in A to 'unresolved' in B.",
     );
     expect(claims[1].evidence.map((e) => e.pointer)).toEqual([
-      "/data/effective/statusChanges/1",
+      "/data/effective/statusChanges/1/id",
+      "/data/effective/statusChanges/1/from",
+      "/data/effective/statusChanges/1/to",
     ]);
   });
 
@@ -1014,6 +1018,12 @@ describe("diff comparison rules", () => {
     const [removed] = byRule(result, "diff-finding-removed");
     expect(removed.claim).toContain("'broad-tool-access'");
     expect(removed.claim).toContain("'el_removed', 'el_other'");
+    expect(removed.evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/removed/0/rule",
+      "/data/findings/removed/0/message",
+      "/data/findings/removed/0/elementIds/0",
+      "/data/findings/removed/0/elementIds/1",
+    ]);
   });
 
   it("notes a same-rule, same-elements add/remove as a reworded pair, not a proven harness change", () => {
@@ -1049,9 +1059,26 @@ describe("diff comparison rules", () => {
       "does not by itself prove a harness change",
     );
     expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
-      "/data/findings/added/0",
+      "/data/findings/added/0/rule",
+      "/data/findings/added/0/message",
+      "/data/findings/added/0/elementIds/0",
       "/data/findings/removed/0",
     ]);
+    const removed = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-finding-removed",
+    );
+    expect(removed[0].claim).toContain("add-plus-remove pair");
+    expect(removed[0].claim).toContain(
+      "does not by itself prove a harness change",
+    );
+    expect(removed[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/removed/0/rule",
+      "/data/findings/removed/0/message",
+      "/data/findings/removed/0/elementIds/0",
+      "/data/findings/added/0",
+    ]);
+    expect(removed[1].claim).not.toContain("add-plus-remove");
   });
 
   it("caps the listed element ids inside a finding claim", () => {
@@ -1091,6 +1118,23 @@ describe("diff comparison rules", () => {
     expect(knowledge?.claim).toContain("is unchanged");
     for (const claim of deltas)
       expect(claim.claim).not.toMatch(/improve|regress|better|worse/i);
+  });
+
+  it("escapes facet names inside evidence pointers per RFC 6901", () => {
+    const doc = diffDoc({ facetDeltas: { "a/b~c": 1 } });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-facet-delta",
+    );
+    expect(claim.claim).toContain("'a/b~c'");
+    expect(claim.evidence).toEqual([{ pointer: "/data/facetDeltas/a~1b~0c" }]);
+  });
+
+  it("rejects malformed pointers in the shared assertion pattern", () => {
+    expect("foobar").not.toMatch(ALLOWED_POINTER);
+    expect("/dat").not.toMatch(ALLOWED_POINTER);
+    expect("/data/findings/added/0/elementIds/3").toMatch(ALLOWED_POINTER);
+    expect("").toMatch(ALLOWED_POINTER);
   });
 
   it("quotes version notes as prose caveats", async () => {

@@ -40,13 +40,13 @@ vocabulary: every command rule set may emit them, and their provenance
 | --- | --- | --- |
 | `diff-described` | The comparison's direction and scope: runtime plus the resolved and observed snapshot identifiers on sides A and B. | 1.0 |
 | `diff-interpretation-provenance` | Which classifier version produced each side's interpretation and whether it was stored or recomputed. | 1.0 |
-| `diff-element-added` | One claim per element id present only in snapshot B (A → B addition); when the list is empty, one claim stating the diff reports none, citing the count. | 1.0 |
-| `diff-element-removed` | One claim per element id present only in snapshot A (removed by B); when the list is empty, one claim stating the diff reports none, citing the count. | 1.0 |
-| `diff-element-changed` | One claim per element id present in both snapshots whose content pfl marks changed; when the list is empty, one claim stating the diff reports none, citing the count. | 1.0 |
+| `diff-element-added` | One claim per element id present only in snapshot B (A → B addition); when the list is empty, one claim stating the diff reports none, citing the count field in evidence. | 1.0 |
+| `diff-element-removed` | One claim per element id present only in snapshot A (removed by B); when the list is empty, one claim stating the diff reports none, citing the count field in evidence. | 1.0 |
+| `diff-element-changed` | One claim per element id present in both snapshots whose content pfl marks changed; when the list is empty, one claim stating the diff reports none, citing the count field in evidence. | 1.0 |
 | `diff-effective-totals` | The aggregate newlyEffective/noLongerEffective/activationChanged counters, with the caveat that they include added/removed elements, `effective` means potentially effective in the static environment, and the totals need not equal the status-change record count. | 1.0 |
 | `diff-status-transition` | One claim per recorded resolved-status transition A → B, linked to `structural.changedIds` only when the same id appears there; null sides are phrased as "no resolved status", never a negative fact. | 1.0 |
 | `diff-facet-delta` | One claim per recorded facet delta (including zero), phrased as an aggregate count change that is never attributed to an individual element and never called an improvement. | 1.0 |
-| `diff-relation-added` | One claim per relation present in B but not A, with direction (`from` is the winning side for `shadows`/`overrides`/`accumulates-with`); legacy types are named without interpreting semantics. | 1.0 |
+| `diff-relation-added` | One claim per relation present in B but not A, with `from`/`to` direction (`from` is the winning side for `shadows`/`overrides`; `accumulates-with` is phrased symmetrically); legacy types are named without interpreting semantics. | 1.0 |
 | `diff-relation-removed` | One claim per relation present in A but not B, with direction; legacy types are named without interpreting semantics. | 1.0 |
 | `diff-finding-added` | One claim per finding in B but not A — rule, message, and cited element ids (list capped at five). A same-rule, same-elements removal is noted as a pfl reworded-finding add-plus-remove pair, never as proof of a harness change. | 1.0 |
 | `diff-finding-removed` | One claim per finding in A but not B — rule, message, and cited element ids (list capped at five). | 1.0 |

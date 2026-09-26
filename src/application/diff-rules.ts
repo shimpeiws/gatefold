@@ -133,7 +133,7 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
   {
     id: "diff-element-added",
     description:
-      "Each element id present only on side B, or a no-addition statement citing the count.",
+      "Each element id present only on side B, or a no-addition statement citing the count field.",
     evaluate: (input) => {
       const { addedIds } = input.data.structural;
       if (addedIds.length === 0)
@@ -165,7 +165,7 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
   {
     id: "diff-element-removed",
     description:
-      "Each element id present only on side A, or a no-removal statement citing the count.",
+      "Each element id present only on side A, or a no-removal statement citing the count field.",
     evaluate: (input) => {
       const { removedIds } = input.data.structural;
       if (removedIds.length === 0)
@@ -197,7 +197,7 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
   {
     id: "diff-element-changed",
     description:
-      "Each element id present on both sides whose content pfl marks as changed, or a no-change statement citing the count.",
+      "Each element id present on both sides whose content pfl marks as changed, or a no-change statement citing the count field.",
     evaluate: (input) => {
       const { changedIds } = input.data.structural;
       if (changedIds.length === 0)
@@ -267,9 +267,11 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
             : `'${change.to}' in B`;
         const evidence: EvidenceReference[] = [
           {
-            pointer: `/data/effective/statusChanges/${index}`,
+            pointer: `/data/effective/statusChanges/${index}/id`,
             elementId: change.id,
           },
+          { pointer: `/data/effective/statusChanges/${index}/from` },
+          { pointer: `/data/effective/statusChanges/${index}/to` },
         ];
         let linked = "";
         const ci = changedIndex.get(change.id);
@@ -346,7 +348,14 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
       const usedRemoved = new Set<number>();
       return input.data.findings.added.map((finding, index) => {
         const evidence: EvidenceReference[] = [
-          { pointer: `/data/findings/added/${index}` },
+          { pointer: `/data/findings/added/${index}/rule` },
+          { pointer: `/data/findings/added/${index}/message` },
+          ...finding.elementIds
+            .slice(0, MAX_LISTED_FINDING_IDS)
+            .map((id, j) => ({
+              pointer: `/data/findings/added/${index}/elementIds/${j}`,
+              elementId: id,
+            })),
         ];
         let paired = "";
         const removed = input.data.findings.removed;
@@ -379,9 +388,36 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
   },
   {
     id: "diff-finding-removed",
-    description: "Each finding present on side A but not on side B.",
-    evaluate: (input) =>
-      input.data.findings.removed.map((finding, index) => {
+    description:
+      "Each finding present on side A but not on side B; a same-rule, same-elements addition is noted as a reworded pair.",
+    evaluate: (input) => {
+      const usedAdded = new Set<number>();
+      return input.data.findings.removed.map((finding, index) => {
+        const evidence: EvidenceReference[] = [
+          { pointer: `/data/findings/removed/${index}/rule` },
+          { pointer: `/data/findings/removed/${index}/message` },
+          ...finding.elementIds
+            .slice(0, MAX_LISTED_FINDING_IDS)
+            .map((id, j) => ({
+              pointer: `/data/findings/removed/${index}/elementIds/${j}`,
+              elementId: id,
+            })),
+        ];
+        let paired = "";
+        const added = input.data.findings.added;
+        for (const [i, other] of added.entries()) {
+          if (
+            !usedAdded.has(i) &&
+            other.rule === finding.rule &&
+            sameElementIds(other.elementIds, finding.elementIds)
+          ) {
+            usedAdded.add(i);
+            paired =
+              "; an added finding with the same rule and element references exists — pfl treats a reworded finding as an add-plus-remove pair, so this does not by itself prove a harness change";
+            evidence.push({ pointer: `/data/findings/added/${i}` });
+            break;
+          }
+        }
         const ids =
           finding.elementIds.length === 0
             ? "citing no elements"
@@ -389,11 +425,12 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
         return makeClaim(
           input,
           "diff-finding-removed",
-          `A finding from rule '${finding.rule}' appears in A but not in B, ${ids}: ${finding.message}.`,
-          [{ pointer: `/data/findings/removed/${index}` }],
+          `A finding from rule '${finding.rule}' appears in A but not in B, ${ids}: ${finding.message}${paired}.`,
+          evidence,
           1,
         );
-      }),
+      });
+    },
   },
   {
     id: "diff-version-note",
@@ -427,7 +464,11 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
               input,
               "diff-comparison-caveats",
               `Side ${label}'s interpretation was recomputed rather than stored, so its interpretation-level facts were regenerated for this comparison.`,
-              [{ pointer: `/data/interpretation/${label.toLowerCase()}` }],
+              [
+                {
+                  pointer: `/data/interpretation/${label.toLowerCase()}/origin`,
+                },
+              ],
               1,
             ),
           );
@@ -439,8 +480,8 @@ export const DIFF_RULES: readonly DiffClaimRule[] = [
             "diff-comparison-caveats",
             `The sides were interpreted by different classifier versions ('${a.classifierVersion}' vs '${b.classifierVersion}'), so interpretation-level differences may reflect the classifier change rather than a harness change.`,
             [
-              { pointer: "/data/interpretation/a" },
-              { pointer: "/data/interpretation/b" },
+              { pointer: "/data/interpretation/a/classifierVersion" },
+              { pointer: "/data/interpretation/b/classifierVersion" },
             ],
             1,
           ),
