@@ -615,6 +615,249 @@ describe("gatefold e2e (real process)", () => {
     expect(first.stdout).toBe(second.stdout);
   });
 
+  it("produces byte-identical output across runs for the same diff", async () => {
+    const first = await gatefold([
+      fixture("valid-diff.json"),
+      "--format",
+      "json",
+    ]);
+    const second = await gatefold([
+      fixture("valid-diff.json"),
+      "--format",
+      "json",
+    ]);
+    expect(first.code).toBe(0);
+    expect(first.stdout).toBe(second.stdout);
+  });
+
+  function resolvePointer(document: unknown, pointer: string): unknown {
+    let current: unknown = document;
+    for (const raw of pointer.split("/").slice(1)) {
+      const segment = raw.replace(/~1/g, "/").replace(/~0/g, "~");
+      if (current === null || typeof current !== "object")
+        throw new Error(`pointer ${pointer} crosses a scalar`);
+      if (Array.isArray(current)) {
+        if (!/^(?:0|[1-9]\d*)$/.test(segment))
+          throw new Error(
+            `pointer ${pointer} segment ${segment} is not an array index`,
+          );
+        const index = Number(segment);
+        if (index >= current.length)
+          throw new Error(`pointer ${pointer} index ${segment} out of range`);
+        current = current[index];
+      } else {
+        if (!Object.hasOwn(current, segment))
+          throw new Error(`pointer ${pointer} key ${segment} is absent`);
+        current = (current as Record<string, unknown>)[segment];
+      }
+    }
+    return current;
+  }
+
+  it.each([
+    "valid-report.json",
+    "valid-export.json",
+    "valid-diff.json",
+    "valid-export-layers.json",
+    "valid-diff-partial.json",
+  ])(
+    "resolves every claim evidence pointer inside %s and keeps claim fields intact",
+    async (name) => {
+      const run = await gatefold([fixture(name), "--format", "json"]);
+      expect(run.code, name).toBe(0);
+      const result = JSON.parse(run.stdout);
+      expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+      expect(result.claims.length, name).toBeGreaterThan(0);
+      const document = JSON.parse(readFileSync(fixture(name), "utf8"));
+      let resolvedPointers = 0;
+      for (const claim of result.claims) {
+        expect(claim.ruleId.length, name).toBeGreaterThan(0);
+        expect(claim.provenance.transform, name).toContain(
+          `rule:${claim.ruleId}`,
+        );
+        expect(claim.confidence, name).toBeGreaterThanOrEqual(0);
+        expect(claim.confidence, name).toBeLessThanOrEqual(1);
+        expect(claim.provenance.sourceFile, name).toBe(fixture(name));
+        for (const evidence of claim.evidence) {
+          // Pointers are document-local: they resolve inside this document,
+          // never into a second document, a path, or a URL.
+          expect(evidence.pointer, name).toMatch(/^\//);
+          expect(
+            () => resolvePointer(document, evidence.pointer),
+            `${name} ${evidence.pointer}`,
+          ).not.toThrow();
+          resolvedPointers += 1;
+        }
+      }
+      expect(resolvedPointers, name).toBeGreaterThan(0);
+    },
+  );
+
+  it("never emits raw control characters in human output", async () => {
+    const run = await gatefold([fixture("valid-export.json")]);
+    expect(run.code).toBe(0);
+    expect(run.stdout).not.toMatch(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+  });
+
+  it("escapes hostile characters in both output formats end to end", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-e2e-"));
+    try {
+      const doc = JSON.parse(
+        readFileSync(fixture("valid-export.json"), "utf8"),
+      );
+      // Replace every occurrence of the first element id so the layer joins,
+      // relation endpoints, and finding references stay consistent.
+      const originalId = doc.data.elements[0].id;
+      const hostileId = "el-\u001b[31m\u202eevil\u200b\ufeff";
+      const replaceIds = (value: unknown): unknown => {
+        if (value === originalId) return hostileId;
+        if (Array.isArray(value)) return value.map(replaceIds);
+        if (value !== null && typeof value === "object")
+          return Object.fromEntries(
+            Object.entries(value).map(([key, entry]) => [
+              key,
+              replaceIds(entry),
+            ]),
+          );
+        return value;
+      };
+      const replaced = replaceIds(doc) as typeof doc;
+      replaced.data.metadata = { "run\u200b": "v\u001b[32mal" };
+      const path = join(dir, "hostile-export.json");
+      writeFileSync(path, JSON.stringify(replaced));
+      // The sanitizer's unsafe set minus \t \n \r, which the formatter emits.
+      const unsafe =
+        /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+      const human = await gatefold([path]);
+      expect(human.code).toBe(0);
+      expect(human.stdout).not.toMatch(unsafe);
+      expect(human.stdout).toContain("\\u001b");
+      const json = await gatefold([path, "--format", "json"]);
+      expect(json.code).toBe(0);
+      const result = JSON.parse(json.stdout);
+      for (const claim of result.claims) {
+        expect(claim.claim).not.toMatch(unsafe);
+      }
+      const claimText = result.claims.map((claim) => claim.claim).join("\n");
+      expect(claimText).toContain("\\u001b");
+      // evidence.elementId is the verbatim id for document correlation;
+      // display paths sanitize it. JSON.stringify escapes C0, so no raw
+      // control bytes can reach the wire through the JSON document.
+      const elementIds = result.claims
+        .flatMap((claim) => claim.evidence)
+        .map((entry) => entry.elementId)
+        .filter((id) => id !== undefined);
+      expect(elementIds).toContain(hostileId);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--help documents all three accepted commands", async () => {
+    const run = await gatefold(["--help"]);
+    expect(run.code).toBe(0);
+    for (const command of ["report", "export", "diff"])
+      expect(run.stdout).toContain(command);
+    expect(run.stdout).toContain("report, export, or diff");
+    expect(run.stdout).toContain("command");
+  });
+
+  it("rejects a version-mismatched export end to end with exit 3", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-e2e-"));
+    try {
+      const doc = JSON.parse(
+        readFileSync(fixture("valid-export.json"), "utf8"),
+      );
+      doc.pflVersion = "2.0.0";
+      const path = join(dir, "v2-export.json");
+      writeFileSync(path, JSON.stringify(doc));
+      const run = await gatefold([path]);
+      expect(run.code).toBe(3);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("pflVersion");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it(
+    "installed tarball smoke: pack, install to a prefix, and run all three commands",
+    { timeout: 180_000 },
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "gatefold-pack-"));
+      try {
+        const packed = await execFileAsync(
+          "npm",
+          ["pack", "--json", `--pack-destination=${dir}`],
+          { cwd: root, timeout: 120_000 },
+        );
+        const [{ filename }] = JSON.parse(packed.stdout);
+        await execFileAsync(
+          "npm",
+          [
+            "install",
+            "--prefix",
+            dir,
+            "--no-save",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            join(dir, filename),
+          ],
+          { cwd: dir, timeout: 120_000 },
+        );
+        const installedBin = join(
+          dir,
+          "node_modules",
+          "@shimpeiws",
+          "gatefold",
+          "bin",
+          "gatefold.js",
+        );
+        const installed = async (args: string[]): Promise<Run> => {
+          try {
+            const { stdout, stderr } = await execFileAsync(
+              process.execPath,
+              [installedBin, ...args],
+              { cwd: dir },
+            );
+            return { code: 0, stdout, stderr };
+          } catch (error) {
+            const e = error as {
+              code?: number;
+              stdout?: string;
+              stderr?: string;
+            };
+            return {
+              code: typeof e.code === "number" ? e.code : -1,
+              stdout: e.stdout ?? "",
+              stderr: e.stderr ?? "",
+            };
+          }
+        };
+        const help = await installed(["--help"]);
+        expect(help.code).toBe(0);
+        for (const fixtureName of [
+          "valid-report.json",
+          "valid-export.json",
+          "valid-diff.json",
+        ]) {
+          const run = await installed([
+            fixture(fixtureName),
+            "--format",
+            "json",
+          ]);
+          expect(run.code, fixtureName).toBe(0);
+          const result = JSON.parse(run.stdout);
+          expect(validate(result), fixtureName).toBe(true);
+          expect(result.claims.length, fixtureName).toBeGreaterThan(0);
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("package.json ci:all is exactly the documented clean-install gate", () => {
     const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
     const steps = (pkg.scripts["ci:all"] as string)
