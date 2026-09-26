@@ -725,6 +725,19 @@ describe("diff comparison rules", () => {
     );
   });
 
+  it("keeps diff provenance to sourceFile, pflVersion, and transform", async () => {
+    // A diff has two snapshot ids and two classifier versions; the
+    // single-valued provenance fields cannot express them, so they ride in
+    // claim text instead (docs/rules.md, docs/pfl-export-contract.md).
+    const result = analyze(await load("valid-diff.json"));
+    for (const claim of result.claims) {
+      expect(claim.provenance.classifierVersion).toBeUndefined();
+      expect(claim.provenance.observedSnapshotId).toBeUndefined();
+      expect(claim.provenance.resolvedSnapshotId).toBeUndefined();
+      expect(claim.provenance.interpretationOrigin).toBeUndefined();
+    }
+  });
+
   it("reports per-side interpretation provenance without a classifier id", async () => {
     const [claim] = byRule(
       analyze(await load("valid-diff.json")),

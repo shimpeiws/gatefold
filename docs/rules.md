@@ -58,6 +58,9 @@ vocabulary: every command rule set may emit them, and their provenance
   export's interpretation
   metadata: `classifierVersion`, `interpretationOrigin`, and — when the export
   carries them — `observedSnapshotId`, `resolvedSnapshotId`, and `runtimeName`.
+  Diff claims use the same `pfl-export-envelope` transform label and carry the
+  per-side snapshot ids and classifier versions in claim text instead: a diff
+  has two of each, which the single-valued provenance fields cannot express.
 - Strings interpolated into claim text — and provenance strings copied from
   the export (`classifierVersion`, `observedSnapshotId`,
   `resolvedSnapshotId`, `runtimeName`) — pass through Gatefold's canonical

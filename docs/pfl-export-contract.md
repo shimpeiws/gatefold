@@ -112,15 +112,15 @@ strings, never resolved.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `runtime` | string | Runtime id shared by both snapshots. |
-| `observedSnapshotIdA` / `observedSnapshotIdB` | string | Observed snapshot id on side A / side B. At most 1,024 characters each (provenance-repeated). |
-| `resolvedSnapshotIdA` / `resolvedSnapshotIdB` | string | Resolved snapshot id on side A / side B. At most 1,024 characters each (provenance-repeated). |
+| `observedSnapshotIdA` / `observedSnapshotIdB` | string | Observed snapshot id on side A / side B. At most 1,024 characters each — a diff has two of each kind, so they ride in `diff-described` claim text rather than the single-valued provenance fields. |
+| `resolvedSnapshotIdA` / `resolvedSnapshotIdB` | string | Resolved snapshot id on side A / side B. At most 1,024 characters each (same claim-text repetition bound). |
 | `structural` | object | `{ added, removed, changed: non-negative safe integer, addedIds, removedIds, changedIds: string[] }`. Each count must equal its ID list's length; the three lists are unique within themselves and pairwise disjoint (an element cannot be both added and removed). |
 | `effective` | object | `{ newlyEffective, noLongerEffective, activationChanged: non-negative safe integer, statusChanges: { id: string, from: status \| null, to: status \| null }[] }`. Status is `"effective" \| "shadowed" \| "conditional" \| "unresolved" \| "unknown"`; `null` marks a side where the element did not exist. Status-change ids are unique. The aggregate counts include added/removed elements, so they are not required to equal the number of status-change records. |
 | `facetDeltas` | object | Record of facet name → signed safe integer delta. Facets are additive in pfl's model, so unknown facet names are accepted; at most 1,000 keys, names bounded as scalar strings. |
 | `relations` | object | `{ added: RelationRef[], removed: RelationRef[] }` with `RelationRef = { type, from, to }`. The accepted type set is the same seven persisted values as export relations. Each array at most 10,000 items. |
 | `findings` | object | `{ added: Finding[], removed: Finding[] }`; the same item shape and per-finding `elementIds` limits as report/export findings. Each array at most 10,000 items. |
 | `versionNotes` | array | Human-readable notes pfl emitted (classifier version, runtime version, or resolution semantics differences). Strings of at most 4,096 characters; at most 10,000 items. |
-| `interpretation` | object | `{ a: Side, b: Side }` where `Side = { classifierVersion: string (at most 1,024 characters), origin: "stored" \| "recomputed" }`. The diff document carries no classifier id; Gatefold does not invent one. |
+| `interpretation` | object | `{ a: Side, b: Side }` where `Side = { classifierVersion: string (at most 1,024 characters, repeated in claim text), origin: "stored" \| "recomputed" }`. The diff document carries no classifier id; Gatefold does not invent one. |
 
 Direction is part of the contract: `added`/`removed` and every `from`/`to`
 pair describe the A → B transition, and Gatefold preserves that direction in
@@ -176,8 +176,8 @@ documents reject more than 10,000 items in any structural ID list, in
 `statusChanges`, in `relations.added`/`removed`, in
 `findings.added`/`removed`, or in `versionNotes`; more than 1,000
 `facetDeltas` keys; and the same 4,096-character scalar ceiling. Diff snapshot
-ids and `interpretation.a`/`b` `classifierVersion` are provenance-repeated and
-capped at 1,024 characters. Metadata
+ids and `interpretation.a`/`b` `classifierVersion` repeat in per-side claim
+text and are capped at 1,024 characters. Metadata
 strings copied into every claim's provenance — `pflVersion`,
 `data.interpretation.classifierVersion`, `data.runtimeName`,
 `data.observedSnapshotId`, `data.resolvedSnapshotId`, and `data.confidence` —
