@@ -50,6 +50,7 @@ const VALID_EXPORT_FIXTURES = [
   "valid-export.json",
   "valid-export-empty.json",
   "valid-export-partial.json",
+  "valid-export-layers.json",
 ];
 
 const INVALID_EXPORT_FIXTURES = [
@@ -328,6 +329,41 @@ describe("pfl export snapshot fixtures", () => {
     expect(data.relations).toEqual([]);
     expect(data.findings).toEqual([]);
     expect(data.runtime.version).toBeNull();
+  });
+
+  it("layers export fixture covers every resolved status variant and null layers", async () => {
+    const doc = await readJson("valid-export-layers.json");
+    const data = doc.data as Record<string, any>;
+    const elements = data.elements as Record<string, any>[];
+    const resolvedStatuses = elements
+      .map((element) => element.resolved?.status)
+      .filter(Boolean);
+    expect(resolvedStatuses).toContain("effective");
+    expect(resolvedStatuses).toContain("shadowed");
+    expect(resolvedStatuses).toContain("conditional");
+    expect(
+      elements.some((element) => element.observed.status === "unreadable"),
+    ).toBe(true);
+    expect(
+      elements.some(
+        (element) =>
+          element.resolved === null && element.interpretation === null,
+      ),
+    ).toBe(true);
+    expect(
+      elements.some(
+        (element) =>
+          element.interpretation !== null &&
+          element.interpretation.confidence === "medium",
+      ),
+    ).toBe(true);
+    expect(
+      elements.some(
+        (element) =>
+          element.interpretation !== null &&
+          element.interpretation.facets.length === 0,
+      ),
+    ).toBe(true);
   });
 
   it("invalid export fixtures violate the contract for distinct reasons", async () => {

@@ -118,6 +118,110 @@ export const EXPORT_RULES: readonly ExportClaimRule[] = [
     },
   },
   {
+    id: "element-observed-state",
+    description:
+      "Describes each element's observed layer: identity, redacted path, native kind and origin, status, and reason. Never infers beyond the observed fields.",
+    evaluate: (input) =>
+      input.data.elements.map((element, index) => {
+        const at = `/data/elements/${index}/observed`;
+        const observed = element.observed;
+        const elementId = element.id;
+        const evidence: EvidenceReference[] = [
+          { pointer: `${at}/native/kind`, elementId },
+          { pointer: `${at}/native/origin`, elementId },
+        ];
+        let text = `pfl observed element '${elementId}'`;
+        if (observed.source.path !== undefined) {
+          text += ` at '${observed.source.path}'`;
+          evidence.push({ pointer: `${at}/source/path`, elementId });
+        }
+        text += ` as kind '${observed.native.kind}' from origin '${observed.native.origin}'`;
+        if (observed.native.scope !== null) {
+          text += ` (scope '${observed.native.scope}')`;
+          evidence.push({ pointer: `${at}/native/scope`, elementId });
+        }
+        text += `; observed status is '${observed.status}'`;
+        evidence.push({ pointer: `${at}/status`, elementId });
+        if (observed.reason !== undefined) {
+          text += ` ('${observed.reason}')`;
+          evidence.push({ pointer: `${at}/reason`, elementId });
+        }
+        return makeClaim(
+          input,
+          "element-observed-state",
+          `${text}.`,
+          evidence,
+          1,
+        );
+      }),
+  },
+  {
+    id: "element-resolved-state",
+    description:
+      "Describes each element's resolved layer: status, activation, applicability, and strategy. 'effective' means potentially effective in the static environment, not proof of runtime use.",
+    evaluate: (input) =>
+      input.data.elements.flatMap((element, index) => {
+        const resolved = element.resolved;
+        if (resolved === null) return [];
+        const at = `/data/elements/${index}/resolved`;
+        const elementId = element.id;
+        const evidence: EvidenceReference[] = [
+          { pointer: `${at}/status`, elementId },
+          { pointer: `${at}/activation`, elementId },
+          { pointer: `${at}/resolution/strategy`, elementId },
+        ];
+        const qualification =
+          resolved.status === "effective"
+            ? " — potentially effective in the static environment, not evidence that an agent used it"
+            : "";
+        let text = `The resolved layer marks element '${elementId}' as '${resolved.status}'${qualification}, activation '${resolved.activation}', strategy '${resolved.resolution.strategy}'`;
+        if (resolved.applicability !== undefined) {
+          const target =
+            resolved.applicability.target === undefined
+              ? ""
+              : ` ('${resolved.applicability.target}')`;
+          text += `, applicable to '${resolved.applicability.type}'${target}`;
+          evidence.push({ pointer: `${at}/applicability`, elementId });
+        }
+        if (resolved.resolution.reason !== undefined) {
+          text += `; reason: ${resolved.resolution.reason}`;
+          evidence.push({ pointer: `${at}/resolution/reason`, elementId });
+        }
+        return [
+          makeClaim(input, "element-resolved-state", `${text}.`, evidence, 1),
+        ];
+      }),
+  },
+  {
+    id: "element-interpretation",
+    description:
+      "Describes each element's derived interpretation: assigned facets, classification confidence, and reason. A null layer means the export has no interpretation entry, not that the element has no facet.",
+    evaluate: (input) =>
+      input.data.elements.flatMap((element, index) => {
+        const interpretation = element.interpretation;
+        if (interpretation === null) return [];
+        const at = `/data/elements/${index}/interpretation`;
+        const elementId = element.id;
+        const evidence: EvidenceReference[] = [
+          { pointer: `${at}/confidence`, elementId },
+          { pointer: `${at}/reason`, elementId },
+        ];
+        const text =
+          interpretation.facets.length === 0
+            ? `The classifier recorded no facets for element '${elementId}' with confidence '${interpretation.confidence}': ${interpretation.reason}`
+            : `The classifier assigned element '${elementId}' facet(s) ${interpretation.facets
+                .map((facet) => `'${facet}'`)
+                .join(
+                  ", ",
+                )} with confidence '${interpretation.confidence}': ${interpretation.reason}`;
+        if (interpretation.facets.length > 0)
+          evidence.unshift({ pointer: `${at}/facets`, elementId });
+        return [
+          makeClaim(input, "element-interpretation", `${text}.`, evidence, 1),
+        ];
+      }),
+  },
+  {
     id: "diagnostic-reported",
     description:
       "Reports each warning or error diagnostic the export carries: code, message, and path.",

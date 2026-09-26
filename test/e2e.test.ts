@@ -127,6 +127,24 @@ describe("gatefold e2e (real process)", () => {
     }
   });
 
+  it("export element-layer claims are emitted per element per layer", async () => {
+    const run = await gatefold([
+      fixture("valid-export-layers.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+    const count = (ruleId: string) =>
+      result.claims.filter((c: { provenance: { transform: string[] } }) =>
+        c.provenance.transform.includes(`rule:${ruleId}`),
+      ).length;
+    expect(count("element-observed-state")).toBe(5);
+    expect(count("element-resolved-state")).toBe(3);
+    expect(count("element-interpretation")).toBe(2);
+  });
+
   it("human output lists claims with confidence and evidence", async () => {
     const run = await gatefold([fixture("valid-report.json")]);
     expect(run.code).toBe(0);

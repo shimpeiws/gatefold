@@ -754,6 +754,21 @@ describe("pfl export snapshot contract", () => {
     expect(() => parsePflExport(overRelations, "inline")).toThrow(/at most/);
   });
 
+  it("caps interpretation.facets at 1,000 items per element", () => {
+    const atCap = validExportDoc();
+    atCap.data.elements[0].interpretation.facets = Array.from(
+      { length: 1_000 },
+      (_, i) => `facet-${i}`,
+    );
+    expect(() => parsePflExport(atCap, "inline")).not.toThrow();
+    const over = validExportDoc();
+    over.data.elements[0].interpretation.facets = Array.from(
+      { length: 1_001 },
+      (_, i) => `facet-${i}`,
+    );
+    expect(() => parsePflExport(over, "inline")).toThrow(/at most 1000/);
+  });
+
   it("bounds nested metadata depth and node count per element", () => {
     const deep = (levels: number): unknown =>
       levels === 0 ? 1 : { next: deep(levels - 1) };
