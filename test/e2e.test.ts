@@ -340,8 +340,11 @@ describe("gatefold e2e (real process)", () => {
       "docs/overview.md",
       "docs/release-checklist.md",
       "docs/v0.3-scope.md",
+      "docs/v0.4-scope.md",
       "schema/claim-result.v1.json",
       "schema/claim-result.v2.json",
+      "schema/claim-result.v3.json",
+      "schema/examples/valid-comparison-result.json",
       "README.md",
       "package.json",
     ]) {
@@ -781,7 +784,7 @@ describe("gatefold e2e (real process)", () => {
   });
 
   it(
-    "installed tarball smoke: pack, install to a prefix, and run all three commands",
+    "installed tarball smoke: pack, install to a prefix, and run all commands including compare",
     { timeout: 180_000 },
     async () => {
       const dir = mkdtempSync(join(tmpdir(), "gatefold-pack-"));

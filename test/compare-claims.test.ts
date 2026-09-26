@@ -241,6 +241,34 @@ describe("compare claims (#35)", () => {
     });
   });
 
+  it.each(["", "relation-only/", "drift-partial/"])(
+    "resolves every claim evidence pointer inside the committed triple at %s",
+    (subdir) => {
+      const before = loadFixture(`${subdir}before.json`) as {
+        raw: unknown;
+        doc: PflExportDocument;
+      };
+      const after = loadFixture(`${subdir}after.json`) as {
+        raw: unknown;
+        doc: PflExportDocument;
+      };
+      const diff = loadFixture(`${subdir}diff.json`) as {
+        raw: unknown;
+        doc: PflDiffDocument;
+      };
+      const result = compareDocuments({
+        before: before.doc,
+        after: after.doc,
+        diff: diff.doc,
+      });
+      expectEvidenceResolves(result, {
+        before: before.raw,
+        after: after.raw,
+        diff: diff.raw,
+      });
+    },
+  );
+
   it("describes an element newly effective through addition", () => {
     const before = makeExport(exportData([element("x")], {}, "a"));
     const after = makeExport(exportData([element("x"), element("y")], {}, "b"));
@@ -827,12 +855,21 @@ describe("compare output ceilings", () => {
         },
       }),
     );
-    expect(() =>
+    // 30k structural ids each emit an element claim plus contradiction
+    // claims (absent from complete exports) — together exceeding 50k.
+    try {
       compareDocuments({
         before: before.doc,
         after: after.doc,
         diff: diff.doc,
-      }),
-    ).toThrowError(/claim ceiling/);
+      });
+      expect.unreachable("expected the comparison to be rejected");
+    } catch (error) {
+      expect(error).toMatchObject({
+        name: "PflExportError",
+        code: "invalid-shape",
+      });
+      expect((error as Error).message).toContain("claim ceiling");
+    }
   });
 });
