@@ -427,11 +427,11 @@ function parseFindingList(
   value: unknown,
   scalarLimit?: number,
   path = "data.findings",
+  budget: { total: number } = { total: 0 },
 ): readonly PflFinding[] {
   if (!Array.isArray(value)) throw shapeError(path, "an array");
   if (value.length > MAX_FINDINGS)
     throw shapeError(path, `an array with at most ${MAX_FINDINGS} items`);
-  let totalElementIds = 0;
   return value.map((item, index) => {
     const at = `${path}[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
@@ -445,8 +445,8 @@ function parseFindingList(
         `${at}.elementIds`,
         `an array of non-empty strings (at most ${MAX_ELEMENT_IDS})`,
       );
-    totalElementIds += elementIds.length;
-    if (totalElementIds > MAX_TOTAL_ELEMENT_IDS)
+    budget.total += elementIds.length;
+    if (budget.total > MAX_TOTAL_ELEMENT_IDS)
       throw shapeError(
         `${path}[*].elementIds`,
         `at most ${MAX_TOTAL_ELEMENT_IDS} ids in total across all findings`,
@@ -1257,6 +1257,7 @@ function parseDiffData(value: unknown): PflDiffData {
     };
   });
 
+  const diffFindingsBudget = { total: 0 };
   const parseRelationSide = (side: unknown, path: string) => {
     if (!Array.isArray(side)) throw shapeError(path, "an array");
     if (side.length > MAX_DIFF_ARRAY)
@@ -1323,15 +1324,19 @@ function parseDiffData(value: unknown): PflDiffData {
       removed: parseRelationSide(relations.removed, "data.relations.removed"),
     },
     findings: {
+      // A diff's two finding lists share one element-id budget: the
+      // 10,000-id ceiling is per document, not per side.
       added: parseFindingList(
         findings.added,
         MAX_SCALAR_CHARS,
         "data.findings.added",
+        diffFindingsBudget,
       ),
       removed: parseFindingList(
         findings.removed,
         MAX_SCALAR_CHARS,
         "data.findings.removed",
+        diffFindingsBudget,
       ),
     },
     versionNotes: versionNotes as string[],

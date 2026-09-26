@@ -894,7 +894,7 @@ function validDiffDoc(): Record<string, any> {
         newlyEffective: 1,
         noLongerEffective: 0,
         activationChanged: 0,
-        statusChanges: [{ id: "el_added", from: null, to: "effective" }],
+        statusChanges: [{ id: "el_shared", from: "shadowed", to: "effective" }],
       },
       facetDeltas: { instructions: 1, memory: -1 },
       relations: {
@@ -1014,9 +1014,17 @@ describe("pfl diff contract", () => {
 
   it("validates statusChanges ids and statuses, allowing explicit nulls", () => {
     const doc = validDiffDoc();
+    // The contract permits a null side even though pfl only emits
+    // statusChanges for ids present on both snapshots; a null side would pair
+    // with an added/removed id, which el_added is.
+    doc.data.effective.statusChanges.push({
+      id: "el_added",
+      from: null,
+      to: "effective",
+    });
     const parsed = parsePflExport(doc, "inline");
     if (parsed.command === "diff")
-      expect(parsed.data.effective.statusChanges[0].from).toBeNull();
+      expect(parsed.data.effective.statusChanges[1].from).toBeNull();
 
     const badStatus = validDiffDoc();
     badStatus.data.effective.statusChanges[0].to = "enabled";
@@ -1024,7 +1032,7 @@ describe("pfl diff contract", () => {
 
     const dupId = validDiffDoc();
     dupId.data.effective.statusChanges.push({
-      id: "el_added",
+      id: "el_shared",
       from: "effective",
       to: "shadowed",
     });
@@ -1121,6 +1129,24 @@ describe("pfl diff contract", () => {
       Array.from({ length: 1_000 }, (_, i) => [`f${i}`, 0]),
     );
     expect(() => parsePflExport(atFacets, "inline")).not.toThrow();
+  });
+
+  it("shares the total element-id budget across both finding sides", () => {
+    const findingsWith = (n: number, prefix: string) =>
+      Array.from({ length: n }, (_, i) => ({
+        rule: "r",
+        message: "m",
+        elementIds: [`${prefix}${i}`],
+      }));
+    const over = validDiffDoc();
+    over.data.findings.added = findingsWith(6_000, "a");
+    over.data.findings.removed = findingsWith(6_000, "r");
+    expect(() => parsePflExport(over, "inline")).toThrow(/at most/);
+
+    const at = validDiffDoc();
+    at.data.findings.added = findingsWith(6_000, "a");
+    at.data.findings.removed = findingsWith(4_000, "r");
+    expect(() => parsePflExport(at, "inline")).not.toThrow();
   });
 
   it("caps displayed and provenance-repeated diff strings", () => {
