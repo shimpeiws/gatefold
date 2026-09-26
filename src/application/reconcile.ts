@@ -302,13 +302,24 @@ export function reconcileDocuments(
         elementId: id,
       });
       const absentCompleteSides: ComparisonEvidenceReference[] = [];
-      if (bi === null && before.completeness === "complete")
+      // A null side records the element as absent on that side, so a
+      // complete export lacking it agrees with the diff; only a non-null
+      // side status contradicts an empty complete export.
+      if (
+        bi === null &&
+        before.completeness === "complete" &&
+        statusChange.from !== null
+      )
         absentCompleteSides.push({
           source: "before",
           pointer: "/data/elements",
           elementId: id,
         });
-      if (ai === null && after.completeness === "complete")
+      if (
+        ai === null &&
+        after.completeness === "complete" &&
+        statusChange.to !== null
+      )
         absentCompleteSides.push({
           source: "after",
           pointer: "/data/elements",
@@ -320,38 +331,58 @@ export function reconcileDocuments(
             "has a diff status change but is absent from a complete export",
           evidence: [statusRef("id"), ...absentCompleteSides],
         });
-      if (
-        statusChange.from !== null &&
-        beforeElement?.resolved != null &&
-        beforeElement.resolved.status !== statusChange.from
-      )
-        contradictions.push({
-          detail: `diff records status from '${statusChange.from}' but the before export resolves '${beforeElement.resolved.status}'`,
-          evidence: [
-            statusRef("from"),
-            {
-              source: "before",
-              pointer: `/data/elements/${bi}/resolved/status`,
-              elementId: id,
-            },
-          ],
-        });
-      if (
-        statusChange.to !== null &&
-        afterElement?.resolved != null &&
-        afterElement.resolved.status !== statusChange.to
-      )
-        contradictions.push({
-          detail: `diff records status to '${statusChange.to}' but the after export resolves '${afterElement.resolved.status}'`,
-          evidence: [
-            statusRef("to"),
-            {
-              source: "after",
-              pointer: `/data/elements/${ai}/resolved/status`,
-              elementId: id,
-            },
-          ],
-        });
+      if (statusChange.from !== null && beforeElement !== null) {
+        if (beforeElement.resolved === null)
+          contradictions.push({
+            detail: `diff records status from '${statusChange.from}' but the before export has no resolved entry`,
+            evidence: [
+              statusRef("from"),
+              {
+                source: "before",
+                pointer: `/data/elements/${bi}/resolved`,
+                elementId: id,
+              },
+            ],
+          });
+        else if (beforeElement.resolved.status !== statusChange.from)
+          contradictions.push({
+            detail: `diff records status from '${statusChange.from}' but the before export resolves '${beforeElement.resolved.status}'`,
+            evidence: [
+              statusRef("from"),
+              {
+                source: "before",
+                pointer: `/data/elements/${bi}/resolved/status`,
+                elementId: id,
+              },
+            ],
+          });
+      }
+      if (statusChange.to !== null && afterElement !== null) {
+        if (afterElement.resolved === null)
+          contradictions.push({
+            detail: `diff records status to '${statusChange.to}' but the after export has no resolved entry`,
+            evidence: [
+              statusRef("to"),
+              {
+                source: "after",
+                pointer: `/data/elements/${ai}/resolved`,
+                elementId: id,
+              },
+            ],
+          });
+        else if (afterElement.resolved.status !== statusChange.to)
+          contradictions.push({
+            detail: `diff records status to '${statusChange.to}' but the after export resolves '${afterElement.resolved.status}'`,
+            evidence: [
+              statusRef("to"),
+              {
+                source: "after",
+                pointer: `/data/elements/${ai}/resolved/status`,
+                elementId: id,
+              },
+            ],
+          });
+      }
       // A null side marks the element as absent on that side in the diff;
       // an export that still carries a resolved status contradicts that.
       if (statusChange.from === null && beforeElement?.resolved != null)
@@ -459,5 +490,37 @@ export function reconcileDocuments(
     }),
   );
 
-  return { before, after, diff, elements, relations, findings };
+  // Sort by stable identifying fields so a permutation of the diff arrays
+  // does not reorder claims; `index` keeps evidence pointers bound to the
+  // original record and breaks ties between identical records.
+  const byString = (a: string, b: string): number =>
+    a < b ? -1 : a > b ? 1 : 0;
+  const relationsSorted = [...relations].sort(
+    (a, b) =>
+      byString(a.from, b.from) ||
+      byString(a.to, b.to) ||
+      byString(a.type, b.type) ||
+      a.index - b.index,
+  );
+  const findingKey = (finding: FindingReconciliation): string =>
+    JSON.stringify([
+      finding.rule,
+      [...finding.elementIds].sort(),
+      finding.message,
+    ]);
+  const findingsSorted = [...findings].sort(
+    (a, b) =>
+      byString(a.direction, b.direction) ||
+      byString(findingKey(a), findingKey(b)) ||
+      a.index - b.index,
+  );
+
+  return {
+    before,
+    after,
+    diff,
+    elements,
+    relations: relationsSorted,
+    findings: findingsSorted,
+  };
 }

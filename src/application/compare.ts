@@ -84,10 +84,12 @@ function diffInput(document: PflDiffDocument): ComparisonDiffInput {
 }
 
 /**
- * Validates that the three documents form one A → B comparison
- * (docs/v0.4-scope.md) and returns the comparison result. Claim rules join
- * the documents in later milestones; for now the result carries the validated
- * inputs and no claims.
+ * Compares three already-parsed documents as one A → B comparison
+ * (docs/v0.4-scope.md): validates cross-document compatibility, reconciles
+ * the diff with both exports into a deterministic view, emits the schema-v3
+ * claims, and enforces the output ceilings. Callers must parse and validate
+ * each input with the pfl document parsers first; this function does not
+ * re-check per-document shape beyond the command role.
  */
 export function compareDocuments(input: {
   before: PflDocument;

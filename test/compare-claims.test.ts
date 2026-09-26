@@ -873,3 +873,195 @@ describe("compare output ceilings", () => {
     }
   });
 });
+
+describe("compare review fixes (devin-review PR #49)", () => {
+  function compare(
+    before: { doc: PflExportDocument },
+    after: { doc: PflExportDocument },
+    diff: { doc: PflDiffDocument },
+  ) {
+    return compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+  }
+
+  it("does not flag a complete export that lacks a null-side status change", () => {
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        structural: {
+          added: 1,
+          removed: 0,
+          changed: 0,
+          addedIds: ["x"],
+          removedIds: [],
+          changedIds: [],
+        },
+        effective: {
+          newlyEffective: 1,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: null, to: "effective" }],
+        },
+      }),
+    );
+    const result = compare(before, after, diff);
+    expect(
+      result.claims.filter((c) => c.ruleId === "compare-contradiction"),
+    ).toHaveLength(0);
+  });
+
+  it("flags a non-null diff status against an export with no resolved entry", () => {
+    const before = makeExport(
+      exportData([element("x", { status: null })], {}, "a"),
+    );
+    const after = makeExport(
+      exportData([element("x", { status: "shadowed" })], {}, "b"),
+    );
+    const diff = makeDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 1,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: "effective", to: "shadowed" }],
+        },
+      }),
+    );
+    const result = compare(before, after, diff);
+    const contradictions = result.claims.filter(
+      (c) => c.ruleId === "compare-contradiction",
+    );
+    expect(
+      contradictions.some((c) => c.claim.includes("has no resolved entry")),
+    ).toBe(true);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("cites the resolved null entry when an element has no resolved layer", () => {
+    const before = makeExport(
+      exportData([element("x", { status: null, facets: null })], {}, "a"),
+    );
+    const after = makeExport(exportData([], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        structural: {
+          added: 0,
+          removed: 1,
+          changed: 0,
+          addedIds: [],
+          removedIds: ["x"],
+          changedIds: [],
+        },
+      }),
+    );
+    const result = compare(before, after, diff);
+    const removed = result.claims.find(
+      (c) => c.ruleId === "compare-element-removed",
+    );
+    expect(removed).toBeDefined();
+    const pointers = removed!.evidence.map((e) => `${e.source}:${e.pointer}`);
+    expect(pointers).toContain("before:/data/elements/0/resolved");
+    expect(pointers).toContain("before:/data/elements/0/interpretation");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("caveats classifier drift between an export and its diff side", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        interpretation: {
+          a: { classifierVersion: "2.0.0", origin: "recomputed" },
+          b: { classifierVersion: "1.0.0", origin: "stored" },
+        },
+      }),
+    );
+    const result = compare(before, after, diff);
+    const drift = result.claims.filter(
+      (c) => c.ruleId === "compare-version-drift",
+    );
+    expect(
+      drift.some(
+        (c) =>
+          c.claim.includes("'1.0.0'") &&
+          c.claim.includes("'2.0.0'") &&
+          c.claim.includes("side A"),
+      ),
+    ).toBe(true);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("does not report runtime drift when a version is unknown", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(
+      exportData(
+        [element("x")],
+        {
+          runtime: {
+            id: "claude-code",
+            version: null,
+            adapter: {
+              id: "a",
+              version: "1.0.0",
+              runtimeCompatibility: "verified",
+            },
+          },
+        },
+        "b",
+      ),
+    );
+    const diff = makeDiff(diffData());
+    const result = compare(before, after, diff);
+    expect(
+      result.claims.some((c) => c.claim.includes("runtime versions")),
+    ).toBe(false);
+  });
+
+  it("orders relation and finding claims independently of diff array order", () => {
+    const relations = [
+      { type: "shadows", from: "z", to: "a" },
+      { type: "shadows", from: "a", to: "z" },
+    ];
+    const findings = [
+      { rule: "r2", message: "m2", elementIds: ["z"] },
+      { rule: "r1", message: "m1", elementIds: ["a"] },
+    ];
+    const build = (
+      addedRelations: typeof relations,
+      addedFindings: typeof findings,
+    ) =>
+      makeDiff(
+        diffData({
+          relations: { added: addedRelations, removed: [] },
+          findings: { added: addedFindings, removed: [] },
+        }),
+      );
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([element("a"), element("z")], {}, "b"));
+    const result1 = compare(before, after, build(relations, findings));
+    const result2 = compare(
+      before,
+      after,
+      build([...relations].reverse(), [...findings].reverse()),
+    );
+    expect(result1.claims.map((c) => c.claim)).toEqual(
+      result2.claims.map((c) => c.claim),
+    );
+  });
+});

@@ -72,8 +72,10 @@ function describeElement(
     `in ${side} it is observed as kind '${element.observed.native.kind}' ` +
     `from origin '${element.observed.native.origin}' with observed status ` +
     `'${element.observed.status}'`;
-  if (element.resolved === null) text += "; it has no resolved entry";
-  else {
+  if (element.resolved === null) {
+    text += "; it has no resolved entry";
+    evidence.push({ source, pointer: `${at}/resolved`, elementId });
+  } else {
     const qualified =
       element.resolved.status === "effective"
         ? "'effective' (potentially effective in the static environment, " +
@@ -85,9 +87,10 @@ function describeElement(
       { source, pointer: `${at}/resolved/activation`, elementId },
     );
   }
-  if (element.interpretation === null)
+  if (element.interpretation === null) {
     text += "; it has no interpretation entry";
-  else {
+    evidence.push({ source, pointer: `${at}/interpretation`, elementId });
+  } else {
     const facets = element.interpretation.facets;
     text +=
       facets.length === 0
@@ -195,11 +198,17 @@ function endpointContext(
       elementId: id,
     },
   ];
-  if (element.resolved === null)
+  if (element.resolved === null) {
+    evidence.push({
+      source,
+      pointer: `/data/elements/${index}/resolved`,
+      elementId: id,
+    });
     return {
       text: `'${id}' is present in ${side} with no resolved entry`,
       evidence,
     };
+  }
   evidence.push({
     source,
     pointer: `/data/elements/${index}/resolved/status`,
@@ -472,15 +481,57 @@ export const COMPARE_RULES: readonly CompareRule[] = [
             ],
           ),
         );
+      // Each diff side records the classifier pfl used for that snapshot;
+      // drift between an export and its matching diff side means the diff's
+      // facet deltas come from a different interpretation than the export's.
+      for (const [source, side, exportVersion, diffVersion] of [
+        [
+          "before",
+          "a",
+          beforeClassifier,
+          view.diff.data.interpretation.a.classifierVersion,
+        ],
+        [
+          "after",
+          "b",
+          afterClassifier,
+          view.diff.data.interpretation.b.classifierVersion,
+        ],
+      ] as const) {
+        if (exportVersion !== diffVersion)
+          claims.push(
+            claim(
+              "compare-version-drift",
+              `The ${source} export was interpreted by classifier ` +
+                `'${exportVersion}' but the diff records classifier ` +
+                `'${diffVersion}' for side ${side.toUpperCase()}, so the ` +
+                "diff's facet deltas may reflect the classifier change.",
+              [
+                {
+                  source,
+                  pointer: "/data/interpretation/classifier/version",
+                },
+                {
+                  source: "diff",
+                  pointer: `/data/interpretation/${side}/classifierVersion`,
+                },
+              ],
+            ),
+          );
+      }
       const beforeRuntime = view.before.data.runtime.version;
       const afterRuntime = view.after.data.runtime.version;
-      if (beforeRuntime !== afterRuntime)
+      // A null runtime version is unknown, not evidence of a change.
+      if (
+        beforeRuntime !== null &&
+        afterRuntime !== null &&
+        beforeRuntime !== afterRuntime
+      )
         claims.push(
           claim(
             "compare-version-drift",
             `The two exports were captured under different runtime versions ` +
-              `(A '${beforeRuntime ?? "unknown"}', B ` +
-              `'${afterRuntime ?? "unknown"}').`,
+              `(A '${beforeRuntime}', B '${afterRuntime}').`,
             [
               { source: "before", pointer: "/data/runtime/version" },
               { source: "after", pointer: "/data/runtime/version" },
@@ -677,7 +728,14 @@ export const COMPARE_RULES: readonly CompareRule[] = [
                 pointer: `/data/elements/${element.beforeIndex}/resolved/status`,
                 elementId: element.id,
               });
-            } else text += "; the before export has no resolved entry for it";
+            } else {
+              text += "; the before export has no resolved entry for it";
+              evidence.push({
+                source: "before",
+                pointer: `/data/elements/${element.beforeIndex}/resolved`,
+                elementId: element.id,
+              });
+            }
           } else {
             const absent = absentContext(
               "before",
@@ -698,7 +756,14 @@ export const COMPARE_RULES: readonly CompareRule[] = [
                 pointer: `/data/elements/${element.afterIndex}/resolved/status`,
                 elementId: element.id,
               });
-            } else text += "; the after export has no resolved entry for it";
+            } else {
+              text += "; the after export has no resolved entry for it";
+              evidence.push({
+                source: "after",
+                pointer: `/data/elements/${element.afterIndex}/resolved`,
+                elementId: element.id,
+              });
+            }
           } else {
             const absent = absentContext(
               "after",
