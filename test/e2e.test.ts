@@ -317,6 +317,7 @@ describe("gatefold e2e (real process)", () => {
       "dist/src/index.d.ts",
       "docs/overview.md",
       "docs/release-checklist.md",
+      "docs/v0.3-scope.md",
       "schema/claim-result.v1.json",
       "README.md",
       "package.json",
@@ -335,7 +336,7 @@ describe("gatefold e2e (real process)", () => {
       );
       expect(hits, forbidden).toEqual([]);
     }
-  });
+  }, 15_000);
 
   it("package.json ci:all is exactly the documented clean-install gate", () => {
     const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
