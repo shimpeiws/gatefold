@@ -35,7 +35,9 @@ Each evidence item carries:
 - `pointer` (required) — a JSON Pointer (RFC 6901) into the input export
   document. The empty string references the whole document.
 - `elementId` (optional) — the id of the referenced element when the export
-  defines element ids.
+  defines element ids, verbatim so it matches the input document. Display and
+  error paths sanitize it; JSON output keeps the document value (JSON string
+  encoding escapes control characters).
 - `note` (optional) — a human-readable clarification.
 
 ### Provenance

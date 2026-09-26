@@ -62,8 +62,12 @@ the file list, and the bin entry against the real registry client.
 TARBALL=$(npm pack --json | jq -r '.[0].filename')
 npm install -g "./$TARBALL"
 gatefold --help
-gatefold path/to/pfl-export.json --format json
-pfl report --json | gatefold -        # stdin transport
+gatefold pfl-report.json --format json    # report document
+gatefold pfl-export.json --format json    # export document
+gatefold pfl-diff.json --format json      # diff document
+pfl report --json | gatefold -            # stdin transport
+pfl export --json | gatefold -            # stdin transport
+pfl diff --json | gatefold -              # stdin transport
 npm uninstall -g @shimpeiws/gatefold
 ```
 

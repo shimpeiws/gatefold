@@ -637,8 +637,12 @@ describe("gatefold e2e (real process)", () => {
       if (current === null || typeof current !== "object")
         throw new Error(`pointer ${pointer} crosses a scalar`);
       if (Array.isArray(current)) {
+        if (!/^(?:0|[1-9]\d*)$/.test(segment))
+          throw new Error(
+            `pointer ${pointer} segment ${segment} is not an array index`,
+          );
         const index = Number(segment);
-        if (!Number.isInteger(index) || index < 0 || index >= current.length)
+        if (index >= current.length)
           throw new Error(`pointer ${pointer} index ${segment} out of range`);
         current = current[index];
       } else {
@@ -663,7 +667,9 @@ describe("gatefold e2e (real process)", () => {
       expect(run.code, name).toBe(0);
       const result = JSON.parse(run.stdout);
       expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+      expect(result.claims.length, name).toBeGreaterThan(0);
       const document = JSON.parse(readFileSync(fixture(name), "utf8"));
+      let resolvedPointers = 0;
       for (const claim of result.claims) {
         expect(claim.ruleId.length, name).toBeGreaterThan(0);
         expect(claim.provenance.transform, name).toContain(
@@ -680,8 +686,10 @@ describe("gatefold e2e (real process)", () => {
             () => resolvePointer(document, evidence.pointer),
             `${name} ${evidence.pointer}`,
           ).not.toThrow();
+          resolvedPointers += 1;
         }
       }
+      expect(resolvedPointers, name).toBeGreaterThan(0);
     },
   );
 
@@ -691,11 +699,66 @@ describe("gatefold e2e (real process)", () => {
     expect(run.stdout).not.toMatch(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
   });
 
+  it("escapes hostile characters in both output formats end to end", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-e2e-"));
+    try {
+      const doc = JSON.parse(
+        readFileSync(fixture("valid-export.json"), "utf8"),
+      );
+      // Replace every occurrence of the first element id so the layer joins,
+      // relation endpoints, and finding references stay consistent.
+      const originalId = doc.data.elements[0].id;
+      const hostileId = "el-\u001b[31m\u202eevil\u200b\ufeff";
+      const replaceIds = (value: unknown): unknown => {
+        if (value === originalId) return hostileId;
+        if (Array.isArray(value)) return value.map(replaceIds);
+        if (value !== null && typeof value === "object")
+          return Object.fromEntries(
+            Object.entries(value).map(([key, entry]) => [
+              key,
+              replaceIds(entry),
+            ]),
+          );
+        return value;
+      };
+      const replaced = replaceIds(doc) as typeof doc;
+      replaced.data.metadata = { "run\u200b": "v\u001b[32mal" };
+      const path = join(dir, "hostile-export.json");
+      writeFileSync(path, JSON.stringify(replaced));
+      // The sanitizer's unsafe set minus \t \n \r, which the formatter emits.
+      const unsafe =
+        /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+      const human = await gatefold([path]);
+      expect(human.code).toBe(0);
+      expect(human.stdout).not.toMatch(unsafe);
+      expect(human.stdout).toContain("\\u001b");
+      const json = await gatefold([path, "--format", "json"]);
+      expect(json.code).toBe(0);
+      const result = JSON.parse(json.stdout);
+      for (const claim of result.claims) {
+        expect(claim.claim).not.toMatch(unsafe);
+      }
+      const claimText = result.claims.map((claim) => claim.claim).join("\n");
+      expect(claimText).toContain("\\u001b");
+      // evidence.elementId is the verbatim id for document correlation;
+      // display paths sanitize it. JSON.stringify escapes C0, so no raw
+      // control bytes can reach the wire through the JSON document.
+      const elementIds = result.claims
+        .flatMap((claim) => claim.evidence)
+        .map((entry) => entry.elementId)
+        .filter((id) => id !== undefined);
+      expect(elementIds).toContain(hostileId);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("--help documents all three accepted commands", async () => {
     const run = await gatefold(["--help"]);
     expect(run.code).toBe(0);
     for (const command of ["report", "export", "diff"])
       expect(run.stdout).toContain(command);
+    expect(run.stdout).toContain("report, export, or diff");
     expect(run.stdout).toContain("command");
   });
 
@@ -737,6 +800,8 @@ describe("gatefold e2e (real process)", () => {
             dir,
             "--no-save",
             "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
             join(dir, filename),
           ],
           { cwd: dir, timeout: 120_000 },
