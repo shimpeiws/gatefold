@@ -39,6 +39,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.1 scope and acceptance criteria](docs/v0.1-scope.md)
 - [v0.2 scope and acceptance criteria](docs/v0.2-scope.md)
 - [v0.3 scope and input contract](docs/v0.3-scope.md)
+- [v0.4 scope and comparison contract](docs/v0.4-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [pfl export contract](docs/pfl-export-contract.md)
