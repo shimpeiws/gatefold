@@ -11,6 +11,12 @@ import type {
   PflDocument,
   PflExportDocument,
 } from "../input/pfl-export.js";
+import { COMPARE_RULES } from "./compare-rules.js";
+import { reconcileDocuments } from "./reconcile.js";
+
+/** Output amplification ceilings, shared with the single-document path. */
+const MAX_EMITTED_CLAIMS = 50_000;
+const MAX_EVIDENCE_REFERENCES = 100_000;
 
 function mismatched(message: string): PflExportError {
   return new PflExportError("mismatched-inputs", message);
@@ -135,6 +141,23 @@ export function compareDocuments(input: {
         `${diff.data.resolvedSnapshotIdB})`,
     );
 
+  const view = reconcileDocuments(before, after, diff);
+  const claims = COMPARE_RULES.flatMap((rule) => rule.evaluate(view));
+  if (claims.length > MAX_EMITTED_CLAIMS)
+    throw new PflExportError(
+      "invalid-shape",
+      `comparison would emit ${claims.length} claims, exceeding the ${MAX_EMITTED_CLAIMS} claim ceiling`,
+    );
+  const evidenceCount = claims.reduce(
+    (total, claim) => total + claim.evidence.length,
+    0,
+  );
+  if (evidenceCount > MAX_EVIDENCE_REFERENCES)
+    throw new PflExportError(
+      "invalid-shape",
+      `comparison would cite ${evidenceCount} evidence references, exceeding the ${MAX_EVIDENCE_REFERENCES} reference ceiling`,
+    );
+
   const result: ComparisonResult = {
     schemaVersion: COMPARISON_SCHEMA_VERSION,
     source: { command: "compare" },
@@ -143,7 +166,7 @@ export function compareDocuments(input: {
       after: exportInput(after),
       diff: diffInput(diff),
     },
-    claims: [],
+    claims,
   };
   assertValidComparisonResult(result);
   return result;
