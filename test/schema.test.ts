@@ -34,6 +34,18 @@ describe("claim schema validation", () => {
     expect(validate(valid)).toBe(true);
   });
 
+  it("accepts the committed v3 comparison example", async () => {
+    const v3Schema = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("schema/claim-result.v3.json", root)),
+        "utf8",
+      ),
+    );
+    const validateV3 = ajv.compile(v3Schema);
+    const example = await readExample("valid-comparison-result.json");
+    expect(validateV3(example), JSON.stringify(validateV3.errors)).toBe(true);
+  });
+
   it("rejects every committed invalid example", async () => {
     const files = await readdir(examplesDir);
     const invalid = files.filter((f) => f.startsWith("invalid-"));

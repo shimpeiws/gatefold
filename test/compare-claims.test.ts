@@ -808,3 +808,31 @@ describe("compare claims (#36) review findings", () => {
     expect(claims[1].claim).toContain("'y' accumulates with element 'x'");
   });
 });
+
+describe("compare output ceilings", () => {
+  it("rejects a triple whose claims would exceed the claim ceiling", () => {
+    const ids = (prefix: string) =>
+      Array.from({ length: 10000 }, (_, i) => `${prefix}-${i}`);
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        structural: {
+          added: 10000,
+          removed: 10000,
+          changed: 10000,
+          addedIds: ids("add"),
+          removedIds: ids("rem"),
+          changedIds: ids("chg"),
+        },
+      }),
+    );
+    expect(() =>
+      compareDocuments({
+        before: before.doc,
+        after: after.doc,
+        diff: diff.doc,
+      }),
+    ).toThrowError(/claim ceiling/);
+  });
+});

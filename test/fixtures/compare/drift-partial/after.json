@@ -1,0 +1,69 @@
+{
+  "pflVersion": "1.5.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "partial",
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "partial-observation",
+      "message": "2 element(s) could not be fully observed"
+    }
+  ],
+  "data": {
+    "project": { "id": "proj-compare", "displayName": "Compare Fixture" },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.1.0",
+      "adapter": {
+        "id": "claude-code-adapter",
+        "version": "1.1.0",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs-drift-b",
+      "resolvedSnapshotId": "res-drift-b",
+      "capturedAt": "2026-09-27T00:00:00Z",
+      "schemaVersion": "1"
+    },
+    "resolution": { "semanticsVersion": "1.1.0", "confidence": "verified" },
+    "elements": [
+      {
+        "id": "el-x",
+        "observed": {
+          "id": "el-x",
+          "native": { "kind": "markdown", "origin": "project", "scope": null },
+          "source": { "path": "docs/x.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el-x",
+          "status": "shadowed",
+          "activation": "always",
+          "resolution": { "strategy": "override" }
+        },
+        "interpretation": {
+          "elementId": "el-x",
+          "facets": ["instructions"],
+          "confidence": "medium",
+          "reason": "matched instruction pattern"
+        }
+      }
+    ],
+    "relations": [],
+    "findings": [
+      {
+        "rule": "shadowed-instructions",
+        "message": "instruction element is shadowed by a higher-precedence element",
+        "elementIds": ["el-x"]
+      }
+    ],
+    "interpretation": {
+      "classifier": { "id": "pfl-classifier", "version": "1.1.0" },
+      "origin": "recomputed"
+    }
+  }
+}

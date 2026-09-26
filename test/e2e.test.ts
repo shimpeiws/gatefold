@@ -852,6 +852,24 @@ describe("gatefold e2e (real process)", () => {
           expect(validate(result), fixtureName).toBe(true);
           expect(result.claims.length, fixtureName).toBeGreaterThan(0);
         }
+        const compare = await installed([
+          "compare",
+          "--before",
+          compareFixture("before.json"),
+          "--after",
+          compareFixture("after.json"),
+          "--diff",
+          compareFixture("diff.json"),
+          "--format",
+          "json",
+        ]);
+        expect(compare.code, compare.stderr).toBe(0);
+        const comparison = JSON.parse(compare.stdout);
+        expect(
+          validateComparison(comparison),
+          JSON.stringify(validateComparison.errors),
+        ).toBe(true);
+        expect(comparison.claims.length).toBeGreaterThan(0);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -1027,5 +1045,63 @@ describe("gatefold compare e2e (real process)", () => {
       diff,
     ]);
     expect(twoStdin.code).toBe(2);
+  });
+
+  it("emits relation claims and no element claims for a relation-only triple", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      compareFixture("relation-only/before.json"),
+      "--after",
+      compareFixture("relation-only/after.json"),
+      "--diff",
+      compareFixture("relation-only/diff.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateComparison(result),
+      JSON.stringify(validateComparison.errors),
+    ).toBe(true);
+    const rules = result.claims.map(
+      (claim: { ruleId: string }) => claim.ruleId,
+    );
+    expect(rules).toContain("compare-relation-added");
+    expect(rules).not.toContain("compare-element-added");
+    expect(rules).not.toContain("compare-status-transition");
+  });
+
+  it("surfaces drift caveats and a reworded finding on the partial triple", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      compareFixture("drift-partial/before.json"),
+      "--after",
+      compareFixture("drift-partial/after.json"),
+      "--diff",
+      compareFixture("drift-partial/diff.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateComparison(result),
+      JSON.stringify(validateComparison.errors),
+    ).toBe(true);
+    const rules = result.claims.map(
+      (claim: { ruleId: string }) => claim.ruleId,
+    );
+    expect(rules).toContain("compare-completeness");
+    expect(rules).toContain("compare-version-drift");
+    expect(rules).toContain("compare-finding-reworded");
+    expect(rules).toContain("compare-status-transition");
+    expect(
+      result.claims.some((claim: { claim: string }) =>
+        claim.claim.includes("may be unobserved"),
+      ),
+    ).toBe(true);
   });
 });

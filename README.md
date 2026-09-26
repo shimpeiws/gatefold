@@ -16,6 +16,9 @@ gatefold <input.json> --min-confidence 0.8     # drop claims below the threshold
 pfl report --json | gatefold -                 # read a document from stdin
 pfl export --json | gatefold -                 # full snapshot: elements, relations, findings
 pfl diff --json   | gatefold -                 # A → B comparison
+gatefold compare --before a.json --after b.json --diff d.json
+                                               # contextual A → B comparison
+                                               # across the three documents
 ```
 
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a

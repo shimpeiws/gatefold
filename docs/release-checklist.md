@@ -1,6 +1,6 @@
 # Release checklist
 
-Reproducible steps to cut the current release (v0.3). Every step must pass in
+Reproducible steps to cut the current release (v0.4). Every step must pass in
 order.
 
 ## 1. Clean install
@@ -21,7 +21,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.3 scope](v0.3-scope.md).
+release gate in [v0.4 scope](v0.4-scope.md).
 
 ## 3. Package validation
 
@@ -32,7 +32,8 @@ npm pack --dry-run --json
 `prepack` runs `npm run build`, so the tarball always carries a fresh `dist/`
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
-`.d.ts` files), `docs/`, `schema/` (including `schema/examples/`), `README.md`,
+`.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
+`claim-result.v3.json`, including `schema/examples/`), `README.md`,
 and `package.json`. All of `docs/` is shipped intentionally — keep only
 public-facing documentation in that directory. The tarball must not contain
 `test/`, `node_modules/`, `src/`, or any agent or review artifacts.
@@ -65,6 +66,7 @@ gatefold --help
 gatefold pfl-report.json --format json    # report document
 gatefold pfl-export.json --format json    # export document
 gatefold pfl-diff.json --format json      # diff document
+gatefold compare   --before export-a.json   --after export-b.json   --diff diff.json --format json          # three-document comparison (v3)
 pfl report --json | gatefold -            # stdin transport
 pfl export --json | gatefold -            # stdin transport
 pfl diff --json | gatefold -              # stdin transport
@@ -72,7 +74,9 @@ npm uninstall -g @shimpeiws/gatefold
 ```
 
 Confirm every claim in the JSON output carries a `ruleId`, evidence pointers,
-and provenance.
+and provenance. For the v3 comparison result, confirm `schemaVersion` is 3,
+`inputs` records all three documents, and every evidence entry names a
+`source` (`before`/`after`/`diff`).
 
 ## 6. Tag and publish
 
