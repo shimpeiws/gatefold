@@ -973,6 +973,27 @@ describe("gatefold compare e2e (real process)", () => {
     expect(wrongCommand.stderr).toContain("must be a pfl export");
   });
 
+  it("rejects an oversized compare input with exit 3", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-oversize-"));
+    try {
+      const oversized = join(dir, "big.json");
+      writeFileSync(oversized, Buffer.alloc(16 * 1024 * 1024 + 1));
+      const run = await gatefold([
+        "compare",
+        "--before",
+        oversized,
+        "--after",
+        after,
+        "--diff",
+        diff,
+      ]);
+      expect(run.code).toBe(3);
+      expect(run.stderr).toContain("byte limit");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects malformed input and usage errors", async () => {
     const malformed = await gatefold([
       "compare",
