@@ -1,9 +1,13 @@
 # Rule catalog
 
-The analyzer (`src/application/rules.ts`) registers an explicit list of
-descriptive rules. Each rule emits claims about what the export contains —
-never a judgement of whether the harness is good or bad. Every claim carries
-evidence, provenance, and confidence per `schema/claim-result.v1.json`.
+The analyzer registers an explicit list of descriptive rules per input
+command: `src/application/rules.ts` for `report` documents and
+`src/application/export-rules.ts` for `export` documents. Each rule emits
+claims about what the document contains — never a judgement of whether the
+harness is good or bad. Every claim carries evidence, provenance, and
+confidence per `schema/claim-result.v2.json`.
+
+## `report` rules
 
 | Rule id | What it claims | Confidence |
 | --- | --- | --- |
@@ -15,6 +19,21 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
 | `completeness-reported` | When the export is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete exports. | 1.0 |
 | `observation-status` | How to read the report's observation status: the reported `completeness`, diagnostic counts by severity, and the interpretation origin and classifier version. Emitted once per accepted report. Describes only what the export states — never a cause, quality judgement, or score. | 1.0 |
 
+## `export` rules
+
+| Rule id | What it claims | Confidence |
+| --- | --- | --- |
+| `export-described` | Which runtime, adapter, and project the export snapshot describes. | 1.0 |
+| `export-snapshot-contents` | How many joined elements, relations, and findings the export carries, and how many elements carry each nullable layer. | 1.0 when `completeness` is `complete`, else 0.8 |
+| `export-interpretation-provenance` | Which classifier produced the export's interpretation, with which origin, resolution semantics version, and resolution confidence. | 1.0 |
+| `diagnostic-reported` | Each `warning`/`error` diagnostic the export carries: its code, message, and path. Emitted only for warning/error diagnostics. | 1.0 |
+| `completeness-reported` | When the export is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete exports. | 1.0 |
+
+`diagnostic-reported` and `completeness-reported` are shared claim
+vocabulary: both command rule sets may emit them, and their provenance
+`transform` chain records which envelope produced the claim
+(`pfl-report-envelope` versus `pfl-export-envelope`).
+
 ## Conventions
 
 - Claim order is deterministic: registry order, then document order within a
@@ -25,7 +44,9 @@ evidence, provenance, and confidence per `schema/claim-result.v1.json`.
 - Evidence pointers are JSON Pointers into the export document at the locations
   the input contract permits (`docs/pfl-export-contract.md`).
 - Provenance records the source file, the export's `pflVersion`, the transform
-  chain `["pfl-report-envelope", "rule:<id>"]`, and the export's interpretation
+  chain `["pfl-report-envelope", "rule:<id>"]` (or
+  `["pfl-export-envelope", "rule:<id>"]` for `export` documents), and the
+  export's interpretation
   metadata: `classifierVersion`, `interpretationOrigin`, and — when the export
   carries them — `observedSnapshotId`, `resolvedSnapshotId`, and `runtimeName`.
 - Strings interpolated into claim text — and provenance strings copied from

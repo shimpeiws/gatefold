@@ -1,0 +1,149 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": {
+      "id": "path-0123456789abcdef",
+      "displayName": "owner/repo"
+    },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.1.272",
+      "adapter": {
+        "id": "claude-code",
+        "version": "0.1.1",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs_0123456789ab",
+      "resolvedSnapshotId": "res_0123456789ab",
+      "capturedAt": "2026-09-18T00:00:00.000Z",
+      "schemaVersion": "1"
+    },
+    "resolution": {
+      "semanticsVersion": "2",
+      "confidence": "verified"
+    },
+    "elements": [
+      {
+        "id": "el_0fc92802d8f84176",
+        "observed": {
+          "id": "el_0fc92802d8f84176",
+          "native": {
+            "kind": "instructions",
+            "origin": "project",
+            "scope": "project"
+          },
+          "source": {
+            "path": "CLAUDE.md",
+            "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "sizeBytes": 12
+          },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el_0fc92802d8f84176",
+          "status": "effective",
+          "applicability": { "type": "project" },
+          "activation": "always",
+          "resolution": {
+            "strategy": "accumulate",
+            "reason": "accumulates with the other layers"
+          }
+        },
+        "interpretation": {
+          "elementId": "el_0fc92802d8f84176",
+          "facets": ["instructions"],
+          "confidence": "high",
+          "reason": "defines agent behavior"
+        }
+      },
+      {
+        "id": "el_1ab29cd03ef45678",
+        "observed": {
+          "id": "el_1ab29cd03ef45678",
+          "native": {
+            "kind": "mcp-server",
+            "origin": "project",
+            "scope": null
+          },
+          "source": {
+            "path": ".mcp.json",
+            "sizeBytes": 340
+          },
+          "inspectability": "observable",
+          "metadata": { "transport": "stdio", "retries": [1, 2] },
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el_1ab29cd03ef45678",
+          "status": "shadowed",
+          "activation": "on-demand",
+          "resolution": {
+            "strategy": "override",
+            "reason": "a managed entry shadows this server"
+          }
+        },
+        "interpretation": null
+      },
+      {
+        "id": "el_9deadbeef00112233",
+        "observed": {
+          "id": "el_9deadbeef00112233",
+          "native": {
+            "kind": "hook",
+            "origin": "user",
+            "scope": "user"
+          },
+          "source": {
+            "path": "~/.claude/hooks/pre.sh",
+            "symlink": true
+          },
+          "inspectability": "opaque",
+          "metadata": {},
+          "status": "skipped",
+          "reason": "symlink-not-followed"
+        },
+        "resolved": null,
+        "interpretation": null
+      }
+    ],
+    "relations": [
+      {
+        "type": "shadows",
+        "from": "el_1ab29cd03ef45678",
+        "to": "el_0fc92802d8f84176"
+      },
+      {
+        "type": "accumulates-with",
+        "from": "el_0fc92802d8f84176",
+        "to": "el_1ab29cd03ef45678"
+      }
+    ],
+    "findings": [
+      {
+        "rule": "shadowed-element",
+        "message": "element el_1ab29cd03ef45678 is shadowed by a managed entry",
+        "elementIds": ["el_1ab29cd03ef45678"]
+      },
+      {
+        "rule": "opaque-runtime-layer",
+        "message": "element el_9deadbeef00112233 could not be inspected",
+        "elementIds": ["el_9deadbeef00112233", "el_0fc92802d8f84176"]
+      }
+    ],
+    "interpretation": {
+      "classifier": {
+        "id": "pfl-native",
+        "version": "5"
+      },
+      "origin": "stored"
+    }
+  }
+}

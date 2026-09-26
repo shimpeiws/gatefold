@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { sanitizeText } from "../src/domain/sanitize.js";
 import {
   isSupportedPflVersion,
   PflExportError,
@@ -348,8 +349,8 @@ describe("readPflExport contract", () => {
         expect.unreachable("parsePflExport should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(PflExportError);
-        expect((error as Error).message).not.toMatch(
-          /[\x00-\x1F\x7F-\x9F\u2028\u202e]/,
+        expect(sanitizeText((error as Error).message)).toBe(
+          (error as Error).message,
         );
       }
     }
@@ -392,6 +393,478 @@ describe("readPflExport contract", () => {
       "2.0.0+build",
     ]) {
       expect(isSupportedPflVersion(v), v).toBe(false);
+    }
+  });
+});
+
+function validExportDoc(): Record<string, any> {
+  return {
+    pflVersion: "1.0.0",
+    command: "export",
+    ok: true,
+    completeness: "complete",
+    diagnostics: [],
+    data: {
+      project: { id: "p", displayName: "d" },
+      runtime: {
+        id: "claude-code",
+        version: "2.0.0",
+        adapter: {
+          id: "claude-code",
+          version: "0.1.1",
+          runtimeCompatibility: "verified",
+        },
+      },
+      snapshot: {
+        observedSnapshotId: "obs_1",
+        resolvedSnapshotId: "res_1",
+        capturedAt: "2026-09-18T00:00:00.000Z",
+        schemaVersion: "1",
+      },
+      resolution: { semanticsVersion: "2", confidence: "verified" },
+      elements: [
+        {
+          id: "el_1",
+          observed: {
+            id: "el_1",
+            native: { kind: "instructions", origin: "project", scope: "p" },
+            source: { path: "CLAUDE.md" },
+            inspectability: "observable",
+            metadata: {},
+            status: "observed",
+          },
+          resolved: {
+            id: "el_1",
+            status: "effective",
+            activation: "always",
+            resolution: { strategy: "accumulate" },
+          },
+          interpretation: {
+            elementId: "el_1",
+            facets: ["instructions"],
+            confidence: "high",
+            reason: "defines agent behavior",
+          },
+        },
+      ],
+      relations: [],
+      findings: [],
+      interpretation: {
+        classifier: { id: "pfl-native", version: "5" },
+        origin: "stored",
+      },
+    },
+  };
+}
+
+const VALID_EXPORT = [
+  "valid-export.json",
+  "valid-export-empty.json",
+  "valid-export-partial.json",
+];
+
+describe("pfl export snapshot contract", () => {
+  it("loads every valid export fixture as typed data", async () => {
+    for (const name of VALID_EXPORT) {
+      const result = await readPflExport(fixture(name));
+      expect(result.command, name).toBe("export");
+      if (result.command !== "export") throw new Error("unreachable");
+      expect(result.pflVersion, name).toMatch(/^1\./);
+      expect(Array.isArray(result.data.elements), name).toBe(true);
+      expect(Array.isArray(result.data.relations), name).toBe(true);
+      expect(result.data.interpretation.classifier.id, name).toBeTruthy();
+    }
+  });
+
+  it("loads exports from stdin with the same validation", async () => {
+    async function* chunks(): AsyncGenerator<Buffer> {
+      const text = JSON.stringify(validExportDoc());
+      yield Buffer.from(text.slice(0, 100));
+      yield Buffer.from(text.slice(100));
+    }
+    const result = await readPflExportStdin(chunks());
+    expect(result.command).toBe("export");
+    expect(result.sourcePath).toBe(STDIN_SOURCE);
+  });
+
+  it("dispatches on command: report and export are read by their own readers", () => {
+    const report = parsePflExport(validDoc(), "inline");
+    expect(report.command).toBe("report");
+    if (report.command === "report")
+      expect(typeof report.data.stats).toBe("object");
+    const exported = parsePflExport(validExportDoc(), "inline");
+    expect(exported.command).toBe("export");
+    if (exported.command === "export")
+      expect(Array.isArray(exported.data.elements)).toBe(true);
+  });
+
+  it.each(["diff", "inspect", "list", "show", 5, null])(
+    "rejects command %s as unsupported-command",
+    (command) => {
+      const doc = validExportDoc();
+      doc.command = command;
+      const error = (() => {
+        try {
+          parsePflExport(doc, "inline");
+          return null;
+        } catch (e) {
+          return e as PflExportError;
+        }
+      })();
+      expect(error?.code).toBe("unsupported-command");
+    },
+  );
+
+  it("rejects an export failure document with its pfl error", async () => {
+    const error = await readPflExport(
+      fixture("export-failure-document.json"),
+    ).catch((e) => e);
+    expect(error).toBeInstanceOf(PflExportError);
+    expect(error.code).toBe("export-failed");
+    expect(error.message).toContain("SNAPSHOT_NOT_FOUND");
+  });
+
+  it.each([
+    ["data", undefined],
+    ["data.project", undefined],
+    ["data.runtime.adapter", undefined],
+    ["data.snapshot", undefined],
+    ["data.resolution", undefined],
+    ["data.elements", undefined],
+    ["data.relations", undefined],
+    ["data.findings", undefined],
+    ["data.interpretation", undefined],
+    ["data.interpretation.classifier", undefined],
+    ["data.elements[0].observed", undefined],
+    ["data.elements[0].resolved", undefined],
+    ["data.elements[0].interpretation", undefined],
+    ["data.elements[0].observed.native", undefined],
+    ["data.elements[0].observed.source", undefined],
+    ["data.elements[0].observed.metadata", undefined],
+    ["data.elements[0].observed.status", undefined],
+    ["data.elements[0].observed.inspectability", undefined],
+    ["data.runtime.version", undefined],
+    ["data.elements[0].observed.native.scope", undefined],
+  ])("rejects export data missing %s", (path) => {
+    const doc = validExportDoc();
+    const segments = path.replace(/\]/g, "").split(/[.[]/);
+    let node: any = doc;
+    for (const segment of segments.slice(0, -1)) node = node[segment];
+    delete node[segments[segments.length - 1]];
+    const error = (() => {
+      try {
+        parsePflExport(doc, "inline");
+        return null;
+      } catch (e) {
+        return e as PflExportError;
+      }
+    })();
+    expect(error?.code, path).toBe("invalid-shape");
+  });
+
+  it.each([
+    ["data.elements[0].observed.native.origin", "in-house"],
+    ["data.elements[0].observed.status", "half-observed"],
+    ["data.elements[0].observed.inspectability", "clear"],
+    ["data.elements[0].observed.reason", "because"],
+    ["data.elements[0].resolved.status", "live"],
+    ["data.elements[0].resolved.activation", "sometimes"],
+    ["data.elements[0].resolved.resolution.strategy", "merge"],
+    ["data.elements[0].interpretation.confidence", "low"],
+    ["data.resolution.confidence", "probably"],
+    ["data.runtime.adapter.runtimeCompatibility", "maybe"],
+    ["data.interpretation.origin", "guessed"],
+    [
+      "data.relations[0].type",
+      "depends-on",
+      [{ type: "shadows", from: "el_1", to: "el_1" }],
+    ],
+  ])("rejects invalid enum at %s", (path, bad, relations) => {
+    const doc = validExportDoc();
+    if (relations !== undefined) doc.data.relations = relations;
+    const segments = path.replace(/\]/g, "").split(/[.[]/);
+    let node: any = doc;
+    for (const segment of segments.slice(0, -1)) node = node[segment];
+    node[segments[segments.length - 1]] = bad;
+    expect(() => parsePflExport(doc, "inline"), path).toThrow(
+      /invalid|one of|must be/,
+    );
+  });
+
+  it("rejects relation endpoints that name unknown element ids", () => {
+    for (const mutate of [
+      (doc: Record<string, any>) => {
+        doc.data.relations = [
+          { type: "shadows", from: "el_ghost", to: "el_1" },
+        ];
+      },
+      (doc: Record<string, any>) => {
+        doc.data.relations = [
+          { type: "shadows", from: "el_1", to: "el_ghost" },
+        ];
+      },
+      (doc: Record<string, any>) => {
+        doc.data.elements = [];
+        doc.data.relations = [{ type: "shadows", from: "el_1", to: "el_1" }];
+      },
+    ]) {
+      const doc = validExportDoc();
+      mutate(doc);
+      const error = (() => {
+        try {
+          parsePflExport(doc, "inline");
+          return null;
+        } catch (e) {
+          return e as PflExportError;
+        }
+      })();
+      expect(error?.code).toBe("invalid-shape");
+      expect(error?.message).toContain("is unknown");
+    }
+  });
+
+  it("accepts every persisted relation type pfl can read", () => {
+    const doc = validExportDoc();
+    for (const type of [
+      "shadows",
+      "overrides",
+      "accumulates-with",
+      "contains",
+      "discovered-from",
+      "resolves-to",
+      "applies-to",
+    ]) {
+      doc.data.relations = [{ type, from: "el_1", to: "el_1" }];
+      expect(() => parsePflExport(doc, "inline"), type).not.toThrow();
+    }
+  });
+
+  it("rejects mismatched joined ids, duplicate ids, and missing layer keys", () => {
+    for (const mutate of [
+      (doc: Record<string, any>) => {
+        doc.data.elements[0].observed.id = "el_other";
+      },
+      (doc: Record<string, any>) => {
+        doc.data.elements[0].resolved.id = "el_other";
+      },
+      (doc: Record<string, any>) => {
+        doc.data.elements[0].interpretation.elementId = "el_other";
+      },
+      (doc: Record<string, any>) => {
+        doc.data.elements.push(
+          JSON.parse(JSON.stringify(doc.data.elements[0])),
+        );
+      },
+      (doc: Record<string, any>) => {
+        delete doc.data.elements[0].resolved;
+      },
+      (doc: Record<string, any>) => {
+        delete doc.data.elements[0].interpretation;
+      },
+    ]) {
+      const doc = validExportDoc();
+      mutate(doc);
+      const error = (() => {
+        try {
+          parsePflExport(doc, "inline");
+          return null;
+        } catch (e) {
+          return e as PflExportError;
+        }
+      })();
+      expect(error?.code).toBe("invalid-shape");
+    }
+  });
+
+  it("accepts null layers and nullable scalars where the contract allows", () => {
+    const doc = validExportDoc();
+    doc.data.elements[0].resolved = null;
+    doc.data.elements[0].interpretation = null;
+    doc.data.runtime.version = null;
+    doc.data.elements[0].observed.native.scope = null;
+    const result = parsePflExport(doc, "inline");
+    if (result.command === "export") {
+      expect(result.data.elements[0].resolved).toBeNull();
+      expect(result.data.elements[0].interpretation).toBeNull();
+      expect(result.data.runtime.version).toBeNull();
+      expect(result.data.elements[0].observed.native.scope).toBeNull();
+    }
+  });
+
+  it("rejects null where the contract does not allow it", () => {
+    for (const mutate of [
+      (doc: Record<string, any>) => {
+        doc.data.project = null;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.runtime.id = null;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.elements[0].observed = null;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.elements[0].observed.native = null;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.snapshot.capturedAt = null;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.elements[0].interpretation.reason = null;
+      },
+    ]) {
+      const doc = validExportDoc();
+      mutate(doc);
+      expect(() => parsePflExport(doc, "inline")).toThrow(/invalid|must be/);
+    }
+  });
+
+  it("enforces the export resource ceilings at their exact boundaries", () => {
+    const element = () =>
+      JSON.parse(JSON.stringify(validExportDoc().data.elements[0]));
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => {
+        const e = element();
+        e.id = `el_${i}`;
+        e.observed.id = `el_${i}`;
+        e.resolved.id = `el_${i}`;
+        e.interpretation.elementId = `el_${i}`;
+        return e;
+      });
+
+    const atElements = validExportDoc();
+    atElements.data.elements = many(10_000);
+    expect(() => parsePflExport(atElements, "inline")).not.toThrow();
+    const overElements = validExportDoc();
+    overElements.data.elements = many(10_001);
+    expect(() => parsePflExport(overElements, "inline")).toThrow(/at most/);
+
+    const atRelations = validExportDoc();
+    atRelations.data.relations = Array.from({ length: 20_000 }, () => ({
+      type: "shadows",
+      from: "el_1",
+      to: "el_1",
+    }));
+    expect(() => parsePflExport(atRelations, "inline")).not.toThrow();
+    const overRelations = validExportDoc();
+    overRelations.data.relations = Array.from({ length: 20_001 }, () => ({
+      type: "shadows",
+      from: "el_1",
+      to: "el_1",
+    }));
+    expect(() => parsePflExport(overRelations, "inline")).toThrow(/at most/);
+  });
+
+  it("bounds nested metadata depth and node count per element", () => {
+    const deep = (levels: number): unknown =>
+      levels === 0 ? 1 : { next: deep(levels - 1) };
+    const atDepth = validExportDoc();
+    atDepth.data.elements[0].observed.metadata = deep(12);
+    expect(() => parsePflExport(atDepth, "inline")).not.toThrow();
+    const overDepth = validExportDoc();
+    overDepth.data.elements[0].observed.metadata = deep(13);
+    expect(() => parsePflExport(overDepth, "inline")).toThrow(/deeper/);
+
+    const wide = validExportDoc();
+    wide.data.elements[0].observed.metadata = {
+      list: Array.from({ length: 10_001 }, () => 0),
+    };
+    expect(() => parsePflExport(wide, "inline")).toThrow(/at most/);
+
+    const longKey = validExportDoc();
+    longKey.data.elements[0].observed.metadata = {
+      nested: { ["k".repeat(4_097)]: true },
+    };
+    expect(() => parsePflExport(longKey, "inline")).toThrow(/at most 4096/);
+    const atKey = validExportDoc();
+    atKey.data.elements[0].observed.metadata = {
+      ["k".repeat(4_096)]: true,
+    };
+    expect(() => parsePflExport(atKey, "inline")).not.toThrow();
+
+    const atNodes = validExportDoc();
+    atNodes.data.elements[0].observed.metadata = {
+      list: Array.from({ length: 9_998 }, () => 0),
+    };
+    expect(() => parsePflExport(atNodes, "inline")).not.toThrow();
+  });
+
+  it("caps displayed and provenance-repeated strings", () => {
+    const over = "x".repeat(4_097);
+    const atCap = "x".repeat(4_096);
+    const overMeta = "x".repeat(1_025);
+
+    const scalar = validExportDoc();
+    scalar.data.elements[0].id = over;
+    expect(() => parsePflExport(scalar, "inline")).toThrow(/at most 4096/);
+    const okScalar = validExportDoc();
+    okScalar.data.elements[0].id = atCap;
+    okScalar.data.elements[0].observed.id = atCap;
+    okScalar.data.elements[0].resolved.id = atCap;
+    okScalar.data.elements[0].interpretation.elementId = atCap;
+    expect(() => parsePflExport(okScalar, "inline")).not.toThrow();
+
+    for (const mutate of [
+      (doc: Record<string, any>) => {
+        doc.data.snapshot.observedSnapshotId = overMeta;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.snapshot.resolvedSnapshotId = overMeta;
+      },
+      (doc: Record<string, any>) => {
+        doc.data.interpretation.classifier.version = overMeta;
+      },
+    ]) {
+      const doc = validExportDoc();
+      mutate(doc);
+      expect(() => parsePflExport(doc, "inline")).toThrow(/at most 1024/);
+    }
+
+    const semantics = validExportDoc();
+    semantics.data.resolution.semanticsVersion = overMeta;
+    expect(() => parsePflExport(semantics, "inline")).not.toThrow();
+    semantics.data.resolution.semanticsVersion = over;
+    expect(() => parsePflExport(semantics, "inline")).toThrow(/at most 4096/);
+
+    const diagnostics = validExportDoc();
+    diagnostics.diagnostics = [
+      { severity: "warning", code: "w", message: over },
+    ];
+    expect(() => parsePflExport(diagnostics, "inline")).toThrow(/at most 4096/);
+    const reportLong = validDoc();
+    reportLong.diagnostics = [
+      { severity: "warning", code: "w", message: over },
+    ];
+    expect(() => parsePflExport(reportLong, "inline")).not.toThrow();
+  });
+
+  it("sanitizes untrusted export text in error messages", () => {
+    const doc = validExportDoc();
+    doc.data.elements[0].observed.id = "el_\x1b[2J\u202e";
+    try {
+      parsePflExport(doc, "inline");
+      expect.unreachable("expected a join mismatch");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PflExportError);
+      expect(sanitizeText((error as Error).message)).toBe(
+        (error as Error).message,
+      );
+    }
+  });
+
+  it("ignores unknown additive fields without echoing them", async () => {
+    const result = await readPflExport(fixture("valid-export-partial.json"));
+    expect(result.command).toBe("export");
+    if (result.command === "export") {
+      expect((result.data as Record<string, unknown>).futureDataField).toBe(
+        undefined,
+      );
+      expect(
+        (result.data.elements[0] as Record<string, unknown>).futureElementField,
+      ).toBeUndefined();
+      expect(
+        (result.data.elements[0].observed as Record<string, unknown>)
+          .futureObservedField,
+      ).toBeUndefined();
     }
   });
 });

@@ -17,13 +17,24 @@ function fail(message: string): never {
 }
 
 /**
- * Enforces the claim-result invariants that schema/claim-result.v1.json
+ * Enforces the claim-result invariants that schema/claim-result.v2.json
  * declares, at the analysis boundary. Kept in sync with the schema by
  * test/schema.test.ts, which runs every committed example through both.
  */
 export function assertValidResult(result: AnalysisResult): void {
   if (result.schemaVersion !== CLAIM_SCHEMA_VERSION)
     fail(`schemaVersion must be ${CLAIM_SCHEMA_VERSION}`);
+  const source = result.source;
+  if (
+    source === undefined ||
+    typeof source !== "object" ||
+    source === null ||
+    typeof source.pflVersion !== "string" ||
+    source.pflVersion.length === 0 ||
+    typeof source.command !== "string" ||
+    source.command.length === 0
+  )
+    fail("source must carry pflVersion and command");
   if (!Array.isArray(result.claims)) fail("claims must be an array");
   for (const [index, claim] of result.claims.entries()) {
     const at = `claims[${index}]`;

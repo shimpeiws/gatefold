@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "source": { "pflVersion": "1.0.0", "command": "report" },
   "claims": [
     {
       "claim": "pfl observed 3 elements: 3 effective, 0 shadowed, 0 conditional, 0 opaque.",

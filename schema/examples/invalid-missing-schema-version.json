@@ -1,3 +1,4 @@
 {
+  "source": { "pflVersion": "1.0.0", "command": "report" },
   "claims": []
 }

@@ -4,20 +4,20 @@ import type {
   EvidenceReference,
 } from "../domain/claim.js";
 import { sanitizeText } from "../domain/sanitize.js";
-import type { PflExport } from "../input/pfl-export.js";
+import type { PflReportDocument } from "../input/pfl-export.js";
 
 /** One descriptive rule. Emits zero or more claims; never judges quality. */
 export interface ClaimRule {
   readonly id: string;
   readonly description: string;
-  readonly evaluate: (input: PflExport) => readonly Claim[];
+  readonly evaluate: (input: PflReportDocument) => readonly Claim[];
 }
 
 function escapePointer(segment: string): string {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 
-function provenance(input: PflExport, ruleId: string): ClaimProvenance {
+function provenance(input: PflReportDocument, ruleId: string): ClaimProvenance {
   const data = input.data;
   const text = (value: string | undefined): string | undefined =>
     value === undefined ? undefined : sanitizeText(value);
@@ -34,12 +34,12 @@ function provenance(input: PflExport, ruleId: string): ClaimProvenance {
 }
 
 /** Confidence for stats-derived claims: 1 only when completeness is "complete". */
-function statsConfidence(input: PflExport): number {
+function statsConfidence(input: PflReportDocument): number {
   return input.completeness === "complete" ? 1 : 0.8;
 }
 
 function makeClaim(
-  input: PflExport,
+  input: PflReportDocument,
   ruleId: string,
   claim: string,
   evidence: readonly EvidenceReference[],

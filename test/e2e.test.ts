@@ -66,7 +66,7 @@ function gatefoldWithStdin(
 }
 
 const schema = JSON.parse(
-  readFileSync(`${root}schema/claim-result.v1.json`, "utf8"),
+  readFileSync(`${root}schema/claim-result.v2.json`, "utf8"),
 );
 const validate = new Ajv2020().compile(schema);
 
@@ -92,7 +92,11 @@ describe("gatefold e2e (real process)", () => {
     expect(run.stderr).toBe("");
     const result = JSON.parse(run.stdout);
     expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
-    expect(result.schemaVersion).toBe(1);
+    expect(result.schemaVersion).toBe(2);
+    expect(result.source).toEqual({
+      pflVersion: "1.0.0",
+      command: "report",
+    });
     expect(result.claims.length).toBeGreaterThan(0);
     for (const claim of result.claims) {
       expect(typeof claim.ruleId).toBe("string");
@@ -159,7 +163,7 @@ describe("gatefold e2e (real process)", () => {
       all.claims.filter((c: { confidence: number }) => c.confidence >= 0.9),
     );
     expect(filtered.claims.length).toBeLessThan(all.claims.length);
-    expect(filtered.schemaVersion).toBe(1);
+    expect(filtered.schemaVersion).toBe(2);
   });
 
   it.each([
@@ -285,7 +289,7 @@ describe("gatefold e2e (real process)", () => {
       fixture("valid-report.json"),
     ]);
     expect(run.code).toBe(0);
-    expect(JSON.parse(run.stdout).schemaVersion).toBe(1);
+    expect(JSON.parse(run.stdout).schemaVersion).toBe(2);
   });
 
   it("package metadata exposes the gatefold binary and library entry", () => {
@@ -319,6 +323,7 @@ describe("gatefold e2e (real process)", () => {
       "docs/release-checklist.md",
       "docs/v0.3-scope.md",
       "schema/claim-result.v1.json",
+      "schema/claim-result.v2.json",
       "README.md",
       "package.json",
     ]) {
@@ -337,6 +342,113 @@ describe("gatefold e2e (real process)", () => {
       expect(hits, forbidden).toEqual([]);
     }
   }, 15_000);
+
+  it("accepts a full pfl export from a file with schema-valid output", async () => {
+    const run = await gatefold([
+      fixture("valid-export.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code).toBe(0);
+    expect(run.stderr).toBe("");
+    const result = JSON.parse(run.stdout);
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+    expect(result.schemaVersion).toBe(2);
+    expect(result.source).toEqual({
+      pflVersion: "1.0.0",
+      command: "export",
+    });
+    expect(result.claims.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a full pfl export from stdin", async () => {
+    const input = readFileSync(fixture("valid-export.json"), "utf8");
+    const run = await gatefoldWithStdin(["-", "--format", "json"], input);
+    expect(run.code).toBe(0);
+    expect(run.stderr).toBe("");
+    const result = JSON.parse(run.stdout);
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+    expect(result.source.command).toBe("export");
+    for (const claim of result.claims) {
+      expect(claim.provenance.sourceFile).toBe("<stdin>");
+    }
+  });
+
+  it("produces human-readable claims for a pfl export", async () => {
+    const run = await gatefold([fixture("valid-export.json")]);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("1. The export describes");
+    expect(run.stdout).toContain("confidence:");
+    expect(run.stdout).toContain("rule:");
+  });
+
+  it("accepts empty and partial pfl exports", async () => {
+    for (const name of [
+      "valid-export-empty.json",
+      "valid-export-partial.json",
+    ]) {
+      const run = await gatefold([fixture(name), "--format", "json"]);
+      expect(run.code, name).toBe(0);
+      expect(run.stderr, name).toBe("");
+      const result = JSON.parse(run.stdout);
+      expect(validate(result), name).toBe(true);
+      expect(result.source.command, name).toBe("export");
+      expect(result.claims.length, name).toBeGreaterThan(0);
+    }
+    const partial = JSON.parse(
+      (
+        await gatefold([
+          fixture("valid-export-partial.json"),
+          "--format",
+          "json",
+        ])
+      ).stdout,
+    );
+    expect(
+      partial.claims.some((c: { claim: string }) =>
+        c.claim.includes("'partial'"),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    "export-failure-document.json",
+    "unsupported-command-diff.json",
+    "export-invalid-shape.json",
+    "export-mismatched-join.json",
+    "export-wrong-enum.json",
+  ])(
+    "rejects invalid export %s with exit 3 and a stderr-only error",
+    async (name) => {
+      const run = await gatefold([fixture(name)]);
+      expect(run.code).toBe(3);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+      expect(run.stderr.trim().length).toBeGreaterThan(10);
+    },
+  );
+
+  it("names the offending element when joined ids mismatch", async () => {
+    const run = await gatefold([fixture("export-mismatched-join.json")]);
+    expect(run.code).toBe(3);
+    expect(run.stderr).toContain("joins mismatched ids");
+    expect(run.stderr).toContain("el_0fc92802d8f84176");
+  });
+
+  it("produces byte-identical output across runs for the same export", async () => {
+    const first = await gatefold([
+      fixture("valid-export.json"),
+      "--format",
+      "json",
+    ]);
+    const second = await gatefold([
+      fixture("valid-export.json"),
+      "--format",
+      "json",
+    ]);
+    expect(first.code).toBe(0);
+    expect(first.stdout).toBe(second.stdout);
+  });
 
   it("package.json ci:all is exactly the documented clean-install gate", () => {
     const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));

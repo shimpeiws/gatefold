@@ -1,0 +1,112 @@
+{
+  "pflVersion": "1.2.3",
+  "command": "export",
+  "ok": true,
+  "completeness": "partial",
+  "diagnostics": [
+    {
+      "severity": "info",
+      "code": "adopted-legacy-history",
+      "message": "adopted the existing history under path-xyz"
+    },
+    {
+      "severity": "warning",
+      "code": "runtime-version-unverified",
+      "message": "runtime version 3.0.0 is newer than the verified range",
+      "path": "~/.codex/config.toml"
+    }
+  ],
+  "futureEnvelopeField": { "anything": ["goes", 1] },
+  "data": {
+    "project": {
+      "id": "path-abcdef0123456789",
+      "displayName": "partial/project"
+    },
+    "runtime": {
+      "id": "codex",
+      "version": "3.0.0",
+      "adapter": {
+        "id": "codex",
+        "version": "0.2.0",
+        "runtimeCompatibility": "unverified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs_partial",
+      "resolvedSnapshotId": "res_partial",
+      "capturedAt": "2026-09-21T00:00:00.000Z",
+      "schemaVersion": "1"
+    },
+    "resolution": {
+      "semanticsVersion": "2",
+      "confidence": "unverified-runtime-version"
+    },
+    "elements": [
+      {
+        "id": "el_aabbccddeeff0011",
+        "futureElementField": true,
+        "observed": {
+          "id": "el_aabbccddeeff0011",
+          "native": {
+            "kind": "instructions",
+            "origin": "project",
+            "scope": "project"
+          },
+          "source": {
+            "path": "AGENTS.md"
+          },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "unreadable",
+          "reason": "unreadable",
+          "futureObservedField": "kept"
+        },
+        "resolved": null,
+        "interpretation": null
+      },
+      {
+        "id": "el_bbccddeeff001122",
+        "observed": {
+          "id": "el_bbccddeeff001122",
+          "native": {
+            "kind": "config",
+            "origin": "managed",
+            "scope": null
+          },
+          "source": {},
+          "inspectability": "known-runtime-provided",
+          "metadata": { "nested": { "list": [1, "two", null, false] } },
+          "status": "unknown"
+        },
+        "resolved": {
+          "id": "el_bbccddeeff001122",
+          "status": "conditional",
+          "activation": "event-driven",
+          "applicability": {
+            "type": "config-rule",
+            "target": "model"
+          },
+          "resolution": {
+            "strategy": "policy"
+          }
+        },
+        "interpretation": {
+          "elementId": "el_bbccddeeff001122",
+          "facets": ["controls", "a-future-facet"],
+          "confidence": "unknown",
+          "reason": "classification inconclusive"
+        }
+      }
+    ],
+    "relations": [],
+    "findings": [],
+    "interpretation": {
+      "classifier": {
+        "id": "pfl-native",
+        "version": "6"
+      },
+      "origin": "recomputed"
+    },
+    "futureDataField": "tolerated"
+  }
+}
