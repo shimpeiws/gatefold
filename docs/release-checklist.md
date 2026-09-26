@@ -1,6 +1,6 @@
 # Release checklist
 
-Reproducible steps to cut the current release (v0.2). Every step must pass in
+Reproducible steps to cut the current release (v0.3). Every step must pass in
 order.
 
 ## 1. Clean install
@@ -21,7 +21,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.2 scope](v0.2-scope.md).
+release gate in [v0.3 scope](v0.3-scope.md).
 
 ## 3. Package validation
 

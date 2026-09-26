@@ -138,10 +138,11 @@ function parseArgs(args: readonly string[]): CliOptions {
 function usage(): string {
   return [
     "Usage: gatefold <input.json> [options]",
-    "       gatefold -               Read the export from standard input",
+    "       gatefold -               Read a pfl document from standard input",
     "",
-    "Analyze a pfl export and print evidence-backed claims.",
-    "Pass '-' as the input to read a pfl export piped on stdin,",
+    "Analyze a pfl report, export, or diff and print evidence-backed claims.",
+    "The document's top-level 'command' field selects the reader.",
+    "Pass '-' as the input to read a pfl document piped on stdin,",
     "e.g. `pfl report --json | gatefold -`. After '--', '-' names a file.",
     "",
     "Options:",

@@ -13,7 +13,9 @@ does not score or rank harnesses.
 gatefold <input.json>                          # human-readable claims
 gatefold <input.json> --format json            # machine-readable, schema-validated
 gatefold <input.json> --min-confidence 0.8     # drop claims below the threshold
-pfl report --json | gatefold -                 # read the export from stdin
+pfl report --json | gatefold -                 # read a document from stdin
+pfl export --json | gatefold -                 # full snapshot: elements, relations, findings
+pfl diff --json   | gatefold -                 # A → B comparison
 ```
 
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
@@ -36,7 +38,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [Project overview](docs/overview.md)
 - [v0.1 scope and acceptance criteria](docs/v0.1-scope.md)
 - [v0.2 scope and acceptance criteria](docs/v0.2-scope.md)
-- [Planned v0.3 scope and input contract](docs/v0.3-scope.md)
+- [v0.3 scope and input contract](docs/v0.3-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [pfl export contract](docs/pfl-export-contract.md)
