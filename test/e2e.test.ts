@@ -93,6 +93,10 @@ describe("gatefold e2e (real process)", () => {
     const result = JSON.parse(run.stdout);
     expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
     expect(result.schemaVersion).toBe(2);
+    expect(result.source).toEqual({
+      pflVersion: "1.0.0",
+      command: "report",
+    });
     expect(result.claims.length).toBeGreaterThan(0);
     for (const claim of result.claims) {
       expect(typeof claim.ruleId).toBe("string");

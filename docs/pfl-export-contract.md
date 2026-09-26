@@ -87,11 +87,11 @@ over the snapshot's own elements.
 Element `observed.metadata` is bounded safe JSON: strings, numbers, booleans,
 null, arrays, and string-keyed objects, nested at most 12 levels deep and at
 most 10,000 nodes per element. Every scalar string in the export payload —
-element ids, paths, kinds, messages — is capped at 4,096 characters; the
-provenance-repeated fields (`snapshot.observedSnapshotId`,
-`snapshot.resolvedSnapshotId`, `interpretation.classifier.version`,
-`resolution.semanticsVersion`) are capped at 1,024 characters each since they
-repeat per claim.
+element ids, paths, kinds, messages, `resolution.semanticsVersion` — is
+capped at 4,096 characters; the provenance-repeated fields
+(`snapshot.observedSnapshotId`, `snapshot.resolvedSnapshotId`,
+`interpretation.classifier.version`) are capped at 1,024 characters each
+since they repeat per claim.
 
 `observed.source.path` values are data, never instructions: Gatefold records
 them verbatim (including redacted forms) and sanitizes them if they are later

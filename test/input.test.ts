@@ -806,6 +806,12 @@ describe("pfl export snapshot contract", () => {
       mutate(doc);
       expect(() => parsePflExport(doc, "inline")).toThrow(/at most 1024/);
     }
+
+    const semantics = validExportDoc();
+    semantics.data.resolution.semanticsVersion = overMeta;
+    expect(() => parsePflExport(semantics, "inline")).not.toThrow();
+    semantics.data.resolution.semanticsVersion = over;
+    expect(() => parsePflExport(semantics, "inline")).toThrow(/at most 4096/);
   });
 
   it("sanitizes untrusted export text in error messages", () => {
