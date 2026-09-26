@@ -418,11 +418,14 @@ export function reconcileDocuments(
 
   // A removed finding pairs with an added finding for the same rule and the
   // same element set when the message differs — the diff-visible shape of a
-  // reworded finding (removal plus addition).
-  const addedFindingKeys = new Map<string, number>();
+  // reworded finding (removal plus addition). Each added finding pairs with
+  // at most one removed finding, in diff order.
+  const addedFindingQueues = new Map<string, number[]>();
   diff.data.findings.added.forEach((finding, index) => {
     const key = JSON.stringify([finding.rule, [...finding.elementIds].sort()]);
-    if (!addedFindingKeys.has(key)) addedFindingKeys.set(key, index);
+    const queue = addedFindingQueues.get(key);
+    if (queue === undefined) addedFindingQueues.set(key, [index]);
+    else queue.push(index);
   });
   const findings: FindingReconciliation[] = (
     ["added", "removed"] as const
@@ -434,12 +437,11 @@ export function reconcileDocuments(
           finding.rule,
           [...finding.elementIds].sort(),
         ]);
-        const candidate = addedFindingKeys.get(key);
-        if (
-          candidate !== undefined &&
-          diff.data.findings.added[candidate].message !== finding.message
-        )
-          counterpart = candidate;
+        const queue = addedFindingQueues.get(key) ?? [];
+        const position = queue.findIndex(
+          (i) => diff.data.findings.added[i].message !== finding.message,
+        );
+        if (position !== -1) counterpart = queue.splice(position, 1)[0];
       }
       return {
         direction,

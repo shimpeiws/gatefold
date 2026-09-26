@@ -732,3 +732,79 @@ describe("compare claims (#36)", () => {
     ).toBe(2);
   });
 });
+
+describe("compare claims (#36) review findings", () => {
+  it("hedges a finding's cited element missing on a partial side", () => {
+    const finding = {
+      rule: "r1",
+      message: "x looks stale",
+      elementIds: ["x", "gone"],
+    };
+    const before = makeExport(
+      exportData([element("x"), element("gone")], { findings: [finding] }, "a"),
+      { completeness: "partial" },
+    );
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({ findings: { added: [], removed: [finding] } }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const removed = result.claims.find(
+      (c) => c.ruleId === "compare-finding-removed",
+    );
+    expect(removed).toBeDefined();
+    expect(removed!.claim).toContain("'x' resolves as 'effective' in A");
+    expect(removed!.claim).toContain("'gone'");
+    const evidence = removed!.evidence.map((e) => `${e.source}:${e.pointer}`);
+    expect(evidence).toContain("before:/data/elements/1/id");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("phrases overrides and accumulates-with like the diff rules", () => {
+    const before = makeExport(
+      exportData([element("x"), element("y")], {}, "a"),
+    );
+    const after = makeExport(
+      exportData(
+        [element("x"), element("y")],
+        {
+          relations: [
+            { type: "overrides", from: "x", to: "y" },
+            { type: "accumulates-with", from: "y", to: "x" },
+          ],
+        },
+        "b",
+      ),
+    );
+    const diff = makeDiff(
+      diffData({
+        relations: {
+          added: [
+            { type: "overrides", from: "x", to: "y" },
+            { type: "accumulates-with", from: "y", to: "x" },
+          ],
+          removed: [],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const claims = result.claims.filter(
+      (c) => c.ruleId === "compare-relation-added",
+    );
+    expect(claims.length).toBe(2);
+    expect(claims[0].claim).toContain("'x' overrides element 'y'");
+    expect(claims[1].claim).toContain("'y' accumulates with element 'x'");
+  });
+});

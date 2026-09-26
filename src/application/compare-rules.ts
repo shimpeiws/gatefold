@@ -148,7 +148,9 @@ const SEMANTIC_RELATIONS: Readonly<Record<string, string>> = {
 };
 
 function relationPhrase(relation: RelationReconciliation): string {
-  const semantic = SEMANTIC_RELATIONS[relation.type];
+  const semantic = Object.hasOwn(SEMANTIC_RELATIONS, relation.type)
+    ? SEMANTIC_RELATIONS[relation.type]
+    : undefined;
   if (semantic !== undefined)
     return `element '${relation.from}' ${semantic} element '${relation.to}'`;
   return `a '${relation.type}' relation from element '${relation.from}' to element '${relation.to}' (legacy type; semantics not interpreted)`;
@@ -274,7 +276,10 @@ function relationClaims(
                 id,
               )
             : {
-                text: `it is also present in ${otherSide}`,
+                text:
+                  targetIndex === null
+                    ? `it is present in ${otherSide}`
+                    : `it is also present in ${otherSide}`,
                 evidence: [
                   {
                     source: otherSource,
@@ -291,7 +296,7 @@ function relationClaims(
         `The diff records ${verb} relation: ${relationPhrase(relation)}. ` +
           `${parts.join("; ")}. The relation is a recorded link, not a ` +
           `cause; its appearance or disappearance does not explain why ` +
-          `any element's state differed in ${otherSide}.`,
+          "any element's state differed between A and B.",
         evidence,
       );
     });
