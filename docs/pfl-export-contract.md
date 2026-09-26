@@ -164,8 +164,12 @@ Claim evidence `pointer` values (JSON Pointer, RFC 6901) may reference:
   `/data/findings/<n>`, `/data/findings/<n>/elementIds/<m>`,
   `/data/project/displayName`)
 
-`elementId` on an evidence item names an element id cited by a finding
-(`/data/findings/<n>/elementIds/<m>`), not a path inside this repository.
+`elementId` on an evidence item names the element id the evidence is about —
+for example an element id cited by a finding
+(`/data/findings/<n>/elementIds/<m>`) or the element described by an
+`element-*` claim (`/data/elements/<n>`) — not a path inside this repository.
+It carries the raw document value so JSON consumers can correlate claims back
+to elements; only display paths escape it.
 
 ## Limits
 
@@ -176,7 +180,8 @@ by size before reading, and pipes are cut off at the limit), more than 1,000 `di
 10,000 `elementIds` in total across all findings, or more than
 1,000 `byFacet` keys are rejected with `invalid-shape` errors. Export
 documents additionally reject more than 10,000 `elements`, more than
-20,000 `relations`, metadata nested more than 12 levels, more than
+20,000 `relations`, more than 1,000 `interpretation.facets` per element,
+metadata nested more than 12 levels, more than
 10,000 metadata nodes per element, any scalar string longer than
 4,096 characters — including `diagnostics` `code`/`message`/`path`, which the
 report reader leaves uncapped for v0.2 compatibility. Diff

@@ -445,6 +445,80 @@ describe("gatefold e2e (real process)", () => {
     },
   );
 
+  it("rejects an export that would exceed the evidence ceiling with exit 3", async () => {
+    const many = Array.from({ length: 8_000 }, (_, i) => {
+      const id = `el_${i}`;
+      return {
+        id,
+        observed: {
+          id,
+          native: { kind: "instructions", origin: "project", scope: "project" },
+          source: { path: `doc-${i}.md` },
+          inspectability: "observable",
+          metadata: {},
+          status: "observed",
+        },
+        resolved: {
+          id,
+          status: "effective",
+          applicability: { type: "project" },
+          activation: "always",
+          resolution: { strategy: "accumulate", reason: "r" },
+        },
+        interpretation: {
+          elementId: id,
+          facets: ["instructions"],
+          confidence: "high",
+          reason: "r",
+        },
+      };
+    });
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "export",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        project: { id: "p", displayName: "p" },
+        runtime: {
+          id: "claude-code",
+          version: null,
+          adapter: {
+            id: "claude-code",
+            version: "0.1.1",
+            runtimeCompatibility: "verified",
+          },
+        },
+        snapshot: {
+          observedSnapshotId: "obs_1",
+          resolvedSnapshotId: "res_1",
+          capturedAt: "t",
+          schemaVersion: "1",
+        },
+        resolution: { semanticsVersion: "2", confidence: "verified" },
+        elements: many,
+        relations: [],
+        findings: [],
+        interpretation: {
+          classifier: { id: "pfl-native", version: "5" },
+          origin: "stored",
+        },
+      },
+    };
+    const tmp = mkdtempSync(join(tmpdir(), "gatefold-ceiling-"));
+    try {
+      writeFileSync(join(tmp, "over-ceiling.json"), JSON.stringify(doc));
+      const run = await gatefold([join(tmp, "over-ceiling.json")]);
+      expect(run.code).toBe(3);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+      expect(run.stderr).toContain("evidence references");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("accepts a pfl diff from a file with schema-valid output", async () => {
     const run = await gatefold([
       fixture("valid-diff.json"),

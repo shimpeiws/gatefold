@@ -452,7 +452,7 @@ describe("descriptive rules", () => {
       c.claim.includes("finding"),
     );
     expect(finding.claim).toContain("\\u202e");
-    expect(finding.claim).not.toContain("‮");
+    expect(finding.claim).not.toContain("\u202e");
   });
 
   it("every registered rule id is documented in docs/rules.md", async () => {
@@ -708,6 +708,72 @@ describe("export snapshot rules", () => {
         expect(evidence.elementId).toBeTruthy();
       }
     }
+  });
+
+  it("escapes a hostile element id in human-readable evidence output", async () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "export",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        project: { id: "p", displayName: "p" },
+        runtime: {
+          id: "claude-code",
+          version: null,
+          adapter: {
+            id: "claude-code",
+            version: "0.1.1",
+            runtimeCompatibility: "verified",
+          },
+        },
+        snapshot: {
+          observedSnapshotId: "obs_1",
+          resolvedSnapshotId: "res_1",
+          capturedAt: "t",
+          schemaVersion: "1",
+        },
+        resolution: { semanticsVersion: "2", confidence: "verified" },
+        elements: [
+          {
+            id: "el_\x1b[2J\u202eevil",
+            observed: {
+              id: "el_\x1b[2J\u202eevil",
+              native: { kind: "instructions", origin: "project", scope: null },
+              source: {},
+              inspectability: "observable",
+              metadata: {},
+              status: "observed",
+            },
+            resolved: null,
+            interpretation: null,
+          },
+        ],
+        relations: [],
+        findings: [],
+        interpretation: {
+          classifier: { id: "pfl-native", version: "5" },
+          origin: "stored",
+        },
+      },
+    };
+    const result = analyze(parsePflExport(doc, "inline"));
+    const { formatHuman } = await import("../src/output/human.js");
+    const rendered = formatHuman(result);
+    expect(rendered).not.toContain("\x1b[2J");
+    expect(rendered).not.toContain("\u202e");
+    expect(rendered).toContain("\\u001b");
+    // JSON output keeps the raw id for machine correlation; only the
+    // human renderer escapes it.
+    const elementClaims = result.claims.filter((claim) =>
+      claim.ruleId.startsWith("element-"),
+    );
+    expect(
+      elementClaims.every((claim) =>
+        claim.evidence.every((e) => e.elementId === "el_\x1b[2J\u202eevil"),
+      ),
+    ).toBe(true);
   });
 
   it("rejects a document whose claims would exceed the evidence ceiling", () => {
