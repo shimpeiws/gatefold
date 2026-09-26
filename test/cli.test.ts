@@ -23,7 +23,7 @@ const minimal = fixture("valid-report-minimal.json");
 
 const schema = JSON.parse(
   readFileSync(
-    fileURLToPath(new URL("../schema/claim-result.v1.json", import.meta.url)),
+    fileURLToPath(new URL("../schema/claim-result.v2.json", import.meta.url)),
     "utf8",
   ),
 );
@@ -38,7 +38,7 @@ describe("gatefold CLI", () => {
   it("returns JSON that validates against the claim-result schema", async () => {
     const parsed = await parseJson([valid, "--format", "json"]);
     expect(validate(parsed), JSON.stringify(validate.errors)).toBe(true);
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(2);
     expect(parsed.claims.length).toBeGreaterThan(0);
   });
 
@@ -127,7 +127,7 @@ describe("gatefold CLI", () => {
 
   it("treats a bare -- as end of options", async () => {
     const parsed = await parseJson(["--format", "json", "--", valid]);
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(2);
     // After --, a leading-dash token is a positional, not an option.
     await expect(runCli(["--", valid, "--bogus"])).rejects.toMatchObject({
       exitCode: EXIT_USAGE,
@@ -164,7 +164,11 @@ describe("gatefold CLI", () => {
   });
 
   it("displays the exact --min-confidence threshold without rounding", () => {
-    const emptied: AnalysisResult = { schemaVersion: 1, claims: [] };
+    const emptied: AnalysisResult = {
+      schemaVersion: 2,
+      source: { pflVersion: "1.0.0", command: "report" },
+      claims: [],
+    };
     expect(formatHuman(emptied, 0.999)).toBe(
       "No claims found at or above confidence 0.999.",
     );

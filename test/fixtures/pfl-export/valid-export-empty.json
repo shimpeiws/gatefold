@@ -1,0 +1,42 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": {
+      "id": "path-fedcba9876543210",
+      "displayName": "empty/project"
+    },
+    "runtime": {
+      "id": "codex",
+      "version": null,
+      "adapter": {
+        "id": "codex",
+        "version": "0.2.0",
+        "runtimeCompatibility": "unverified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs_empty",
+      "resolvedSnapshotId": "res_empty",
+      "capturedAt": "2026-09-20T00:00:00.000Z",
+      "schemaVersion": "1"
+    },
+    "resolution": {
+      "semanticsVersion": "2",
+      "confidence": "unverified-runtime-version"
+    },
+    "elements": [],
+    "relations": [],
+    "findings": [],
+    "interpretation": {
+      "classifier": {
+        "id": "pfl-native",
+        "version": "5"
+      },
+      "origin": "recomputed"
+    }
+  }
+}

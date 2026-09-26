@@ -1,4 +1,4 @@
-export const CLAIM_SCHEMA_VERSION = 1;
+export const CLAIM_SCHEMA_VERSION = 2;
 
 export interface EvidenceReference {
   readonly pointer: string;
@@ -27,5 +27,10 @@ export interface Claim {
 
 export interface AnalysisResult {
   readonly schemaVersion: typeof CLAIM_SCHEMA_VERSION;
+  /** Identifies which input document produced this result (v0.3). */
+  readonly source: {
+    readonly pflVersion: string;
+    readonly command: "report" | "export";
+  };
   readonly claims: readonly Claim[];
 }

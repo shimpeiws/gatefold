@@ -46,6 +46,20 @@ const INVALID_FIXTURES = [
   "empty-file.json",
 ];
 
+const VALID_EXPORT_FIXTURES = [
+  "valid-export.json",
+  "valid-export-empty.json",
+  "valid-export-partial.json",
+];
+
+const INVALID_EXPORT_FIXTURES = [
+  "export-failure-document.json",
+  "unsupported-command-diff.json",
+  "export-invalid-shape.json",
+  "export-mismatched-join.json",
+  "export-wrong-enum.json",
+];
+
 describe("pfl export contract fixtures", () => {
   it("valid fixtures satisfy every contract requirement", async () => {
     for (const name of VALID_FIXTURES) {
@@ -158,8 +172,169 @@ describe("pfl export contract fixtures", () => {
   it("every fixture on disk is classified by this suite", async () => {
     const { readdir } = await import("node:fs/promises");
     const onDisk = await readdir(fileURLToPath(dir));
-    expect([...VALID_FIXTURES, ...INVALID_FIXTURES].sort()).toEqual(
-      onDisk.sort(),
+    expect(
+      [
+        ...VALID_FIXTURES,
+        ...INVALID_FIXTURES,
+        ...VALID_EXPORT_FIXTURES,
+        ...INVALID_EXPORT_FIXTURES,
+      ].sort(),
+    ).toEqual(onDisk.sort());
+  });
+});
+
+describe("pfl export snapshot fixtures", () => {
+  const ORIGINS = [
+    "project",
+    "user",
+    "managed",
+    "plugin",
+    "builtin",
+    "unknown",
+  ];
+  const OBSERVED_STATUSES = [
+    "observed",
+    "unreadable",
+    "unsupported",
+    "skipped",
+    "unknown",
+  ];
+  const INSPECTABILITIES = ["observable", "known-runtime-provided", "opaque"];
+  const RELATION_TYPES = [
+    "shadows",
+    "overrides",
+    "accumulates-with",
+    "contains",
+    "discovered-from",
+    "resolves-to",
+    "applies-to",
+  ];
+
+  it("valid export fixtures satisfy the v0.3 export contract", async () => {
+    for (const name of VALID_EXPORT_FIXTURES) {
+      const doc = await readJson(name);
+      expect(inSupportedRange(doc.pflVersion), name).toBe(true);
+      expect(doc.command, name).toBe("export");
+      expect(doc.ok, name).toBe(true);
+      expect(["complete", "partial", "unknown"], name).toContain(
+        doc.completeness,
+      );
+      const data = doc.data as Record<string, any>;
+      for (const key of [
+        "project",
+        "runtime",
+        "snapshot",
+        "resolution",
+        "elements",
+        "relations",
+        "findings",
+        "interpretation",
+      ]) {
+        expect(data[key], `${name} data.${key}`).toBeDefined();
+      }
+      expect(typeof data.runtime.version !== "undefined", name).toBe(true);
+      expect(
+        ["verified", "unverified"],
+        `${name} adapter.runtimeCompatibility`,
+      ).toContain(data.runtime.adapter.runtimeCompatibility);
+      expect(
+        ["verified", "unverified-runtime-version"],
+        `${name} resolution.confidence`,
+      ).toContain(data.resolution.confidence);
+      const seenIds = new Set<string>();
+      for (const [index, element] of (
+        data.elements as Record<string, any>[]
+      ).entries()) {
+        const at = `${name} elements[${index}]`;
+        expect(typeof element.id, at).toBe("string");
+        expect(seenIds.has(element.id), `${at} duplicate id`).toBe(false);
+        seenIds.add(element.id);
+        expect(element.observed.id, at).toBe(element.id);
+        expect(
+          "resolved" in element && "interpretation" in element,
+          `${at} required keys`,
+        ).toBe(true);
+        if (element.resolved !== null)
+          expect(element.resolved.id, at).toBe(element.id);
+        if (element.interpretation !== null)
+          expect(element.interpretation.elementId, at).toBe(element.id);
+        expect(ORIGINS, `${at} native.origin`).toContain(
+          element.observed.native.origin,
+        );
+        expect(
+          element.observed.native.scope === null ||
+            typeof element.observed.native.scope === "string",
+          `${at} native.scope`,
+        ).toBe(true);
+        expect(OBSERVED_STATUSES, `${at} observed.status`).toContain(
+          element.observed.status,
+        );
+        expect(INSPECTABILITIES, `${at} inspectability`).toContain(
+          element.observed.inspectability,
+        );
+      }
+      for (const relation of data.relations as Record<string, any>[]) {
+        expect(RELATION_TYPES, `${name} relation.type`).toContain(
+          relation.type,
+        );
+        expect(typeof relation.from, name).toBe("string");
+        expect(typeof relation.to, name).toBe("string");
+      }
+      expect(
+        ["stored", "recomputed"],
+        `${name} interpretation.origin`,
+      ).toContain(data.interpretation.origin);
+      expect(typeof data.interpretation.classifier.id, name).toBe("string");
+      expect(typeof data.interpretation.classifier.version, name).toBe(
+        "string",
+      );
+    }
+  });
+
+  it("partial export fixture exercises diagnostics and unknown fields", async () => {
+    const doc = await readJson("valid-export-partial.json");
+    expect(doc.completeness).toBe("partial");
+    expect((doc.diagnostics as unknown[]).length).toBeGreaterThan(0);
+    expect(doc.futureEnvelopeField).toBeDefined();
+    const data = doc.data as Record<string, any>;
+    expect(data.futureDataField).toBeDefined();
+    expect(data.elements[0].futureElementField).toBeDefined();
+    expect(
+      data.elements.some(
+        (element: Record<string, any>) =>
+          element.resolved === null && element.interpretation === null,
+      ),
+    ).toBe(true);
+  });
+
+  it("empty export fixture carries zero contents in required arrays", async () => {
+    const doc = await readJson("valid-export-empty.json");
+    const data = doc.data as Record<string, any>;
+    expect(data.elements).toEqual([]);
+    expect(data.relations).toEqual([]);
+    expect(data.findings).toEqual([]);
+    expect(data.runtime.version).toBeNull();
+  });
+
+  it("invalid export fixtures violate the contract for distinct reasons", async () => {
+    expect((await readJson("export-failure-document.json")).ok).toBe(false);
+    expect((await readJson("unsupported-command-diff.json")).command).toBe(
+      "diff",
+    );
+    const shape = (await readJson("export-invalid-shape.json")).data as Record<
+      string,
+      any
+    >;
+    expect(shape.snapshot === undefined).toBe(true);
+    const joined = (await readJson("export-mismatched-join.json"))
+      .data as Record<string, any>;
+    expect(joined.elements[0].resolved.id).not.toBe(joined.elements[0].id);
+    const badEnum = (await readJson("export-wrong-enum.json")).data as Record<
+      string,
+      any
+    >;
+    expect(OBSERVED_STATUSES).not.toContain(
+      badEnum.elements[0].observed.status,
     );
   });
 });

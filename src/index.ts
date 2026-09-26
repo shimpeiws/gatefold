@@ -17,11 +17,20 @@ export {
 export type {
   Completeness,
   PflDiagnostic,
+  PflDocument,
   PflExport,
+  PflExportDocument,
   PflExportErrorCode,
   PflFinding,
   PflReportData,
+  PflReportDocument,
   PflReportStats,
+  PflSnapshotData,
+  PflSnapshotElement,
+  PflSnapshotInterpretation,
+  PflSnapshotObserved,
+  PflSnapshotRelation,
+  PflSnapshotResolved,
 } from "./input/pfl-export.js";
 export { formatHuman } from "./output/human.js";
 export { formatJson } from "./output/json.js";

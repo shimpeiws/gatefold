@@ -1,0 +1,36 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": {
+      "id": "path-0123456789abcdef",
+      "displayName": "owner/repo"
+    },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.1.272",
+      "adapter": {
+        "id": "claude-code",
+        "version": "0.1.1",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "resolution": {
+      "semanticsVersion": "2",
+      "confidence": "verified"
+    },
+    "elements": [],
+    "relations": [],
+    "findings": [],
+    "interpretation": {
+      "classifier": {
+        "id": "pfl-native",
+        "version": "5"
+      },
+      "origin": "stored"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "export",
+  "ok": false,
+  "completeness": "unknown",
+  "diagnostics": [],
+  "data": {
+    "error": {
+      "code": "SNAPSHOT_NOT_FOUND",
+      "message": "no snapshot matches the requested id"
+    }
+  }
+}

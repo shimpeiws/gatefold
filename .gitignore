@@ -5,3 +5,6 @@ coverage/
 
 # Agent session state
 .letta/
+
+# graft local graph cache (regenerable)
+/graft/

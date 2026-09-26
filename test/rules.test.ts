@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { analyze } from "../src/application/analyze.js";
 import { RULES } from "../src/application/rules.js";
 import type { Claim } from "../src/domain/claim.js";
+import { sanitizeText } from "../src/domain/sanitize.js";
 import { assertValidResult } from "../src/domain/validate.js";
 import { parsePflExport, readPflExport } from "../src/input/pfl-export.js";
 import { formatJson } from "../src/output/json.js";
@@ -389,6 +390,7 @@ describe("descriptive rules", () => {
     const input = {
       sourcePath: "inline",
       pflVersion: "1.0.0",
+      command: "report" as const,
       completeness: "complete" as const,
       diagnostics: [],
       data: {
@@ -424,6 +426,7 @@ describe("descriptive rules", () => {
     const input = {
       sourcePath: "inline",
       pflVersion: "1.0.0",
+      command: "report" as const,
       completeness: "complete" as const,
       diagnostics: [],
       data: {
@@ -453,12 +456,210 @@ describe("descriptive rules", () => {
   });
 
   it("every registered rule id is documented in docs/rules.md", async () => {
+    const { EXPORT_RULES } = await import("../src/application/export-rules.js");
     const doc = await readFile(
       fileURLToPath(new URL("../docs/rules.md", import.meta.url)),
       "utf8",
     );
-    for (const rule of RULES) {
+    for (const rule of [...RULES, ...EXPORT_RULES]) {
       expect(doc, rule.id).toContain(`\`${rule.id}\``);
     }
+  });
+});
+
+describe("export snapshot rules", () => {
+  const EXPORT_FIXTURES = [
+    "valid-export.json",
+    "valid-export-empty.json",
+    "valid-export-partial.json",
+  ];
+
+  it("emits only schema-valid claims for every valid export fixture", async () => {
+    for (const name of EXPORT_FIXTURES) {
+      const result = analyze(await load(name));
+      expect(result.source.command, name).toBe("export");
+      expect(() => assertValidResult(result), name).not.toThrow();
+    }
+  });
+
+  it("is deterministic for the same export input", async () => {
+    const input = await load("valid-export.json");
+    expect(JSON.stringify(analyze(input))).toBe(JSON.stringify(analyze(input)));
+  });
+
+  it("every claim carries evidence, provenance, and a registered ruleId", async () => {
+    const { EXPORT_RULES } = await import("../src/application/export-rules.js");
+    for (const name of EXPORT_FIXTURES) {
+      const input = await load(name);
+      const result = analyze(input);
+      expect(result.claims.length, name).toBeGreaterThan(0);
+      for (const claim of result.claims) {
+        expect(claim.evidence.length, name).toBeGreaterThanOrEqual(1);
+        for (const evidence of claim.evidence)
+          expect(evidence.pointer, name).toMatch(ALLOWED_POINTER);
+        expect(claim.provenance.sourceFile, name).toBe(fixture(name));
+        expect(claim.provenance.exportVersion, name).toBe(input.pflVersion);
+        expect(claim.provenance.transform[0], name).toBe("pfl-export-envelope");
+        expect(claim.provenance.transform, name).toContain(
+          `rule:${claim.ruleId}`,
+        );
+        expect(
+          EXPORT_RULES.some((rule) => rule.id === claim.ruleId),
+          `${name} ${claim.ruleId}`,
+        ).toBe(true);
+        expect(claim.provenance.interpretationOrigin, name).toMatch(
+          /^(stored|recomputed)$/,
+        );
+        expect(claim.confidence, name).toBeGreaterThanOrEqual(0);
+        expect(claim.confidence, name).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("describes the runtime, adapter, and project", async () => {
+    const [claim] = byRule(
+      analyze(await load("valid-export.json")),
+      "export-described",
+    );
+    expect(claim.claim).toBe(
+      "The export describes a 'claude-code' harness for project 'owner/repo' via adapter 'claude-code' version '0.1.1' (runtime compatibility 'verified').",
+    );
+    expect(claim.evidence.map((e) => e.pointer)).toEqual([
+      "/data/runtime/id",
+      "/data/runtime/adapter",
+      "/data/project/displayName",
+    ]);
+  });
+
+  it("reports joined contents and nullable-layer counts", async () => {
+    const [claim] = byRule(
+      analyze(await load("valid-export.json")),
+      "export-snapshot-contents",
+    );
+    expect(claim.claim).toBe(
+      "The export joins 3 element(s) by id — 2 with a resolved layer and 1 with an interpretation — alongside 2 relation(s) and 2 finding(s).",
+    );
+    expect(claim.confidence).toBe(1);
+
+    const [empty] = byRule(
+      analyze(await load("valid-export-empty.json")),
+      "export-snapshot-contents",
+    );
+    expect(empty.claim).toBe(
+      "The export joins 0 element(s) by id — 0 with a resolved layer and 0 with an interpretation — alongside 0 relation(s) and 0 finding(s).",
+    );
+
+    const [partial] = byRule(
+      analyze(await load("valid-export-partial.json")),
+      "export-snapshot-contents",
+    );
+    expect(partial.confidence).toBe(0.8);
+    expect(partial.claim).toContain("2 element(s)");
+    expect(partial.claim).toContain("1 with a resolved layer");
+    expect(partial.claim).toContain("1 with an interpretation");
+  });
+
+  it("reports interpretation provenance from the export's declared fields", async () => {
+    const [claim] = byRule(
+      analyze(await load("valid-export.json")),
+      "export-interpretation-provenance",
+    );
+    expect(claim.claim).toBe(
+      "The export's interpretation was produced by classifier 'pfl-native' version '5' with origin 'stored'; resolution used semantics version '2' with confidence 'verified'.",
+    );
+    expect(claim.evidence.map((e) => e.pointer)).toEqual([
+      "/data/interpretation",
+      "/data/resolution",
+    ]);
+    expect(claim.provenance.observedSnapshotId).toBe("obs_0123456789ab");
+    expect(claim.provenance.resolvedSnapshotId).toBe("res_0123456789ab");
+    expect(claim.provenance.classifierVersion).toBe("5");
+  });
+
+  it("reports only warning and error diagnostics", async () => {
+    const claims = byRule(
+      analyze(await load("valid-export-partial.json")),
+      "diagnostic-reported",
+    );
+    expect(claims).toHaveLength(1);
+    expect(claims[0].claim).toBe(
+      "The export reports diagnostic 'runtime-version-unverified' (warning) at '~/.codex/config.toml': runtime version 3.0.0 is newer than the verified range",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/diagnostics/1",
+    ]);
+  });
+
+  it("reports completeness only when the export is not complete", async () => {
+    expect(
+      byRule(analyze(await load("valid-export.json")), "completeness-reported"),
+    ).toHaveLength(0);
+    const [claim] = byRule(
+      analyze(await load("valid-export-partial.json")),
+      "completeness-reported",
+    );
+    expect(claim.claim).toBe(
+      "The export is marked 'partial' with 2 diagnostic(s) recorded.",
+    );
+    expect(claim.evidence.map((e) => e.pointer)).toEqual([
+      "/completeness",
+      "/diagnostics",
+    ]);
+  });
+
+  it("sanitizes untrusted strings inside claim prose", () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "export",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [
+        {
+          severity: "warning",
+          code: "w",
+          message: "runs \x1b[1mBold\x1b[0m",
+          path: "p\u202ex",
+        },
+      ],
+      data: {
+        project: { id: "p", displayName: "evil\x1b[2J\nname" },
+        runtime: {
+          id: "claude-code",
+          version: null,
+          adapter: {
+            id: "claude-code",
+            version: "0.1.1",
+            runtimeCompatibility: "unverified",
+          },
+        },
+        snapshot: {
+          observedSnapshotId: "obs\ufeffid",
+          resolvedSnapshotId: "res\u2028id",
+          capturedAt: "t",
+          schemaVersion: "1",
+        },
+        resolution: {
+          semanticsVersion: "2",
+          confidence: "unverified-runtime-version",
+        },
+        elements: [],
+        relations: [],
+        findings: [],
+        interpretation: {
+          classifier: { id: "c", version: "v\x7f1" },
+          origin: "recomputed",
+        },
+      },
+    };
+    const result = analyze(parsePflExport(doc, "inline"));
+    for (const claim of result.claims) {
+      expect(sanitizeText(claim.claim)).toBe(claim.claim);
+      expect(claim.provenance.observedSnapshotId).toBe("obs\\ufeffid");
+      expect(claim.provenance.resolvedSnapshotId).toBe("res\\u2028id");
+      expect(claim.provenance.classifierVersion).toBe("v\\u007f1");
+    }
+    const [diag] = byRule(result, "diagnostic-reported");
+    expect(diag.claim).toContain("\\u001b");
+    expect(diag.claim).toContain("\\u202e");
   });
 });

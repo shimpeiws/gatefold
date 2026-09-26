@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v2.json",
+  "title": "Gatefold analysis result",
+  "description": "Machine-readable claim collection emitted by gatefold --format json. Version 2 adds the source discriminator identifying which input document produced the result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source", "claims"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 2,
+      "description": "Version of this result schema. Additive changes keep the version; structural changes bump it."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pflVersion", "command"],
+      "description": "Identifies the single input document that produced this result. Claims never join multiple documents.",
+      "properties": {
+        "pflVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The input document's pflVersion."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The input document's command (e.g. 'report' or 'export')."
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim" }
+    }
+  },
+  "$defs": {
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "evidence", "provenance", "confidence"],
+      "properties": {
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A single descriptive statement about the input representation. Never a judgement of quality."
+        },
+        "ruleId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier of the rule that produced this claim (e.g. 'element-counts'). Lets consumers select claims without parsing claim text. Optional so results written before ruleId existed remain valid; Gatefold always emits it."
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceReference" },
+          "description": "References into the input export that support the claim. A claim without evidence is invalid."
+        },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Certainty that the evidence supports the claim. 1 = fully supported. Not a harness quality score."
+        }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pointer"],
+      "properties": {
+        "pointer": {
+          "type": "string",
+          "pattern": "^$|^(?:/(?:[^/~]|~0|~1)*)*$",
+          "description": "JSON Pointer (RFC 6901) into the input export document. The empty string references the whole document."
+        },
+        "elementId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the referenced element inside the export, when the export defines element ids."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional human-readable clarification of what the reference shows."
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceFile", "transform"],
+      "properties": {
+        "sourceFile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of the input export file the claim was derived from."
+        },
+        "exportVersion": {
+          "type": "string",
+          "description": "Version of the input export (e.g. the pflVersion field of a pfl --json document), when the export carries one."
+        },
+        "transform": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of the transformations applied between the raw input and this claim, in application order. Empty when the claim reads the input directly."
+        },
+        "classifierVersion": {
+          "type": "string",
+          "description": "Version of the export's interpretation classifier, when the export carries one."
+        },
+        "interpretationOrigin": {
+          "type": "string",
+          "description": "How the export's interpretation was produced (e.g. 'stored' or 'recomputed' for a pfl document), when the export carries one."
+        },
+        "observedSnapshotId": {
+          "type": "string",
+          "description": "Identifier of the snapshot the export observed, when the export carries one."
+        },
+        "resolvedSnapshotId": {
+          "type": "string",
+          "description": "Identifier of the snapshot the export resolved, when the export carries one."
+        },
+        "runtimeName": {
+          "type": "string",
+          "description": "Display name of the runtime the export describes, when the export carries one."
+        }
+      }
+    }
+  }
+}

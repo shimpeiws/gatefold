@@ -8,7 +8,7 @@ import { assertValidResult } from "../src/domain/validate.js";
 import { analyze } from "../src/application/analyze.js";
 
 const root = new URL("../", import.meta.url);
-const schemaPath = fileURLToPath(new URL("schema/claim-result.v1.json", root));
+const schemaPath = fileURLToPath(new URL("schema/claim-result.v2.json", root));
 const examplesDir = fileURLToPath(new URL("schema/examples/", root));
 
 const schema = JSON.parse(await readFile(schemaPath, "utf8"));
@@ -85,6 +85,7 @@ describe("claim schema validation", () => {
   it("validates a value typed as AnalysisResult", () => {
     const result: AnalysisResult = {
       schemaVersion: CLAIM_SCHEMA_VERSION,
+      source: { pflVersion: "1.0.0", command: "report" },
       claims: [
         {
           claim: "The export contains 3 elements.",

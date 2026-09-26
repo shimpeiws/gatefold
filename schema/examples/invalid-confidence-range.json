@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "source": { "pflVersion": "1.0.0", "command": "report" },
   "claims": [
     {
       "claim": "The export declares an MCP server.",

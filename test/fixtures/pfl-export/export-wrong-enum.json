@@ -1,0 +1,60 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": {
+      "id": "path-0123456789abcdef",
+      "displayName": "owner/repo"
+    },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.1.272",
+      "adapter": {
+        "id": "claude-code",
+        "version": "0.1.1",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs_0123456789ab",
+      "resolvedSnapshotId": "res_0123456789ab",
+      "capturedAt": "2026-09-18T00:00:00.000Z",
+      "schemaVersion": "1"
+    },
+    "resolution": {
+      "semanticsVersion": "2",
+      "confidence": "verified"
+    },
+    "elements": [
+      {
+        "id": "el_0fc92802d8f84176",
+        "observed": {
+          "id": "el_0fc92802d8f84176",
+          "native": {
+            "kind": "instructions",
+            "origin": "project",
+            "scope": "project"
+          },
+          "source": { "path": "CLAUDE.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "half-observed"
+        },
+        "resolved": null,
+        "interpretation": null
+      }
+    ],
+    "relations": [],
+    "findings": [],
+    "interpretation": {
+      "classifier": {
+        "id": "pfl-native",
+        "version": "5"
+      },
+      "origin": "stored"
+    }
+  }
+}

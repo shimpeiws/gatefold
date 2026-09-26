@@ -3,7 +3,7 @@
 A claim is one evidence-backed statement about a harness representation.
 
 The machine-readable form is defined by the versioned JSON Schema at
-[`schema/claim-result.v1.json`](../schema/claim-result.v1.json). The TypeScript
+[`schema/claim-result.v2.json`](../schema/claim-result.v2.json). The TypeScript
 types in `src/domain/claim.ts` mirror that schema with one deliberate
 difference: the `Claim` interface marks `ruleId` required because Gatefold
 always emits it, while the schema and the runtime validator keep it optional
@@ -14,7 +14,8 @@ so results written before `ruleId` existed stay valid. A typed
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schemaVersion` | integer | Version of this result schema. Currently `1`. |
+| `schemaVersion` | integer | Version of this result schema. Currently `2`. |
+| `source` | object | `{ pflVersion: string, command: "report" \| "export" }` — which pfl document produced these claims. Added in v2; v1 results predate it and remain valid v1 documents. |
 | `claims` | array | The emitted claims. May be empty. |
 
 ## Claim fields
@@ -46,7 +47,9 @@ Each evidence item carries:
 - `transform` (required, may be empty) — names of the transformations applied
   between the raw input and the claim, in application order.
 - `classifierVersion` (optional) — the version of the export's interpretation
-  classifier (for a `pfl` document, `data.interpretation.classifierVersion`).
+  classifier (`data.interpretation.classifierVersion` for a `pfl report`
+  document, `data.interpretation.classifier.version` for a `pfl export`
+  document).
 - `interpretationOrigin` (optional) — how the export's interpretation was
   produced (for a `pfl` document, `data.interpretation.origin`).
 - `observedSnapshotId` / `resolvedSnapshotId` (optional) — snapshot identifiers
@@ -68,7 +71,9 @@ names the same version. Additive changes (a new optional field) keep the
 version; removing, renaming, or retyping a field bumps it. Readers should
 ignore unknown fields on `claims` items' payloads only where the schema allows
 — the v1 schema is closed (`additionalProperties: false`) so producers cannot
-silently add contract-breaking fields.
+silently add contract-breaking fields. Version 2 adds the required `source`
+discriminator; consumers must branch on `schemaVersion` and v1 documents keep
+validating against `schema/claim-result.v1.json`.
 
 ## Invalid claims
 

@@ -59,13 +59,125 @@ export interface PflReportData {
   };
 }
 
-export interface PflExport {
+/* ==== `pfl export` payload: the full joined snapshot (docs/v0.3-scope.md) ==== */
+
+export interface PflSnapshotObserved {
+  readonly id: string;
+  readonly native: {
+    readonly kind: string;
+    readonly origin: string;
+    readonly scope: string | null;
+  };
+  readonly source: {
+    readonly path?: string;
+    readonly digest?: string;
+    readonly sizeBytes?: number;
+    readonly symlink?: boolean;
+  };
+  readonly inspectability: string;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly status: string;
+  readonly reason?: string;
+}
+
+export interface PflSnapshotResolved {
+  readonly id: string;
+  readonly status: string;
+  readonly activation: string;
+  readonly applicability?: {
+    readonly type: string;
+    readonly target?: string;
+  };
+  readonly resolution: {
+    readonly strategy: string;
+    readonly reason?: string;
+  };
+}
+
+export interface PflSnapshotInterpretation {
+  readonly elementId: string;
+  readonly facets: readonly string[];
+  readonly confidence: string;
+  readonly reason: string;
+}
+
+/**
+ * One element's observed / resolved / interpretation layers joined by id.
+ * `resolved` and `interpretation` are required keys whose values may be null:
+ * null means pfl has no entry for that layer, not a negative property.
+ */
+export interface PflSnapshotElement {
+  readonly id: string;
+  readonly observed: PflSnapshotObserved;
+  readonly resolved: PflSnapshotResolved | null;
+  readonly interpretation: PflSnapshotInterpretation | null;
+}
+
+export interface PflSnapshotRelation {
+  readonly type: string;
+  readonly from: string;
+  readonly to: string;
+}
+
+export interface PflSnapshotData {
+  readonly project: {
+    readonly id: string;
+    readonly displayName: string;
+  };
+  readonly runtime: {
+    readonly id: string;
+    readonly version: string | null;
+    readonly adapter: {
+      readonly id: string;
+      readonly version: string;
+      readonly runtimeCompatibility: string;
+    };
+  };
+  readonly snapshot: {
+    readonly observedSnapshotId: string;
+    readonly resolvedSnapshotId: string;
+    readonly capturedAt: string;
+    readonly schemaVersion: string;
+  };
+  readonly resolution: {
+    readonly semanticsVersion: string;
+    readonly confidence: string;
+  };
+  readonly elements: readonly PflSnapshotElement[];
+  readonly relations: readonly PflSnapshotRelation[];
+  readonly findings: readonly PflFinding[];
+  readonly interpretation: {
+    readonly classifier: {
+      readonly id: string;
+      readonly version: string;
+    };
+    readonly origin: "stored" | "recomputed";
+  };
+}
+
+interface PflDocumentBase {
   readonly sourcePath: string;
   readonly pflVersion: string;
   readonly completeness: Completeness;
   readonly diagnostics: readonly PflDiagnostic[];
+}
+
+/** A `pfl report --json` document (the v0.2 input). */
+export interface PflReportDocument extends PflDocumentBase {
+  readonly command: "report";
   readonly data: PflReportData;
 }
+
+/** A `pfl export --json` document (the v0.3 full snapshot input). */
+export interface PflExportDocument extends PflDocumentBase {
+  readonly command: "export";
+  readonly data: PflSnapshotData;
+}
+
+export type PflDocument = PflReportDocument | PflExportDocument;
+
+/** @deprecated v0.2 name for a report document; use {@link PflReportDocument}. */
+export type PflExport = PflReportDocument;
 
 /** Resource ceilings for untrusted exports (see docs/pfl-export-contract.md). */
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
@@ -81,6 +193,16 @@ const MAX_BY_FACET_KEYS = 1_000;
  * input into output too large to buffer.
  */
 const MAX_METADATA_CHARS = 1_024;
+/** Ceilings that apply to the `export` payload only (docs/v0.3-scope.md). */
+const MAX_ELEMENTS = 10_000;
+const MAX_RELATIONS = 20_000;
+const MAX_METADATA_DEPTH = 12;
+const MAX_METADATA_NODES = 10_000;
+/**
+ * Character ceiling for strings displayed in or repeated across claims and
+ * errors (ids, kinds, paths, messages, reasons, metadata leaves).
+ */
+const MAX_SCALAR_CHARS = 4_096;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -130,6 +252,62 @@ function optionalStringField(
   return value;
 }
 
+/** Required non-empty string capped at `max` characters. */
+function boundedStringField(
+  record: Record<string, unknown>,
+  key: string,
+  path = key,
+  max = MAX_SCALAR_CHARS,
+): string {
+  const value = stringField(record, key, path);
+  if (value.length > max)
+    throw shapeError(path, `a string of at most ${max} characters`);
+  return value;
+}
+
+/** Optional string capped at `max` characters. */
+function optionalBoundedStringField(
+  record: Record<string, unknown>,
+  key: string,
+  path = key,
+  max = MAX_SCALAR_CHARS,
+): string | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw shapeError(path, "a string");
+  if (value.length > max)
+    throw shapeError(path, `a string of at most ${max} characters`);
+  return value;
+}
+
+/** Required string that may explicitly be null. */
+function nullableStringField(
+  record: Record<string, unknown>,
+  key: string,
+  path = key,
+  max = MAX_SCALAR_CHARS,
+): string | null {
+  const value = record[key];
+  if (value === null) return null;
+  if (typeof value !== "string") throw shapeError(path, "a string or null");
+  if (value.length > max)
+    throw shapeError(path, `a string of at most ${max} characters`);
+  return value;
+}
+
+/** Required string whose value must be one of `allowed`. */
+function enumField<T extends string>(
+  record: Record<string, unknown>,
+  key: string,
+  allowed: readonly T[],
+  path = key,
+): T {
+  const value = record[key];
+  if (typeof value !== "string" || !allowed.includes(value as T))
+    throw shapeError(path, `one of ${allowed.map((v) => `"${v}"`).join(", ")}`);
+  return value as T;
+}
+
 function parseDiagnostics(value: unknown): readonly PflDiagnostic[] {
   if (!Array.isArray(value)) throw shapeError("diagnostics", "an array");
   if (value.length > MAX_DIAGNOSTICS)
@@ -154,6 +332,63 @@ function parseDiagnostics(value: unknown): readonly PflDiagnostic[] {
       return { ...diagnostic, path };
     }
     return diagnostic;
+  });
+}
+
+/**
+ * Shared `{ rule, message, elementIds }` list used by report and export.
+ * `scalarLimit` caps displayed strings; the v0.2 report contract leaves them
+ * uncapped, so only the export path passes one.
+ */
+function parseFindingList(
+  value: unknown,
+  scalarLimit?: number,
+): readonly PflFinding[] {
+  if (!Array.isArray(value)) throw shapeError("data.findings", "an array");
+  if (value.length > MAX_FINDINGS)
+    throw shapeError(
+      "data.findings",
+      `an array with at most ${MAX_FINDINGS} items`,
+    );
+  let totalElementIds = 0;
+  return value.map((item, index) => {
+    const at = `data.findings[${index}]`;
+    if (!isRecord(item)) throw shapeError(at, "an object");
+    const elementIds = item.elementIds;
+    if (
+      !Array.isArray(elementIds) ||
+      elementIds.length > MAX_ELEMENT_IDS ||
+      elementIds.some((id) => typeof id !== "string" || id.length === 0)
+    )
+      throw shapeError(
+        `${at}.elementIds`,
+        `an array of non-empty strings (at most ${MAX_ELEMENT_IDS})`,
+      );
+    totalElementIds += elementIds.length;
+    if (totalElementIds > MAX_TOTAL_ELEMENT_IDS)
+      throw shapeError(
+        "data.findings[*].elementIds",
+        `at most ${MAX_TOTAL_ELEMENT_IDS} ids in total across all findings`,
+      );
+    if (scalarLimit !== undefined)
+      for (const [elementIndex, id] of elementIds.entries()) {
+        if ((id as string).length > scalarLimit)
+          throw shapeError(
+            `${at}.elementIds[${elementIndex}]`,
+            `a string of at most ${scalarLimit} characters`,
+          );
+      }
+    return {
+      rule:
+        scalarLimit === undefined
+          ? stringField(item, "rule", `${at}.rule`)
+          : boundedStringField(item, "rule", `${at}.rule`, scalarLimit),
+      message:
+        scalarLimit === undefined
+          ? stringField(item, "message", `${at}.message`)
+          : boundedStringField(item, "message", `${at}.message`, scalarLimit),
+      elementIds: elementIds as string[],
+    };
   });
 }
 
@@ -186,40 +421,7 @@ function parseReportData(value: unknown): PflReportData {
       byFacet[facet] = count;
     }
   }
-  const findingsValue = value.findings;
-  if (!Array.isArray(findingsValue))
-    throw shapeError("data.findings", "an array");
-  if (findingsValue.length > MAX_FINDINGS)
-    throw shapeError(
-      "data.findings",
-      `an array with at most ${MAX_FINDINGS} items`,
-    );
-  let totalElementIds = 0;
-  const findings = findingsValue.map((item, index) => {
-    const at = `data.findings[${index}]`;
-    if (!isRecord(item)) throw shapeError(at, "an object");
-    const elementIds = item.elementIds;
-    if (
-      !Array.isArray(elementIds) ||
-      elementIds.length > MAX_ELEMENT_IDS ||
-      elementIds.some((id) => typeof id !== "string" || id.length === 0)
-    )
-      throw shapeError(
-        `${at}.elementIds`,
-        `an array of non-empty strings (at most ${MAX_ELEMENT_IDS})`,
-      );
-    totalElementIds += elementIds.length;
-    if (totalElementIds > MAX_TOTAL_ELEMENT_IDS)
-      throw shapeError(
-        "data.findings[*].elementIds",
-        `at most ${MAX_TOTAL_ELEMENT_IDS} ids in total across all findings`,
-      );
-    return {
-      rule: stringField(item, "rule", `${at}.rule`),
-      message: stringField(item, "message", `${at}.message`),
-      elementIds: elementIds as string[],
-    };
-  });
+  const findings = parseFindingList(value.findings);
   const interpretation = value.interpretation;
   if (!isRecord(interpretation))
     throw shapeError("data.interpretation", "an object");
@@ -276,6 +478,503 @@ function parseReportData(value: unknown): PflReportData {
   };
 }
 
+/* Enum domains mirror pfl's core model types (docs/v0.3-scope.md). */
+const SNAPSHOT_NATIVE_ORIGINS = [
+  "project",
+  "user",
+  "managed",
+  "plugin",
+  "builtin",
+  "unknown",
+] as const;
+const OBSERVED_STATUSES = [
+  "observed",
+  "unreadable",
+  "unsupported",
+  "skipped",
+  "unknown",
+] as const;
+const OBSERVED_REASONS = [
+  "symlink-not-followed",
+  "hardlink-not-followed",
+  "non-regular-file-not-opened",
+  "limit-exceeded",
+  "unsupported-by-adapter",
+  "unreadable",
+  "unknown",
+] as const;
+const INSPECTABILITIES = [
+  "observable",
+  "known-runtime-provided",
+  "opaque",
+] as const;
+const RESOLVED_STATUSES = [
+  "effective",
+  "shadowed",
+  "conditional",
+  "unresolved",
+  "unknown",
+] as const;
+const ACTIVATIONS = [
+  "always",
+  "conditional",
+  "on-demand",
+  "event-driven",
+  "unknown",
+] as const;
+const APPLICABILITY_TYPES = [
+  "global",
+  "project",
+  "directory-subtree",
+  "tool-event",
+  "config-rule",
+  "runtime-defined",
+  "unknown",
+] as const;
+const RESOLUTION_STRATEGIES = [
+  "override",
+  "accumulate",
+  "available",
+  "policy",
+  "event-pipeline",
+  "runtime-defined",
+  "unknown",
+] as const;
+/**
+ * pfl's reader accepts the schema-1 persisted relation set (the three current
+ * types plus four withdrawn legacy types) because stored artifacts can still
+ * carry them; an export projects stored artifacts, so the same set is accepted
+ * here.
+ */
+const RELATION_TYPES = [
+  "shadows",
+  "overrides",
+  "accumulates-with",
+  "contains",
+  "discovered-from",
+  "resolves-to",
+  "applies-to",
+] as const;
+const INTERPRETATION_CONFIDENCES = ["high", "medium", "unknown"] as const;
+const RESOLUTION_CONFIDENCES = [
+  "verified",
+  "unverified-runtime-version",
+] as const;
+const RUNTIME_COMPATIBILITIES = ["verified", "unverified"] as const;
+const INTERPRETATION_ORIGINS = ["stored", "recomputed"] as const;
+
+/**
+ * Walks an element's `metadata` tree: bounded safe JSON (string, number,
+ * boolean, null, arrays, string-keyed objects) within the depth and node
+ * ceilings. Pure validation — the tree is never turned into prose.
+ */
+function checkMetadata(
+  value: unknown,
+  path: string,
+  depth: number,
+  budget: { nodes: number },
+): void {
+  budget.nodes += 1;
+  if (budget.nodes > MAX_METADATA_NODES)
+    throw shapeError(
+      path,
+      `nested metadata with at most ${MAX_METADATA_NODES} nodes per element`,
+    );
+  if (value === null || typeof value === "boolean" || typeof value === "number")
+    return;
+  if (typeof value === "string") {
+    if (value.length > MAX_SCALAR_CHARS)
+      throw shapeError(
+        path,
+        `a string of at most ${MAX_SCALAR_CHARS} characters`,
+      );
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (depth > MAX_METADATA_DEPTH)
+      throw shapeError(
+        path,
+        `metadata nested no deeper than ${MAX_METADATA_DEPTH} levels`,
+      );
+    for (const [index, item] of value.entries())
+      checkMetadata(item, `${path}[${index}]`, depth + 1, budget);
+    return;
+  }
+  if (isRecord(value)) {
+    if (depth > MAX_METADATA_DEPTH)
+      throw shapeError(
+        path,
+        `metadata nested no deeper than ${MAX_METADATA_DEPTH} levels`,
+      );
+    for (const [key, item] of Object.entries(value))
+      checkMetadata(item, `${path}.${key}`, depth + 1, budget);
+    return;
+  }
+  throw shapeError(
+    path,
+    "safe JSON metadata (string, number, boolean, null, array, or object)",
+  );
+}
+
+function parseSnapshotObserved(
+  value: unknown,
+  at: string,
+): PflSnapshotObserved {
+  if (!isRecord(value)) throw shapeError(at, "an object");
+  const native = value.native;
+  if (!isRecord(native)) throw shapeError(`${at}.native`, "an object");
+  const source = value.source;
+  if (!isRecord(source)) throw shapeError(`${at}.source`, "an object");
+  const metadata = value.metadata;
+  if (!isRecord(metadata)) throw shapeError(`${at}.metadata`, "an object");
+  checkMetadata(metadata, `${at}.metadata`, 1, { nodes: 0 });
+  const reason = value.reason;
+  const parsed: PflSnapshotObserved = {
+    id: boundedStringField(value, "id", `${at}.id`),
+    native: {
+      kind: boundedStringField(native, "kind", `${at}.native.kind`),
+      origin: enumField(
+        native,
+        "origin",
+        SNAPSHOT_NATIVE_ORIGINS,
+        `${at}.native.origin`,
+      ),
+      scope: nullableStringField(native, "scope", `${at}.native.scope`),
+    },
+    source: {
+      ...(source.path !== undefined
+        ? {
+            path: optionalBoundedStringField(
+              source,
+              "path",
+              `${at}.source.path`,
+            ),
+          }
+        : {}),
+      ...(source.digest !== undefined
+        ? {
+            digest: optionalBoundedStringField(
+              source,
+              "digest",
+              `${at}.source.digest`,
+            ),
+          }
+        : {}),
+      ...(source.sizeBytes !== undefined
+        ? {
+            sizeBytes: nonNegativeIntField(
+              source,
+              "sizeBytes",
+              `${at}.source.sizeBytes`,
+            ),
+          }
+        : {}),
+      ...(source.symlink !== undefined
+        ? {
+            symlink: (() => {
+              if (typeof source.symlink !== "boolean")
+                throw shapeError(`${at}.source.symlink`, "a boolean");
+              return source.symlink;
+            })(),
+          }
+        : {}),
+    },
+    inspectability: enumField(
+      value,
+      "inspectability",
+      INSPECTABILITIES,
+      `${at}.inspectability`,
+    ),
+    metadata,
+    status: enumField(value, "status", OBSERVED_STATUSES, `${at}.status`),
+  };
+  if (reason !== undefined)
+    return {
+      ...parsed,
+      reason: enumField(value, "reason", OBSERVED_REASONS, `${at}.reason`),
+    };
+  return parsed;
+}
+
+function parseSnapshotResolved(
+  value: unknown,
+  at: string,
+): PflSnapshotResolved {
+  if (!isRecord(value)) throw shapeError(at, "an object");
+  const resolution = value.resolution;
+  if (!isRecord(resolution)) throw shapeError(`${at}.resolution`, "an object");
+  const applicability = value.applicability;
+  let parsedApplicability: PflSnapshotResolved["applicability"];
+  if (applicability !== undefined) {
+    if (!isRecord(applicability))
+      throw shapeError(`${at}.applicability`, "an object");
+    const type = enumField(
+      applicability,
+      "type",
+      APPLICABILITY_TYPES,
+      `${at}.applicability.type`,
+    );
+    const target = optionalBoundedStringField(
+      applicability,
+      "target",
+      `${at}.applicability.target`,
+    );
+    parsedApplicability = target === undefined ? { type } : { type, target };
+  }
+  const reason = optionalBoundedStringField(
+    resolution,
+    "reason",
+    `${at}.resolution.reason`,
+  );
+  return {
+    id: boundedStringField(value, "id", `${at}.id`),
+    status: enumField(value, "status", RESOLVED_STATUSES, `${at}.status`),
+    activation: enumField(value, "activation", ACTIVATIONS, `${at}.activation`),
+    ...(parsedApplicability === undefined
+      ? {}
+      : { applicability: parsedApplicability }),
+    resolution: {
+      strategy: enumField(
+        resolution,
+        "strategy",
+        RESOLUTION_STRATEGIES,
+        `${at}.resolution.strategy`,
+      ),
+      ...(reason === undefined ? {} : { reason }),
+    },
+  };
+}
+
+function parseSnapshotInterpretation(
+  value: unknown,
+  at: string,
+): PflSnapshotInterpretation {
+  if (!isRecord(value)) throw shapeError(at, "an object");
+  const facets = value.facets;
+  if (
+    !Array.isArray(facets) ||
+    facets.some((facet) => typeof facet !== "string" || facet.length === 0)
+  )
+    throw shapeError(`${at}.facets`, "an array of non-empty strings");
+  for (const [index, facet] of facets.entries()) {
+    if ((facet as string).length > MAX_SCALAR_CHARS)
+      throw shapeError(
+        `${at}.facets[${index}]`,
+        `a string of at most ${MAX_SCALAR_CHARS} characters`,
+      );
+  }
+  return {
+    elementId: boundedStringField(value, "elementId", `${at}.elementId`),
+    facets: facets as string[],
+    confidence: enumField(
+      value,
+      "confidence",
+      INTERPRETATION_CONFIDENCES,
+      `${at}.confidence`,
+    ),
+    reason: boundedStringField(value, "reason", `${at}.reason`),
+  };
+}
+
+function parseSnapshotElement(
+  item: unknown,
+  index: number,
+  seenIds: Set<string>,
+): PflSnapshotElement {
+  const at = `data.elements[${index}]`;
+  if (!isRecord(item)) throw shapeError(at, "an object");
+  const id = boundedStringField(item, "id", `${at}.id`);
+  if (seenIds.has(id))
+    throw new PflExportError(
+      "invalid-shape",
+      `pfl export element ${at} duplicates element id '${id}'`,
+    );
+  seenIds.add(id);
+  const observed = parseSnapshotObserved(item.observed, `${at}.observed`);
+  if (observed.id !== id)
+    throw new PflExportError(
+      "invalid-shape",
+      `pfl export element ${at} joins mismatched ids: observed.id '${observed.id}' is not element id '${id}'`,
+    );
+  if (!("resolved" in item))
+    throw shapeError(
+      `${at}.resolved`,
+      "a required key (its value may be null)",
+    );
+  const resolved =
+    item.resolved === null
+      ? null
+      : parseSnapshotResolved(item.resolved, `${at}.resolved`);
+  if (resolved !== null && resolved.id !== id)
+    throw new PflExportError(
+      "invalid-shape",
+      `pfl export element ${at} joins mismatched ids: resolved.id '${resolved.id}' is not element id '${id}'`,
+    );
+  if (!("interpretation" in item))
+    throw shapeError(
+      `${at}.interpretation`,
+      "a required key (its value may be null)",
+    );
+  const interpretation =
+    item.interpretation === null
+      ? null
+      : parseSnapshotInterpretation(
+          item.interpretation,
+          `${at}.interpretation`,
+        );
+  if (interpretation !== null && interpretation.elementId !== id)
+    throw new PflExportError(
+      "invalid-shape",
+      `pfl export element ${at} joins mismatched ids: interpretation.elementId '${interpretation.elementId}' is not element id '${id}'`,
+    );
+  return { id, observed, resolved, interpretation };
+}
+
+function parsePflSnapshotData(value: unknown): PflSnapshotData {
+  if (!isRecord(value)) throw shapeError("data", "an object");
+  const project = value.project;
+  if (!isRecord(project)) throw shapeError("data.project", "an object");
+  const runtime = value.runtime;
+  if (!isRecord(runtime)) throw shapeError("data.runtime", "an object");
+  const adapter = runtime.adapter;
+  if (!isRecord(adapter)) throw shapeError("data.runtime.adapter", "an object");
+  const snapshot = value.snapshot;
+  if (!isRecord(snapshot)) throw shapeError("data.snapshot", "an object");
+  const resolution = value.resolution;
+  if (!isRecord(resolution)) throw shapeError("data.resolution", "an object");
+  const elements = value.elements;
+  if (!Array.isArray(elements)) throw shapeError("data.elements", "an array");
+  if (elements.length > MAX_ELEMENTS)
+    throw shapeError(
+      "data.elements",
+      `an array with at most ${MAX_ELEMENTS} items`,
+    );
+  const relations = value.relations;
+  if (!Array.isArray(relations)) throw shapeError("data.relations", "an array");
+  if (relations.length > MAX_RELATIONS)
+    throw shapeError(
+      "data.relations",
+      `an array with at most ${MAX_RELATIONS} items`,
+    );
+  const interpretation = value.interpretation;
+  if (!isRecord(interpretation))
+    throw shapeError("data.interpretation", "an object");
+  const classifier = interpretation.classifier;
+  if (!isRecord(classifier))
+    throw shapeError("data.interpretation.classifier", "an object");
+  const seenIds = new Set<string>();
+  return {
+    project: {
+      id: boundedStringField(project, "id", "data.project.id"),
+      displayName: boundedStringField(
+        project,
+        "displayName",
+        "data.project.displayName",
+      ),
+    },
+    runtime: {
+      id: boundedStringField(runtime, "id", "data.runtime.id"),
+      version: nullableStringField(runtime, "version", "data.runtime.version"),
+      adapter: {
+        id: boundedStringField(adapter, "id", "data.runtime.adapter.id"),
+        version: boundedStringField(
+          adapter,
+          "version",
+          "data.runtime.adapter.version",
+        ),
+        runtimeCompatibility: enumField(
+          adapter,
+          "runtimeCompatibility",
+          RUNTIME_COMPATIBILITIES,
+          "data.runtime.adapter.runtimeCompatibility",
+        ),
+      },
+    },
+    snapshot: {
+      // Snapshot ids are copied into every claim's provenance: provenance cap.
+      observedSnapshotId: boundedStringField(
+        snapshot,
+        "observedSnapshotId",
+        "data.snapshot.observedSnapshotId",
+        MAX_METADATA_CHARS,
+      ),
+      resolvedSnapshotId: boundedStringField(
+        snapshot,
+        "resolvedSnapshotId",
+        "data.snapshot.resolvedSnapshotId",
+        MAX_METADATA_CHARS,
+      ),
+      capturedAt: boundedStringField(
+        snapshot,
+        "capturedAt",
+        "data.snapshot.capturedAt",
+      ),
+      schemaVersion: boundedStringField(
+        snapshot,
+        "schemaVersion",
+        "data.snapshot.schemaVersion",
+      ),
+    },
+    resolution: {
+      semanticsVersion: boundedStringField(
+        resolution,
+        "semanticsVersion",
+        "data.resolution.semanticsVersion",
+      ),
+      confidence: enumField(
+        resolution,
+        "confidence",
+        RESOLUTION_CONFIDENCES,
+        "data.resolution.confidence",
+      ),
+    },
+    elements: elements.map((item, index) =>
+      parseSnapshotElement(item, index, seenIds),
+    ),
+    relations: relations.map((item, index) => {
+      const at = `data.relations[${index}]`;
+      if (!isRecord(item)) throw shapeError(at, "an object");
+      const type = enumField(item, "type", RELATION_TYPES, `${at}.type`);
+      const from = boundedStringField(item, "from", `${at}.from`);
+      const to = boundedStringField(item, "to", `${at}.to`);
+      if (!seenIds.has(from))
+        throw shapeError(
+          `${at}.from`,
+          `an element id present in data.elements ('${from}' is unknown)`,
+        );
+      if (!seenIds.has(to))
+        throw shapeError(
+          `${at}.to`,
+          `an element id present in data.elements ('${to}' is unknown)`,
+        );
+      return { type, from, to };
+    }),
+    findings: parseFindingList(value.findings, MAX_SCALAR_CHARS),
+    interpretation: {
+      classifier: {
+        id: boundedStringField(
+          classifier,
+          "id",
+          "data.interpretation.classifier.id",
+        ),
+        // Copied into every claim's provenance: provenance cap.
+        version: boundedStringField(
+          classifier,
+          "version",
+          "data.interpretation.classifier.version",
+          MAX_METADATA_CHARS,
+        ),
+      },
+      origin: enumField(
+        interpretation,
+        "origin",
+        INTERPRETATION_ORIGINS,
+        "data.interpretation.origin",
+      ),
+    },
+  };
+}
+
 /** Accepted pflVersion range per docs/pfl-export-contract.md: >=1.0.0 <2.0.0. */
 export function isSupportedPflVersion(version: string): boolean {
   // Semver build metadata (+...) carries no precedence; prereleases are
@@ -289,9 +988,13 @@ export function isSupportedPflVersion(version: string): boolean {
 
 /**
  * Validates a parsed JSON value against the pfl export contract
- * (docs/pfl-export-contract.md). Pure: no I/O.
+ * (docs/pfl-export-contract.md) and dispatches on its `command` to the
+ * matching payload reader. Pure: no I/O.
  */
-export function parsePflExport(value: unknown, sourcePath: string): PflExport {
+export function parsePflExport(
+  value: unknown,
+  sourcePath: string,
+): PflDocument {
   if (!isRecord(value))
     throw new PflExportError(
       "invalid-shape",
@@ -310,10 +1013,11 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
       "unsupported-version",
       `unsupported pflVersion: ${pflVersion} (supported: >=1.0.0 <2.0.0)`,
     );
-  if (value.command !== "report")
+  const command = value.command;
+  if (command !== "report" && command !== "export")
     throw new PflExportError(
       "unsupported-command",
-      `unsupported pfl command document: ${String(value.command)} (supported: report)`,
+      `unsupported pfl command document: ${String(command)} (supported: report, export)`,
     );
   if (value.ok !== true) {
     const error = isRecord(value.data) ? value.data.error : undefined;
@@ -322,7 +1026,7 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
       : "unknown pfl failure";
     throw new PflExportError(
       "export-failed",
-      `the pfl export is a failure document (${detail}); run pfl again and pass a successful report`,
+      `the pfl export is a failure document (${detail}); run pfl again and pass a successful ${command} document`,
     );
   }
   const completeness = value.completeness;
@@ -332,13 +1036,15 @@ export function parsePflExport(value: unknown, sourcePath: string): PflExport {
     completeness !== "unknown"
   )
     throw shapeError("completeness", '"complete", "partial", or "unknown"');
-  return {
+  const base = {
     sourcePath: sanitizeText(sourcePath),
     pflVersion,
-    completeness,
+    completeness: completeness as Completeness,
     diagnostics: parseDiagnostics(value.diagnostics),
-    data: parseReportData(value.data),
   };
+  return command === "report"
+    ? { ...base, command, data: parseReportData(value.data) }
+    : { ...base, command, data: parsePflSnapshotData(value.data) };
 }
 
 class InputTooLargeError extends Error {}
@@ -399,7 +1105,7 @@ function parseExportContent(
   content: string,
   invalidJsonMessage: string,
   sourcePath: string,
-): PflExport {
+): PflDocument {
   // A leading UTF-8 BOM (U+FEFF) is part of the transport encoding, not the
   // document: strip exactly one. A BOM anywhere else stays invalid JSON.
   const text = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
@@ -413,7 +1119,7 @@ function parseExportContent(
   return parsePflExport(value, sourcePath);
 }
 
-export async function readPflExport(path: string): Promise<PflExport> {
+export async function readPflExport(path: string): Promise<PflDocument> {
   let content: string;
   try {
     content = (await readBounded(path)).toString("utf8");
@@ -438,7 +1144,7 @@ export async function readPflExport(path: string): Promise<PflExport> {
 
 export async function readPflExportStdin(
   stream: AsyncIterable<Buffer | string> = process.stdin,
-): Promise<PflExport> {
+): Promise<PflDocument> {
   let content: string;
   try {
     content = (await readBoundedStdin(stream)).toString("utf8");
