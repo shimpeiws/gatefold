@@ -127,6 +127,7 @@ export const EXPORT_RULES: readonly ExportClaimRule[] = [
         const observed = element.observed;
         const elementId = element.id;
         const evidence: EvidenceReference[] = [
+          { pointer: `/data/elements/${index}/id`, elementId },
           { pointer: `${at}/native/kind`, elementId },
           { pointer: `${at}/native/origin`, elementId },
         ];
@@ -166,6 +167,7 @@ export const EXPORT_RULES: readonly ExportClaimRule[] = [
         const at = `/data/elements/${index}/resolved`;
         const elementId = element.id;
         const evidence: EvidenceReference[] = [
+          { pointer: `/data/elements/${index}/id`, elementId },
           { pointer: `${at}/status`, elementId },
           { pointer: `${at}/activation`, elementId },
           { pointer: `${at}/resolution/strategy`, elementId },
@@ -203,6 +205,8 @@ export const EXPORT_RULES: readonly ExportClaimRule[] = [
         const at = `/data/elements/${index}/interpretation`;
         const elementId = element.id;
         const evidence: EvidenceReference[] = [
+          { pointer: `/data/elements/${index}/id`, elementId },
+          { pointer: `${at}/facets`, elementId },
           { pointer: `${at}/confidence`, elementId },
           { pointer: `${at}/reason`, elementId },
         ];
@@ -214,8 +218,6 @@ export const EXPORT_RULES: readonly ExportClaimRule[] = [
                 .join(
                   ", ",
                 )} with confidence '${interpretation.confidence}': ${interpretation.reason}`;
-        if (interpretation.facets.length > 0)
-          evidence.unshift({ pointer: `${at}/facets`, elementId });
         return [
           makeClaim(input, "element-interpretation", `${text}.`, evidence, 1),
         ];

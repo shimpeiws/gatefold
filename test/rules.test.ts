@@ -617,6 +617,7 @@ describe("export snapshot rules", () => {
       "pfl observed element 'el_0fc92802d8f84176' at 'CLAUDE.md' as kind 'instructions' from origin 'project' (scope 'project'); observed status is 'observed'.",
     );
     expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/0/id",
       "/data/elements/0/observed/native/kind",
       "/data/elements/0/observed/native/origin",
       "/data/elements/0/observed/source/path",
@@ -650,6 +651,7 @@ describe("export snapshot rules", () => {
       "The resolved layer marks element 'el_0fc92802d8f84176' as 'effective' — potentially effective in the static environment, not evidence that an agent used it, activation 'always', strategy 'accumulate', applicable to 'project'; reason: accumulates with the other layers.",
     );
     expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/0/id",
       "/data/elements/0/resolved/status",
       "/data/elements/0/resolved/activation",
       "/data/elements/0/resolved/resolution/strategy",
@@ -676,6 +678,7 @@ describe("export snapshot rules", () => {
       "The classifier assigned element 'el_0fc92802d8f84176' facet(s) 'instructions' with confidence 'medium': defines agent behavior.",
     );
     expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/0/id",
       "/data/elements/0/interpretation/facets",
       "/data/elements/0/interpretation/confidence",
       "/data/elements/0/interpretation/reason",
@@ -686,6 +689,12 @@ describe("export snapshot rules", () => {
     expect(claims[1].claim).toBe(
       "The classifier recorded no facets for element 'el_2cc38ee12bb9aa01' with confidence 'unknown': no facet matched this element.",
     );
+    expect(claims[1].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/2/id",
+      "/data/elements/2/interpretation/facets",
+      "/data/elements/2/interpretation/confidence",
+      "/data/elements/2/interpretation/reason",
+    ]);
     expect(
       claims.every(
         (claim) => claim.claim.includes("no interpretation") === false,
