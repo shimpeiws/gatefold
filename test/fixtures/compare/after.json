@@ -1,0 +1,83 @@
+{
+  "pflVersion": "1.4.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": { "id": "proj-compare", "displayName": "Compare Fixture" },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.0.0",
+      "adapter": {
+        "id": "claude-code-adapter",
+        "version": "1.0.0",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs-bbb",
+      "resolvedSnapshotId": "res-bbb",
+      "capturedAt": "2026-09-27T00:00:00Z",
+      "schemaVersion": "1"
+    },
+    "resolution": {
+      "semanticsVersion": "1.0.0",
+      "confidence": "verified"
+    },
+    "elements": [
+      {
+        "id": "el-added",
+        "observed": {
+          "id": "el-added",
+          "native": { "kind": "markdown", "origin": "project", "scope": null },
+          "source": { "path": "docs/added.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el-added",
+          "status": "effective",
+          "activation": "always",
+          "resolution": { "strategy": "override" }
+        },
+        "interpretation": {
+          "elementId": "el-added",
+          "facets": ["instructions"],
+          "confidence": "high",
+          "reason": "matched instruction pattern"
+        }
+      },
+      {
+        "id": "el-kept",
+        "observed": {
+          "id": "el-kept",
+          "native": { "kind": "markdown", "origin": "project", "scope": null },
+          "source": { "path": "docs/kept.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el-kept",
+          "status": "shadowed",
+          "activation": "always",
+          "resolution": { "strategy": "override" }
+        },
+        "interpretation": {
+          "elementId": "el-kept",
+          "facets": ["instructions"],
+          "confidence": "high",
+          "reason": "matched instruction pattern"
+        }
+      }
+    ],
+    "relations": [],
+    "findings": [],
+    "interpretation": {
+      "classifier": { "id": "pfl-classifier", "version": "1.0.0" },
+      "origin": "stored"
+    }
+  }
+}

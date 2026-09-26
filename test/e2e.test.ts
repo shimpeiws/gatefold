@@ -872,3 +872,129 @@ describe("gatefold e2e (real process)", () => {
     ]);
   });
 });
+
+const compareSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v3.json`, "utf8"),
+);
+const validateComparison = new Ajv2020().compile(compareSchema);
+const compareFixture = (name: string): string =>
+  `${root}test/fixtures/compare/${name}`;
+
+describe("gatefold compare e2e (real process)", () => {
+  const before = compareFixture("before.json");
+  const after = compareFixture("after.json");
+  const diff = compareFixture("diff.json");
+
+  it("accepts a matching triple and emits schema v3 JSON", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      before,
+      "--after",
+      after,
+      "--diff",
+      diff,
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateComparison(result),
+      JSON.stringify(validateComparison.errors),
+    ).toBe(true);
+    expect(result.schemaVersion).toBe(3);
+    expect(result.source.command).toBe("compare");
+    expect(result.inputs.before.label).toBe(before);
+    expect(result.inputs.diff.command).toBe("diff");
+  });
+
+  it("reads one input from stdin", async () => {
+    const run = await gatefoldWithStdin(
+      ["compare", "--before", before, "--after", after, "--diff", "-", "--format", "json"],
+      readFileSync(diff),
+    );
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.diff.label).toBe("<stdin>");
+  });
+
+  it("rejects swapped exports with exit 3 and a swap hint on stderr", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      after,
+      "--after",
+      before,
+      "--diff",
+      diff,
+    ]);
+    expect(run.code).toBe(3);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("swap");
+  });
+
+  it("rejects a mismatched snapshot binding with exit 3", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      before,
+      "--after",
+      after,
+      "--diff",
+      compareFixture("diff-wrong-snapshots.json"),
+    ]);
+    expect(run.code).toBe(3);
+    expect(run.stderr).toContain("snapshot");
+  });
+
+  it("rejects a project mismatch and a wrong-command role with exit 3", async () => {
+    const projectMismatch = await gatefold([
+      "compare",
+      "--before",
+      before,
+      "--after",
+      compareFixture("after-wrong-project.json"),
+      "--diff",
+      diff,
+    ]);
+    expect(projectMismatch.code).toBe(3);
+    expect(projectMismatch.stderr).toContain("different projects");
+    const wrongCommand = await gatefold([
+      "compare",
+      "--before",
+      fixture("valid-report.json"),
+      "--after",
+      after,
+      "--diff",
+      diff,
+    ]);
+    expect(wrongCommand.code).toBe(3);
+    expect(wrongCommand.stderr).toContain("must be a pfl export");
+  });
+
+  it("rejects malformed input and usage errors", async () => {
+    const malformed = await gatefold([
+      "compare",
+      "--before",
+      fixture("malformed.json"),
+      "--after",
+      after,
+      "--diff",
+      diff,
+    ]);
+    expect(malformed.code).toBe(3);
+    const missing = await gatefold(["compare", "--before", before]);
+    expect(missing.code).toBe(2);
+    const twoStdin = await gatefold([
+      "compare",
+      "--before",
+      "-",
+      "--after",
+      "-",
+      "--diff",
+      diff,
+    ]);
+    expect(twoStdin.code).toBe(2);
+  });
+});

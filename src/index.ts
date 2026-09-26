@@ -1,5 +1,15 @@
 export { analyze } from "./application/analyze.js";
+export { compareDocuments } from "./application/compare.js";
 export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
+export {
+  COMPARISON_SCHEMA_VERSION,
+  type ComparisonClaim,
+  type ComparisonDiffInput,
+  type ComparisonEvidenceReference,
+  type ComparisonEvidenceSource,
+  type ComparisonExportInput,
+  type ComparisonResult,
+} from "./domain/comparison.js";
 export type {
   AnalysisResult,
   Claim,
@@ -36,5 +46,5 @@ export type {
   PflSnapshotRelation,
   PflSnapshotResolved,
 } from "./input/pfl-export.js";
-export { formatHuman } from "./output/human.js";
+export { formatComparisonHuman, formatHuman } from "./output/human.js";
 export { formatJson } from "./output/json.js";
