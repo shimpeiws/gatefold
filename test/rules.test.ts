@@ -941,6 +941,29 @@ describe("export snapshot rules", () => {
     ]);
   });
 
+  it("rejects a relation/finding-heavy export that exceeds the evidence ceiling", () => {
+    const ids = Array.from({ length: 5_000 }, (_, i) => `el_${i}`);
+    const doc = exportDocWith({
+      elements: ids.map(layerElement),
+      relations: Array.from({ length: 20_000 }, (_, i) => ({
+        type: "shadows",
+        from: ids[i % ids.length],
+        to: ids[(i + 1) % ids.length],
+      })),
+      findings: Array.from({ length: 5 }, (_, f) => ({
+        rule: `r${f}`,
+        message: "m",
+        elementIds: ids.slice(f * 1_000, f * 1_000 + 1_000),
+      })),
+    });
+    // 5,000 observed claims × 4 + 20,000 relations × 3 + 5,000 finding
+    // references × 5 exceeds 100,000 evidence references while staying
+    // under the claim ceiling: the deterministic input error must fire.
+    expect(() => analyze(parsePflExport(doc, "inline"))).toThrow(
+      /evidence references/,
+    );
+  });
+
   it("keeps claim order stable across the new rules", async () => {
     const result = analyze(await load("valid-export.json"));
     const ruleIds = result.claims.map((claim) => claim.ruleId);
