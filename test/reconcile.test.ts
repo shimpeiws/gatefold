@@ -224,7 +224,11 @@ describe("reconcileDocuments", () => {
     );
     const [record] = reconcileDocuments(before, after, diff).elements;
     expect(record.structural).toBe("none");
-    expect(record.statusChange).toEqual({ from: "effective", to: "shadowed" });
+    expect(record.statusChange).toEqual({
+      from: "effective",
+      to: "shadowed",
+      index: 0,
+    });
     expect(record.contradictions).toEqual([]);
   });
 
@@ -312,20 +316,23 @@ describe("reconcileDocuments", () => {
     );
     const view = reconcileDocuments(before, after, diff);
     const byId = new Map(view.elements.map((e) => [e.id, e]));
-    expect(byId.get("ghost")!.contradictions[0]).toContain(
+    expect(byId.get("ghost")!.contradictions[0].detail).toContain(
       "present in the before",
     );
-    expect(byId.get("stayer")!.contradictions[0]).toContain(
+    expect(byId.get("stayer")!.contradictions[0].detail).toContain(
       "present in the after",
     );
-    expect(byId.get("missing")!.contradictions).toEqual([
+    expect(byId.get("missing")!.contradictions.map((c) => c.detail)).toEqual([
       "listed as changed by the diff but absent from the complete before export",
       "listed as changed by the diff but absent from the complete after export",
     ]);
-    expect(byId.get("x")!.contradictions).toEqual([
+    expect(byId.get("x")!.contradictions.map((c) => c.detail)).toEqual([
       "diff records status from 'shadowed' but the before export resolves 'effective'",
       "diff records status to 'effective' but the after export resolves 'shadowed'",
     ]);
+    for (const record of view.elements)
+      for (const contradiction of record.contradictions)
+        expect(contradiction.evidence.length).toBeGreaterThan(0);
   });
 
   it("treats missing ids on partial-completeness sides as unobserved, not contradictions", () => {
@@ -445,7 +452,7 @@ describe("reconcileDocuments review findings", () => {
       }),
     );
     const [record] = reconcileDocuments(partialBefore, after, diff).elements;
-    expect(record.contradictions).toEqual([
+    expect(record.contradictions.map((c) => c.detail)).toEqual([
       "listed as changed by the diff but absent from the complete after export",
     ]);
   });
@@ -464,7 +471,7 @@ describe("reconcileDocuments review findings", () => {
       }),
     );
     const [record] = reconcileDocuments(before, after, diff).elements;
-    expect(record.contradictions).toEqual([
+    expect(record.contradictions.map((c) => c.detail)).toEqual([
       "diff records no after status but the after export resolves 'effective'",
     ]);
   });

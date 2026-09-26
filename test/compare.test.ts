@@ -54,7 +54,8 @@ describe("gatefold compare", () => {
     expect(result.inputs.before.semanticsVersion).toBe("1.0.0");
     expect(result.inputs.before.classifierVersion).toBe("1.0.0");
     expect(result.inputs.diff.classifierVersionA).toBe("1.0.0");
-    expect(result.claims).toEqual([]);
+    expect(result.claims.length).toBeGreaterThan(0);
+    expect(result.claims.every((claim) => claim.ruleId)).toBe(true);
   });
 
   it("accepts --flag=value spellings and options before the subcommand", async () => {
@@ -79,7 +80,8 @@ describe("gatefold compare", () => {
       "--diff",
       diff,
     ]);
-    expect(output).toContain("No claims found.");
+    expect(output).toContain("el-added");
+    expect(output).toContain("evidence:");
   });
 
   it("rejects swapped exports with a swap hint (exit 3)", async () => {

@@ -911,7 +911,17 @@ describe("gatefold compare e2e (real process)", () => {
 
   it("reads one input from stdin", async () => {
     const run = await gatefoldWithStdin(
-      ["compare", "--before", before, "--after", after, "--diff", "-", "--format", "json"],
+      [
+        "compare",
+        "--before",
+        before,
+        "--after",
+        after,
+        "--diff",
+        "-",
+        "--format",
+        "json",
+      ],
       readFileSync(diff),
     );
     expect(run.code, run.stderr).toBe(0);

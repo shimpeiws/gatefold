@@ -1,0 +1,517 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { compareDocuments } from "../src/application/compare.js";
+import type { ComparisonResult } from "../src/domain/comparison.js";
+import { parsePflExport } from "../src/input/pfl-export.js";
+import type {
+  PflDiffDocument,
+  PflExportDocument,
+  PflSnapshotElement,
+} from "../src/input/pfl-export.js";
+
+const compareDir = new URL("fixtures/compare/", import.meta.url);
+
+interface Raw {
+  raw: unknown;
+  doc: PflExportDocument | PflDiffDocument;
+}
+
+function makeExport(
+  data: unknown,
+  extra: Record<string, unknown> = {},
+): { raw: unknown; doc: PflExportDocument } {
+  const raw = {
+    pflVersion: "1.0.0",
+    command: "export",
+    ok: true,
+    completeness: "complete",
+    diagnostics: [],
+    data,
+    ...extra,
+  };
+  return { raw, doc: parsePflExport(raw, "test") as PflExportDocument };
+}
+
+function makeDiff(
+  data: unknown,
+  extra: Record<string, unknown> = {},
+): { raw: unknown; doc: PflDiffDocument } {
+  const raw = {
+    pflVersion: "1.0.0",
+    command: "diff",
+    ok: true,
+    completeness: "complete",
+    diagnostics: [],
+    data,
+    ...extra,
+  };
+  return { raw, doc: parsePflExport(raw, "test") as PflDiffDocument };
+}
+
+function loadFixture(name: string): Raw {
+  const raw = JSON.parse(
+    readFileSync(fileURLToPath(new URL(name, compareDir)), "utf8"),
+  );
+  return { raw, doc: parsePflExport(raw, name) };
+}
+
+function element(
+  id: string,
+  overrides: {
+    status?: string | null;
+    activation?: string;
+    facets?: readonly string[] | null;
+  } = {},
+): PflSnapshotElement {
+  const {
+    status = "effective",
+    activation = "always",
+    facets = ["instructions"],
+  } = overrides;
+  return {
+    id,
+    observed: {
+      id,
+      native: { kind: "markdown", origin: "project", scope: null },
+      source: { path: `docs/${id}.md` },
+      inspectability: "observable",
+      metadata: {},
+      status: "observed",
+    },
+    resolved:
+      status === null
+        ? null
+        : {
+            id,
+            status,
+            activation,
+            resolution: { strategy: "override" },
+          },
+    interpretation:
+      facets === null
+        ? null
+        : {
+            elementId: id,
+            facets: [...facets],
+            confidence: "high",
+            reason: "matched instruction pattern",
+          },
+  } as PflSnapshotElement;
+}
+
+function exportData(
+  elements: readonly PflSnapshotElement[],
+  extra: Record<string, unknown> = {},
+  side: "a" | "b" = "a",
+) {
+  return {
+    project: { id: "proj", displayName: "P" },
+    runtime: {
+      id: "claude-code",
+      version: "2.0.0",
+      adapter: {
+        id: "a",
+        version: "1.0.0",
+        runtimeCompatibility: "verified",
+      },
+    },
+    snapshot: {
+      observedSnapshotId: `obs-${side}`,
+      resolvedSnapshotId: `res-${side}`,
+      capturedAt: "2026-01-01T00:00:00Z",
+      schemaVersion: "1",
+    },
+    resolution: { semanticsVersion: "1.0.0", confidence: "verified" },
+    elements,
+    relations: [],
+    findings: [],
+    interpretation: {
+      classifier: { id: "c", version: "1.0.0" },
+      origin: "stored",
+    },
+    ...extra,
+  };
+}
+
+function diffData(overrides: Record<string, unknown> = {}) {
+  return {
+    runtime: "claude-code",
+    observedSnapshotIdA: "obs-a",
+    observedSnapshotIdB: "obs-b",
+    resolvedSnapshotIdA: "res-a",
+    resolvedSnapshotIdB: "res-b",
+    structural: {
+      added: 0,
+      removed: 0,
+      changed: 0,
+      addedIds: [],
+      removedIds: [],
+      changedIds: [],
+    },
+    effective: {
+      newlyEffective: 0,
+      noLongerEffective: 0,
+      activationChanged: 0,
+      statusChanges: [],
+    },
+    facetDeltas: {},
+    relations: { added: [], removed: [] },
+    findings: { added: [], removed: [] },
+    versionNotes: [],
+    interpretation: {
+      a: { classifierVersion: "1.0.0", origin: "stored" },
+      b: { classifierVersion: "1.0.0", origin: "stored" },
+    },
+    ...overrides,
+  };
+}
+
+/** Resolves an RFC 6901 pointer against a raw input document. */
+function pointerExists(raw: unknown, pointer: string): boolean {
+  if (pointer === "") return true;
+  const segments = pointer
+    .slice(1)
+    .split("/")
+    .map((s) => s.replace(/~1/g, "/").replace(/~0/g, "~"));
+  let current: unknown = raw;
+  for (const segment of segments) {
+    if (current === null || typeof current !== "object") return false;
+    if (Array.isArray(current)) {
+      const i = Number(segment);
+      if (!Number.isInteger(i) || i < 0 || i >= current.length) return false;
+      current = current[i];
+    } else {
+      if (!(segment in current)) return false;
+      current = (current as Record<string, unknown>)[segment];
+    }
+  }
+  return true;
+}
+
+function expectEvidenceResolves(
+  result: ComparisonResult,
+  raws: Record<"before" | "after" | "diff", unknown>,
+) {
+  const order = { before: 0, after: 1, diff: 2 };
+  for (const c of result.claims) {
+    expect(c.evidence.length).toBeGreaterThan(0);
+    for (const e of c.evidence)
+      expect(
+        pointerExists(raws[e.source], e.pointer),
+        `${c.ruleId}: ${e.source}:${e.pointer} should resolve`,
+      ).toBe(true);
+    const sorted = [...c.evidence].sort(
+      (a, b) =>
+        order[a.source] - order[b.source] ||
+        (a.pointer < b.pointer ? -1 : a.pointer > b.pointer ? 1 : 0),
+    );
+    expect(c.evidence, `${c.ruleId} evidence sorted`).toEqual(sorted);
+  }
+}
+
+describe("compare claims (#35)", () => {
+  it("emits evidence-backed claims for the matching triple", () => {
+    const before = loadFixture("before.json") as {
+      raw: unknown;
+      doc: PflExportDocument;
+    };
+    const after = loadFixture("after.json") as {
+      raw: unknown;
+      doc: PflExportDocument;
+    };
+    const diff = loadFixture("diff.json") as {
+      raw: unknown;
+      doc: PflDiffDocument;
+    };
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const rules = result.claims.map((c) => c.ruleId);
+    expect(rules).toContain("compare-inputs");
+    expect(rules).toContain("compare-element-added");
+    expect(rules).toContain("compare-element-removed");
+    expect(rules).toContain("compare-status-transition");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("describes an element newly effective through addition", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([element("x"), element("y")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        structural: {
+          added: 1,
+          removed: 0,
+          changed: 0,
+          addedIds: ["y"],
+          removedIds: [],
+          changedIds: [],
+        },
+        effective: {
+          newlyEffective: 1,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const added = result.claims.find(
+      (c) => c.ruleId === "compare-element-added",
+    );
+    expect(added).toBeDefined();
+    expect(added!.claim).toContain("'y'");
+    expect(added!.claim).toContain("added between A and B");
+    expect(added!.claim).toContain("'effective'");
+    const sources = added!.evidence.map((e) => `${e.source}:${e.pointer}`);
+    expect(sources).toContain("diff:/data/structural/addedIds/0");
+    expect(sources).toContain("after:/data/elements/1/resolved/status");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("describes an effective → shadowed status transition", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(
+      exportData([element("x", { status: "shadowed" })], {}, "b"),
+    );
+    const diff = makeDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 1,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: "effective", to: "shadowed" }],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const transition = result.claims.find(
+      (c) => c.ruleId === "compare-status-transition",
+    );
+    expect(transition).toBeDefined();
+    expect(transition!.claim).toContain("'effective' in A");
+    expect(transition!.claim).toContain("'shadowed' in B");
+    const sources = transition!.evidence.map((e) => `${e.source}:${e.pointer}`);
+    expect(sources).toContain("before:/data/elements/0/resolved/status");
+    expect(sources).toContain("after:/data/elements/0/resolved/status");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("emits no element-state claims for a relation-only change", () => {
+    const shared = [element("x"), element("y")];
+    const before = makeExport(exportData(shared, { relations: [] }, "a"));
+    const after = makeExport(
+      exportData(
+        shared,
+        { relations: [{ type: "shadows", from: "x", to: "y" }] },
+        "b",
+      ),
+    );
+    const diff = makeDiff(
+      diffData({
+        relations: {
+          added: [{ type: "shadows", from: "x", to: "y" }],
+          removed: [],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const elementRules = result.claims.filter((c) =>
+      [
+        "compare-element-added",
+        "compare-element-removed",
+        "compare-element-changed",
+        "compare-status-transition",
+        "compare-activation-change",
+        "compare-facet-change",
+        "compare-contradiction",
+      ].includes(c.ruleId),
+    );
+    expect(elementRules).toEqual([]);
+  });
+
+  it("preserves uncertainty on a partial-completeness side", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([], {}, "b"), {
+      completeness: "partial",
+    });
+    const diff = makeDiff(
+      diffData({
+        structural: {
+          added: 0,
+          removed: 1,
+          changed: 0,
+          addedIds: [],
+          removedIds: ["x"],
+          changedIds: [],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const caveat = result.claims.find(
+      (c) => c.ruleId === "compare-completeness" && c.claim.includes("after"),
+    );
+    expect(caveat).toBeDefined();
+    const removed = result.claims.find(
+      (c) => c.ruleId === "compare-element-removed",
+    );
+    expect(removed!.claim).toContain("absence may be unobserved");
+    expect(
+      result.claims.some((c) => c.ruleId === "compare-contradiction"),
+    ).toBe(false);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("surfaces version and semantics drift as caveat claims", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(
+      exportData(
+        [element("x")],
+        {
+          resolution: { semanticsVersion: "2.0.0", confidence: "verified" },
+          interpretation: {
+            classifier: { id: "c", version: "2.0.0" },
+            origin: "recomputed",
+          },
+        },
+        "b",
+      ),
+      { pflVersion: "1.5.0" },
+    );
+    const diff = makeDiff(diffData({ versionNotes: ["classifier updated"] }), {
+      pflVersion: "1.5.0",
+    });
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const drifts = result.claims.filter(
+      (c) => c.ruleId === "compare-version-drift",
+    );
+    expect(drifts.some((c) => c.claim.includes("different pfl versions"))).toBe(
+      true,
+    );
+    expect(
+      drifts.some((c) => c.claim.includes("resolution semantics versions")),
+    ).toBe(true);
+    expect(
+      drifts.some((c) => c.claim.includes("different classifier versions")),
+    ).toBe(true);
+    expect(drifts.some((c) => c.claim.includes("classifier updated"))).toBe(
+      true,
+    );
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("surfaces document disagreements as contradiction claims", () => {
+    const before = makeExport(
+      exportData([element("x", { status: "effective" })], {}, "a"),
+    );
+    const after = makeExport(
+      exportData([element("x", { status: "shadowed" })], {}, "b"),
+    );
+    const diff = makeDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: "shadowed", to: "effective" }],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const contradictions = result.claims.filter(
+      (c) => c.ruleId === "compare-contradiction",
+    );
+    expect(contradictions.length).toBe(2);
+    expect(contradictions[0].claim).toContain("disagree about element 'x'");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("emits claims in deterministic rule order", () => {
+    const run = () => {
+      const before = makeExport(
+        exportData([element("b"), element("a")], {}, "a"),
+      );
+      const after = makeExport(
+        exportData(
+          [element("a", { status: "shadowed" }), element("b")],
+          {},
+          "b",
+        ),
+      );
+      const diff = makeDiff(
+        diffData({
+          effective: {
+            newlyEffective: 0,
+            noLongerEffective: 1,
+            activationChanged: 0,
+            statusChanges: [{ id: "a", from: "effective", to: "shadowed" }],
+          },
+        }),
+      );
+      return compareDocuments({
+        before: before.doc,
+        after: after.doc,
+        diff: diff.doc,
+      });
+    };
+    const first = run();
+    const second = run();
+    expect(first.claims).toEqual(second.claims);
+    const transitions = first.claims.filter(
+      (c) => c.ruleId === "compare-status-transition",
+    );
+    expect(transitions.length).toBe(1);
+    expect(transitions[0].claim).toContain("'a'");
+  });
+});
