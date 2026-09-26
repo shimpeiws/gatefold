@@ -663,3 +663,155 @@ describe("export snapshot rules", () => {
     expect(diag.claim).toContain("\\u202e");
   });
 });
+
+describe("diff comparison rules", () => {
+  const DIFF_FIXTURES = [
+    "valid-diff.json",
+    "valid-diff-empty.json",
+    "valid-diff-partial.json",
+  ];
+
+  it("emits only schema-valid claims for every valid diff fixture", async () => {
+    for (const name of DIFF_FIXTURES) {
+      const result = analyze(await load(name));
+      expect(result.source.command, name).toBe("diff");
+      expect(() => assertValidResult(result), name).not.toThrow();
+    }
+  });
+
+  it("is deterministic for the same diff input", async () => {
+    const input = await load("valid-diff.json");
+    expect(JSON.stringify(analyze(input))).toBe(JSON.stringify(analyze(input)));
+  });
+
+  it("every claim carries evidence, provenance, and a registered ruleId", async () => {
+    const { DIFF_RULES } = await import("../src/application/diff-rules.js");
+    for (const name of DIFF_FIXTURES) {
+      const input = await load(name);
+      const result = analyze(input);
+      expect(result.claims.length, name).toBeGreaterThan(0);
+      for (const claim of result.claims) {
+        expect(claim.evidence.length, name).toBeGreaterThanOrEqual(1);
+        for (const evidence of claim.evidence)
+          expect(evidence.pointer, name).toMatch(ALLOWED_POINTER);
+        expect(claim.provenance.sourceFile, name).toBe(fixture(name));
+        expect(claim.provenance.exportVersion, name).toBe(input.pflVersion);
+        expect(claim.provenance.transform, name).toContain(
+          `rule:${claim.ruleId}`,
+        );
+        expect(
+          DIFF_RULES.some((rule) => rule.id === claim.ruleId),
+          `${name} ${claim.ruleId}`,
+        ).toBe(true);
+        expect(claim.confidence, name).toBeGreaterThanOrEqual(0);
+        expect(claim.confidence, name).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("describes the A to B direction and runtime", async () => {
+    const [claim] = byRule(
+      analyze(await load("valid-diff.json")),
+      "diff-described",
+    );
+    expect(claim.claim).toBe(
+      "The diff compares snapshot 'res_aaa111' (observed 'obs_aaa111') to 'res_bbb222' (observed 'obs_bbb222') for runtime 'claude-code'.",
+    );
+    expect(claim.evidence.map((e) => e.pointer)).toContain(
+      "/data/resolvedSnapshotIdA",
+    );
+    expect(claim.evidence.map((e) => e.pointer)).toContain(
+      "/data/resolvedSnapshotIdB",
+    );
+  });
+
+  it("reports per-side interpretation provenance without a classifier id", async () => {
+    const [claim] = byRule(
+      analyze(await load("valid-diff.json")),
+      "diff-interpretation-provenance",
+    );
+    expect(claim.claim).toContain("'5' with origin 'stored'");
+    expect(claim.claim).toContain("'6' with origin 'recomputed'");
+  });
+
+  it("reports only warning and error diagnostics", async () => {
+    const claims = byRule(
+      analyze(await load("valid-diff-partial.json")),
+      "diagnostic-reported",
+    );
+    expect(claims.length).toBe(1);
+    expect(claims[0].claim).toContain("snapshot-unreadable");
+    expect(claims[0].claim).toContain("/redacted/path");
+    expect(claims[0].evidence[0].pointer).toBe("/diagnostics/0");
+  });
+
+  it("reports completeness only when the diff is not complete", async () => {
+    expect(
+      byRule(analyze(await load("valid-diff.json")), "completeness-reported"),
+    ).toEqual([]);
+    const [claim] = byRule(
+      analyze(await load("valid-diff-partial.json")),
+      "completeness-reported",
+    );
+    expect(claim.claim).toContain("'partial'");
+  });
+
+  it("sanitizes untrusted strings inside claim prose", () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "diff",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        runtime: "claude-code\x1b[2J",
+        observedSnapshotIdA: "obs\ufeffa",
+        observedSnapshotIdB: "obs_b",
+        resolvedSnapshotIdA: "res\u2028a",
+        resolvedSnapshotIdB: "res_b",
+        structural: {
+          added: 0,
+          removed: 0,
+          changed: 0,
+          addedIds: [],
+          removedIds: [],
+          changedIds: [],
+        },
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [],
+        },
+        facetDeltas: {},
+        relations: { added: [], removed: [] },
+        findings: { added: [], removed: [] },
+        versionNotes: [],
+        interpretation: {
+          a: { classifierVersion: "v\x7f5", origin: "stored" },
+          b: { classifierVersion: "5", origin: "stored" },
+        },
+      },
+    };
+    const result = analyze(parsePflExport(doc, "inline"));
+    for (const claim of result.claims)
+      expect(sanitizeText(claim.claim)).toBe(claim.claim);
+    const [described] = byRule(result, "diff-described");
+    expect(described.claim).toContain("\\u001b");
+    expect(described.claim).toContain("\\ufeff");
+    expect(described.claim).toContain("\\u2028");
+    const [prov] = byRule(result, "diff-interpretation-provenance");
+    expect(prov.claim).toContain("v\\u007f5");
+  });
+
+  it("every registered diff rule id is documented in docs/rules.md", async () => {
+    const { DIFF_RULES } = await import("../src/application/diff-rules.js");
+    const doc = await readFile(
+      fileURLToPath(new URL("../docs/rules.md", import.meta.url)),
+      "utf8",
+    );
+    for (const rule of DIFF_RULES) {
+      expect(doc, rule.id).toContain(`\`${rule.id}\``);
+    }
+  });
+});

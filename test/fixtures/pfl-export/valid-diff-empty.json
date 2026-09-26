@@ -1,0 +1,43 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "diff",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "runtime": "claude-code",
+    "observedSnapshotIdA": "obs_0123456789ab",
+    "observedSnapshotIdB": "obs_0123456789ab",
+    "resolvedSnapshotIdA": "res_0123456789ab",
+    "resolvedSnapshotIdB": "res_0123456789ab",
+    "structural": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0,
+      "addedIds": [],
+      "removedIds": [],
+      "changedIds": []
+    },
+    "effective": {
+      "newlyEffective": 0,
+      "noLongerEffective": 0,
+      "activationChanged": 0,
+      "statusChanges": []
+    },
+    "facetDeltas": {
+      "instructions": 0,
+      "knowledge": 0,
+      "memory": 0,
+      "actions": 0,
+      "delegation": 0,
+      "controls": 0
+    },
+    "relations": { "added": [], "removed": [] },
+    "findings": { "added": [], "removed": [] },
+    "versionNotes": [],
+    "interpretation": {
+      "a": { "classifierVersion": "5", "origin": "stored" },
+      "b": { "classifierVersion": "5", "origin": "stored" }
+    }
+  }
+}

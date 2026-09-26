@@ -2,7 +2,8 @@
 
 Gatefold is an evidence-backed judgement layer for coding-agent harnesses.
 It reads a [`pfl`](docs/pfl-export-contract.md) JSON document — a
-`pfl report --json` aggregate or a `pfl export --json` full snapshot — and
+`pfl report --json` aggregate, a `pfl export --json` full snapshot, or a
+`pfl diff --json` A → B comparison — and
 emits descriptive claims, each with evidence, provenance, and confidence. It
 does not score or rank harnesses.
 

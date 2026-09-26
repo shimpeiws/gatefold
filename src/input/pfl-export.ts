@@ -155,6 +155,61 @@ export interface PflSnapshotData {
   };
 }
 
+/* ==== `pfl diff` payload: one A → B comparison (docs/v0.3-scope.md) ==== */
+
+export interface PflDiffStatusChange {
+  readonly id: string;
+  readonly from: string | null;
+  readonly to: string | null;
+}
+
+export interface PflDiffInterpretationSide {
+  readonly classifierVersion: string;
+  readonly origin: "stored" | "recomputed";
+}
+
+/**
+ * The comparison pfl already computed. A diff carries no element set, so
+ * relation endpoints and finding element IDs are opaque references: they are
+ * validated as strings, never resolved against a snapshot this document does
+ * not contain.
+ */
+export interface PflDiffData {
+  readonly runtime: string;
+  readonly observedSnapshotIdA: string;
+  readonly observedSnapshotIdB: string;
+  readonly resolvedSnapshotIdA: string;
+  readonly resolvedSnapshotIdB: string;
+  readonly structural: {
+    readonly added: number;
+    readonly removed: number;
+    readonly changed: number;
+    readonly addedIds: readonly string[];
+    readonly removedIds: readonly string[];
+    readonly changedIds: readonly string[];
+  };
+  readonly effective: {
+    readonly newlyEffective: number;
+    readonly noLongerEffective: number;
+    readonly activationChanged: number;
+    readonly statusChanges: readonly PflDiffStatusChange[];
+  };
+  readonly facetDeltas: Readonly<Record<string, number>>;
+  readonly relations: {
+    readonly added: readonly PflSnapshotRelation[];
+    readonly removed: readonly PflSnapshotRelation[];
+  };
+  readonly findings: {
+    readonly added: readonly PflFinding[];
+    readonly removed: readonly PflFinding[];
+  };
+  readonly versionNotes: readonly string[];
+  readonly interpretation: {
+    readonly a: PflDiffInterpretationSide;
+    readonly b: PflDiffInterpretationSide;
+  };
+}
+
 interface PflDocumentBase {
   readonly sourcePath: string;
   readonly pflVersion: string;
@@ -174,7 +229,16 @@ export interface PflExportDocument extends PflDocumentBase {
   readonly data: PflSnapshotData;
 }
 
-export type PflDocument = PflReportDocument | PflExportDocument;
+/** A `pfl diff --json` document (the v0.3 comparison input). */
+export interface PflDiffDocument extends PflDocumentBase {
+  readonly command: "diff";
+  readonly data: PflDiffData;
+}
+
+export type PflDocument =
+  | PflReportDocument
+  | PflExportDocument
+  | PflDiffDocument;
 
 /** @deprecated v0.2 name for a report document; use {@link PflReportDocument}. */
 export type PflExport = PflReportDocument;
@@ -198,6 +262,9 @@ const MAX_ELEMENTS = 10_000;
 const MAX_RELATIONS = 20_000;
 const MAX_METADATA_DEPTH = 12;
 const MAX_METADATA_NODES = 10_000;
+/** Ceilings that apply to the `diff` payload only (docs/v0.3-scope.md). */
+const MAX_DIFF_ARRAY = 10_000;
+const MAX_FACET_DELTA_KEYS = 1_000;
 /**
  * Character ceiling for strings displayed in or repeated across claims and
  * errors (ids, kinds, paths, messages, reasons, metadata leaves).
@@ -352,23 +419,21 @@ function parseDiagnostics(
 }
 
 /**
- * Shared `{ rule, message, elementIds }` list used by report and export.
- * `scalarLimit` caps displayed strings; the v0.2 report contract leaves them
- * uncapped, so only the export path passes one.
+ * Shared `{ rule, message, elementIds }` list used by report, export, and
+ * diff. `scalarLimit` caps displayed strings; the v0.2 report contract leaves
+ * them uncapped, so only the export and diff paths pass one.
  */
 function parseFindingList(
   value: unknown,
   scalarLimit?: number,
+  path = "data.findings",
 ): readonly PflFinding[] {
-  if (!Array.isArray(value)) throw shapeError("data.findings", "an array");
+  if (!Array.isArray(value)) throw shapeError(path, "an array");
   if (value.length > MAX_FINDINGS)
-    throw shapeError(
-      "data.findings",
-      `an array with at most ${MAX_FINDINGS} items`,
-    );
+    throw shapeError(path, `an array with at most ${MAX_FINDINGS} items`);
   let totalElementIds = 0;
   return value.map((item, index) => {
-    const at = `data.findings[${index}]`;
+    const at = `${path}[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
     const elementIds = item.elementIds;
     if (
@@ -383,7 +448,7 @@ function parseFindingList(
     totalElementIds += elementIds.length;
     if (totalElementIds > MAX_TOTAL_ELEMENT_IDS)
       throw shapeError(
-        "data.findings[*].elementIds",
+        `${path}[*].elementIds`,
         `at most ${MAX_TOTAL_ELEMENT_IDS} ids in total across all findings`,
       );
     if (scalarLimit !== undefined)
@@ -852,6 +917,16 @@ function parseSnapshotElement(
   return { id, observed, resolved, interpretation };
 }
 
+/** One `{ type, from, to }` relation, shared by export and diff. */
+function parseRelation(item: unknown, at: string): PflSnapshotRelation {
+  if (!isRecord(item)) throw shapeError(at, "an object");
+  return {
+    type: enumField(item, "type", RELATION_TYPES, `${at}.type`),
+    from: boundedStringField(item, "from", `${at}.from`),
+    to: boundedStringField(item, "to", `${at}.to`),
+  };
+}
+
 function parsePflSnapshotData(value: unknown): PflSnapshotData {
   if (!isRecord(value)) throw shapeError("data", "an object");
   const project = value.project;
@@ -955,21 +1030,18 @@ function parsePflSnapshotData(value: unknown): PflSnapshotData {
     ),
     relations: relations.map((item, index) => {
       const at = `data.relations[${index}]`;
-      if (!isRecord(item)) throw shapeError(at, "an object");
-      const type = enumField(item, "type", RELATION_TYPES, `${at}.type`);
-      const from = boundedStringField(item, "from", `${at}.from`);
-      const to = boundedStringField(item, "to", `${at}.to`);
-      if (!seenIds.has(from))
+      const relation = parseRelation(item, at);
+      if (!seenIds.has(relation.from))
         throw shapeError(
           `${at}.from`,
-          `an element id present in data.elements ('${from}' is unknown)`,
+          `an element id present in data.elements ('${relation.from}' is unknown)`,
         );
-      if (!seenIds.has(to))
+      if (!seenIds.has(relation.to))
         throw shapeError(
           `${at}.to`,
-          `an element id present in data.elements ('${to}' is unknown)`,
+          `an element id present in data.elements ('${relation.to}' is unknown)`,
         );
-      return { type, from, to };
+      return relation;
     }),
     findings: parseFindingList(value.findings, MAX_SCALAR_CHARS),
     interpretation: {
@@ -993,6 +1065,279 @@ function parsePflSnapshotData(value: unknown): PflSnapshotData {
         INTERPRETATION_ORIGINS,
         "data.interpretation.origin",
       ),
+    },
+  };
+}
+
+/** Required string or explicit null whose value must be one of `allowed`. */
+function nullableEnumField<T extends string>(
+  record: Record<string, unknown>,
+  key: string,
+  allowed: readonly T[],
+  path = key,
+): T | null {
+  const value = record[key];
+  if (value === null) return null;
+  if (typeof value !== "string" || !allowed.includes(value as T))
+    throw shapeError(
+      path,
+      `null or one of ${allowed.map((v) => `"${v}"`).join(", ")}`,
+    );
+  return value as T;
+}
+
+/**
+ * One structural ID list: bounded, non-empty bounded strings, unique within
+ * the list. Pairwise disjointness across the three lists is checked by the
+ * caller once all three are parsed.
+ */
+function parseDiffIdList(
+  record: Record<string, unknown>,
+  key: string,
+): string[] {
+  const path = `data.structural.${key}`;
+  const value = record[key];
+  if (!Array.isArray(value)) throw shapeError(path, "an array");
+  if (value.length > MAX_DIFF_ARRAY)
+    throw shapeError(path, `an array with at most ${MAX_DIFF_ARRAY} items`);
+  const seen = new Set<string>();
+  return value.map((item, index) => {
+    if (typeof item !== "string" || item.length === 0)
+      throw shapeError(`${path}[${index}]`, "a non-empty string");
+    if (item.length > MAX_SCALAR_CHARS)
+      throw shapeError(
+        `${path}[${index}]`,
+        `a string of at most ${MAX_SCALAR_CHARS} characters`,
+      );
+    if (seen.has(item))
+      throw shapeError(
+        `${path}[${index}]`,
+        `a unique element id ('${item}' repeats)`,
+      );
+    seen.add(item);
+    return item;
+  });
+}
+
+/**
+ * Facet names to signed integer deltas. Unknown facet names are tolerated:
+ * pfl's facet set is additive, and a delta carries no detail beyond the count.
+ */
+function parseFacetDeltas(value: unknown): Readonly<Record<string, number>> {
+  if (!isRecord(value)) throw shapeError("data.facetDeltas", "an object");
+  const keys = Object.keys(value);
+  if (keys.length > MAX_FACET_DELTA_KEYS)
+    throw shapeError(
+      "data.facetDeltas",
+      `an object with at most ${MAX_FACET_DELTA_KEYS} keys`,
+    );
+  const deltas = Object.create(null) as Record<string, number>;
+  for (const [facet, delta] of Object.entries(value)) {
+    if (facet.length > MAX_SCALAR_CHARS)
+      throw shapeError(
+        `data.facetDeltas.${facet.slice(0, 32)}…`,
+        `a facet name of at most ${MAX_SCALAR_CHARS} characters`,
+      );
+    if (typeof delta !== "number" || !Number.isSafeInteger(delta))
+      throw shapeError(`data.facetDeltas.${facet}`, "a safe integer");
+    deltas[facet] = delta;
+  }
+  return deltas;
+}
+
+/** One side's interpretation provenance: `{ classifierVersion, origin }`. */
+function parseDiffInterpretationSide(
+  value: unknown,
+  at: string,
+): PflDiffInterpretationSide {
+  if (!isRecord(value)) throw shapeError(at, "an object");
+  return {
+    // Copied into claim text per side: provenance cap.
+    classifierVersion: boundedStringField(
+      value,
+      "classifierVersion",
+      `${at}.classifierVersion`,
+      MAX_METADATA_CHARS,
+    ),
+    origin: enumField(value, "origin", INTERPRETATION_ORIGINS, `${at}.origin`),
+  };
+}
+
+function parseDiffData(value: unknown): PflDiffData {
+  if (!isRecord(value)) throw shapeError("data", "an object");
+  const structural = value.structural;
+  if (!isRecord(structural)) throw shapeError("data.structural", "an object");
+  const effective = value.effective;
+  if (!isRecord(effective)) throw shapeError("data.effective", "an object");
+  const relations = value.relations;
+  if (!isRecord(relations)) throw shapeError("data.relations", "an object");
+  const findings = value.findings;
+  if (!isRecord(findings)) throw shapeError("data.findings", "an object");
+  const versionNotes = value.versionNotes;
+  if (!Array.isArray(versionNotes))
+    throw shapeError("data.versionNotes", "an array");
+  if (versionNotes.length > MAX_DIFF_ARRAY)
+    throw shapeError(
+      "data.versionNotes",
+      `an array with at most ${MAX_DIFF_ARRAY} items`,
+    );
+  for (const [index, note] of versionNotes.entries()) {
+    if (typeof note !== "string")
+      throw shapeError(`data.versionNotes[${index}]`, "a string");
+    if (note.length > MAX_SCALAR_CHARS)
+      throw shapeError(
+        `data.versionNotes[${index}]`,
+        `a string of at most ${MAX_SCALAR_CHARS} characters`,
+      );
+  }
+  const interpretation = value.interpretation;
+  if (!isRecord(interpretation))
+    throw shapeError("data.interpretation", "an object");
+
+  const addedIds = parseDiffIdList(structural, "addedIds");
+  const removedIds = parseDiffIdList(structural, "removedIds");
+  const changedIds = parseDiffIdList(structural, "changedIds");
+  const disjointPairs: readonly (readonly [string, readonly string[]])[] = [
+    ["removedIds", removedIds],
+    ["changedIds", changedIds],
+  ];
+  for (const [otherName, other] of disjointPairs) {
+    const otherSet = new Set(other);
+    for (const id of addedIds)
+      if (otherSet.has(id))
+        throw shapeError(
+          "data.structural.addedIds",
+          `disjoint from ${otherName} ('${id}' appears in both)`,
+        );
+  }
+  const changedSet = new Set(changedIds);
+  for (const id of removedIds)
+    if (changedSet.has(id))
+      throw shapeError(
+        "data.structural.removedIds",
+        `disjoint from changedIds ('${id}' appears in both)`,
+      );
+  for (const [countKey, ids] of [
+    ["added", addedIds],
+    ["removed", removedIds],
+    ["changed", changedIds],
+  ] as const) {
+    const count = nonNegativeIntField(
+      structural,
+      countKey,
+      `data.structural.${countKey}`,
+    );
+    if (count !== ids.length)
+      throw shapeError(
+        `data.structural.${countKey}`,
+        `the length of ${countKey}Ids (${ids.length}), got ${count}`,
+      );
+  }
+
+  const statusChanges = effective.statusChanges;
+  if (!Array.isArray(statusChanges))
+    throw shapeError("data.effective.statusChanges", "an array");
+  if (statusChanges.length > MAX_DIFF_ARRAY)
+    throw shapeError(
+      "data.effective.statusChanges",
+      `an array with at most ${MAX_DIFF_ARRAY} items`,
+    );
+  const seenChangeIds = new Set<string>();
+  const parsedStatusChanges = statusChanges.map((item, index) => {
+    const at = `data.effective.statusChanges[${index}]`;
+    if (!isRecord(item)) throw shapeError(at, "an object");
+    const id = boundedStringField(item, "id", `${at}.id`);
+    if (seenChangeIds.has(id))
+      throw shapeError(`${at}.id`, `a unique element id ('${id}' repeats)`);
+    seenChangeIds.add(id);
+    return {
+      id,
+      from: nullableEnumField(item, "from", RESOLVED_STATUSES, `${at}.from`),
+      to: nullableEnumField(item, "to", RESOLVED_STATUSES, `${at}.to`),
+    };
+  });
+
+  const parseRelationSide = (side: unknown, path: string) => {
+    if (!Array.isArray(side)) throw shapeError(path, "an array");
+    if (side.length > MAX_DIFF_ARRAY)
+      throw shapeError(path, `an array with at most ${MAX_DIFF_ARRAY} items`);
+    return side.map((item, index) => parseRelation(item, `${path}[${index}]`));
+  };
+
+  return {
+    runtime: boundedStringField(value, "runtime", "data.runtime"),
+    // Snapshot ids are copied into claim text per claim: provenance cap.
+    observedSnapshotIdA: boundedStringField(
+      value,
+      "observedSnapshotIdA",
+      "data.observedSnapshotIdA",
+      MAX_METADATA_CHARS,
+    ),
+    observedSnapshotIdB: boundedStringField(
+      value,
+      "observedSnapshotIdB",
+      "data.observedSnapshotIdB",
+      MAX_METADATA_CHARS,
+    ),
+    resolvedSnapshotIdA: boundedStringField(
+      value,
+      "resolvedSnapshotIdA",
+      "data.resolvedSnapshotIdA",
+      MAX_METADATA_CHARS,
+    ),
+    resolvedSnapshotIdB: boundedStringField(
+      value,
+      "resolvedSnapshotIdB",
+      "data.resolvedSnapshotIdB",
+      MAX_METADATA_CHARS,
+    ),
+    structural: {
+      added: addedIds.length,
+      removed: removedIds.length,
+      changed: changedIds.length,
+      addedIds,
+      removedIds,
+      changedIds,
+    },
+    effective: {
+      newlyEffective: nonNegativeIntField(
+        effective,
+        "newlyEffective",
+        "data.effective.newlyEffective",
+      ),
+      noLongerEffective: nonNegativeIntField(
+        effective,
+        "noLongerEffective",
+        "data.effective.noLongerEffective",
+      ),
+      activationChanged: nonNegativeIntField(
+        effective,
+        "activationChanged",
+        "data.effective.activationChanged",
+      ),
+      statusChanges: parsedStatusChanges,
+    },
+    facetDeltas: parseFacetDeltas(value.facetDeltas),
+    relations: {
+      added: parseRelationSide(relations.added, "data.relations.added"),
+      removed: parseRelationSide(relations.removed, "data.relations.removed"),
+    },
+    findings: {
+      added: parseFindingList(
+        findings.added,
+        MAX_SCALAR_CHARS,
+        "data.findings.added",
+      ),
+      removed: parseFindingList(
+        findings.removed,
+        MAX_SCALAR_CHARS,
+        "data.findings.removed",
+      ),
+    },
+    versionNotes: versionNotes as string[],
+    interpretation: {
+      a: parseDiffInterpretationSide(interpretation.a, "data.interpretation.a"),
+      b: parseDiffInterpretationSide(interpretation.b, "data.interpretation.b"),
     },
   };
 }
@@ -1036,10 +1381,10 @@ export function parsePflExport(
       `unsupported pflVersion: ${pflVersion} (supported: >=1.0.0 <2.0.0)`,
     );
   const command = value.command;
-  if (command !== "report" && command !== "export")
+  if (command !== "report" && command !== "export" && command !== "diff")
     throw new PflExportError(
       "unsupported-command",
-      `unsupported pfl command document: ${String(command)} (supported: report, export)`,
+      `unsupported pfl command document: ${String(command)} (supported: report, export, diff)`,
     );
   if (value.ok !== true) {
     const error = isRecord(value.data) ? value.data.error : undefined;
@@ -1064,12 +1409,14 @@ export function parsePflExport(
     completeness: completeness as Completeness,
     diagnostics: parseDiagnostics(
       value.diagnostics,
-      command === "export" ? MAX_SCALAR_CHARS : undefined,
+      command === "report" ? undefined : MAX_SCALAR_CHARS,
     ),
   };
-  return command === "report"
-    ? { ...base, command, data: parseReportData(value.data) }
-    : { ...base, command, data: parsePflSnapshotData(value.data) };
+  if (command === "report")
+    return { ...base, command, data: parseReportData(value.data) };
+  if (command === "export")
+    return { ...base, command, data: parsePflSnapshotData(value.data) };
+  return { ...base, command, data: parseDiffData(value.data) };
 }
 
 class InputTooLargeError extends Error {}

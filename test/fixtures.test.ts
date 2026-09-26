@@ -54,10 +54,22 @@ const VALID_EXPORT_FIXTURES = [
 
 const INVALID_EXPORT_FIXTURES = [
   "export-failure-document.json",
-  "unsupported-command-diff.json",
   "export-invalid-shape.json",
   "export-mismatched-join.json",
   "export-wrong-enum.json",
+];
+
+const VALID_DIFF_FIXTURES = [
+  "valid-diff.json",
+  "valid-diff-empty.json",
+  "valid-diff-partial.json",
+];
+
+const INVALID_DIFF_FIXTURES = [
+  "diff-failure-document.json",
+  "diff-invalid-shape.json",
+  "diff-count-mismatch.json",
+  "diff-bad-status.json",
 ];
 
 describe("pfl export contract fixtures", () => {
@@ -178,6 +190,8 @@ describe("pfl export contract fixtures", () => {
         ...INVALID_FIXTURES,
         ...VALID_EXPORT_FIXTURES,
         ...INVALID_EXPORT_FIXTURES,
+        ...VALID_DIFF_FIXTURES,
+        ...INVALID_DIFF_FIXTURES,
       ].sort(),
     ).toEqual(onDisk.sort());
   });
@@ -318,9 +332,6 @@ describe("pfl export snapshot fixtures", () => {
 
   it("invalid export fixtures violate the contract for distinct reasons", async () => {
     expect((await readJson("export-failure-document.json")).ok).toBe(false);
-    expect((await readJson("unsupported-command-diff.json")).command).toBe(
-      "diff",
-    );
     const shape = (await readJson("export-invalid-shape.json")).data as Record<
       string,
       any
@@ -335,6 +346,180 @@ describe("pfl export snapshot fixtures", () => {
     >;
     expect(OBSERVED_STATUSES).not.toContain(
       badEnum.elements[0].observed.status,
+    );
+  });
+});
+
+describe("pfl diff fixtures", () => {
+  const RESOLVED_STATUSES = [
+    "effective",
+    "shadowed",
+    "conditional",
+    "unresolved",
+    "unknown",
+  ];
+  const RELATION_TYPES = [
+    "shadows",
+    "overrides",
+    "accumulates-with",
+    "contains",
+    "discovered-from",
+    "resolves-to",
+    "applies-to",
+  ];
+
+  it("valid diff fixtures satisfy the v0.3 diff contract", async () => {
+    for (const name of VALID_DIFF_FIXTURES) {
+      const doc = await readJson(name);
+      expect(inSupportedRange(doc.pflVersion), name).toBe(true);
+      expect(doc.command, name).toBe("diff");
+      expect(doc.ok, name).toBe(true);
+      expect(["complete", "partial", "unknown"], name).toContain(
+        doc.completeness,
+      );
+      const data = doc.data as Record<string, any>;
+      expect(typeof data.runtime, name).toBe("string");
+      for (const key of [
+        "observedSnapshotIdA",
+        "observedSnapshotIdB",
+        "resolvedSnapshotIdA",
+        "resolvedSnapshotIdB",
+      ]) {
+        expect(typeof data[key], `${name} data.${key}`).toBe("string");
+      }
+      const structural = data.structural as Record<string, any>;
+      for (const [countKey, idsKey] of [
+        ["added", "addedIds"],
+        ["removed", "removedIds"],
+        ["changed", "changedIds"],
+      ]) {
+        expect(
+          isNonNegativeInteger(structural[countKey]),
+          `${name} ${countKey}`,
+        ).toBe(true);
+        expect(structural[countKey], `${name} count/list`).toBe(
+          structural[idsKey].length,
+        );
+      }
+      const effective = data.effective as Record<string, any>;
+      for (const key of [
+        "newlyEffective",
+        "noLongerEffective",
+        "activationChanged",
+      ]) {
+        expect(
+          isNonNegativeInteger(effective[key]),
+          `${name} effective.${key}`,
+        ).toBe(true);
+      }
+      for (const change of effective.statusChanges as Record<string, any>[]) {
+        expect(typeof change.id, name).toBe("string");
+        expect(
+          change.from === null || RESOLVED_STATUSES.includes(change.from),
+          `${name} statusChange.from`,
+        ).toBe(true);
+        expect(
+          change.to === null || RESOLVED_STATUSES.includes(change.to),
+          `${name} statusChange.to`,
+        ).toBe(true);
+      }
+      for (const [facet, delta] of Object.entries(
+        data.facetDeltas as Record<string, unknown>,
+      )) {
+        expect(typeof facet, name).toBe("string");
+        expect(
+          Number.isSafeInteger(delta),
+          `${name} facetDeltas.${facet}`,
+        ).toBe(true);
+      }
+      for (const side of ["added", "removed"] as const) {
+        for (const relation of data.relations[side] as Record<string, any>[]) {
+          expect(RELATION_TYPES, `${name} relations.${side}`).toContain(
+            relation.type,
+          );
+        }
+        for (const finding of data.findings[side] as Record<string, any>[]) {
+          expect(typeof finding.rule, name).toBe("string");
+          expect(Array.isArray(finding.elementIds), name).toBe(true);
+        }
+      }
+      for (const note of data.versionNotes as unknown[]) {
+        expect(typeof note, name).toBe("string");
+      }
+      for (const side of ["a", "b"] as const) {
+        const interp = data.interpretation[side] as Record<string, any>;
+        expect(typeof interp.classifierVersion, name).toBe("string");
+        expect(
+          ["stored", "recomputed"],
+          `${name} interpretation.${side}`,
+        ).toContain(interp.origin);
+      }
+    }
+  });
+
+  it("non-empty diff fixture exercises every comparison section", async () => {
+    const doc = await readJson("valid-diff.json");
+    const data = doc.data as Record<string, any>;
+    expect(data.structural.added).toBeGreaterThan(0);
+    expect(data.structural.removed).toBeGreaterThan(0);
+    expect(data.structural.changed).toBeGreaterThan(0);
+    expect(data.effective.statusChanges.length).toBeGreaterThan(0);
+    expect(
+      Object.values(data.facetDeltas as Record<string, number>).some(
+        (delta) => delta !== 0,
+      ),
+    ).toBe(true);
+    expect(data.relations.added.length).toBeGreaterThan(0);
+    expect(data.relations.removed.length).toBeGreaterThan(0);
+    expect(data.findings.added.length).toBeGreaterThan(0);
+    expect(data.findings.removed.length).toBeGreaterThan(0);
+    expect(data.versionNotes.length).toBeGreaterThan(0);
+    expect(data.interpretation.a.origin).toBe("stored");
+    expect(data.interpretation.b.origin).toBe("recomputed");
+  });
+
+  it("partial diff fixture exercises diagnostics and unknown fields", async () => {
+    const doc = await readJson("valid-diff-partial.json");
+    expect(doc.completeness).toBe("partial");
+    expect((doc.diagnostics as unknown[]).length).toBeGreaterThan(0);
+    expect(doc.futureEnvelopeField).toBeDefined();
+    const data = doc.data as Record<string, any>;
+    expect(data.futureDataField).toBeDefined();
+    // Facets are additive: an unknown facet delta is part of the contract.
+    expect((data.facetDeltas as Record<string, number>)["future-facet"]).toBe(
+      -3,
+    );
+  });
+
+  it("empty diff fixture carries zero contents in required arrays", async () => {
+    const doc = await readJson("valid-diff-empty.json");
+    const data = doc.data as Record<string, any>;
+    expect(data.structural.added).toBe(0);
+    expect(data.structural.addedIds).toEqual([]);
+    expect(data.effective.statusChanges).toEqual([]);
+    expect(data.relations).toEqual({ added: [], removed: [] });
+    expect(data.findings).toEqual({ added: [], removed: [] });
+    expect(data.versionNotes).toEqual([]);
+  });
+
+  it("invalid diff fixtures violate the contract for distinct reasons", async () => {
+    expect((await readJson("diff-failure-document.json")).ok).toBe(false);
+    const shape = (await readJson("diff-invalid-shape.json")).data as Record<
+      string,
+      any
+    >;
+    expect(shape.structural === undefined).toBe(true);
+    const mismatch = (await readJson("diff-count-mismatch.json"))
+      .data as Record<string, any>;
+    expect(mismatch.structural.added).not.toBe(
+      mismatch.structural.addedIds.length,
+    );
+    const badStatus = (await readJson("diff-bad-status.json")).data as Record<
+      string,
+      any
+    >;
+    expect(RESOLVED_STATUSES).not.toContain(
+      badStatus.effective.statusChanges[0].from,
     );
   });
 });

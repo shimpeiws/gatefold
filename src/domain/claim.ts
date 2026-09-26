@@ -30,7 +30,7 @@ export interface AnalysisResult {
   /** Identifies which input document produced this result (v0.3). */
   readonly source: {
     readonly pflVersion: string;
-    readonly command: "report" | "export";
+    readonly command: "report" | "export" | "diff";
   };
   readonly claims: readonly Claim[];
 }
