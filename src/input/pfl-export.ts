@@ -262,6 +262,7 @@ const MAX_ELEMENTS = 10_000;
 const MAX_RELATIONS = 20_000;
 const MAX_METADATA_DEPTH = 12;
 const MAX_METADATA_NODES = 10_000;
+const MAX_ELEMENT_FACETS = 1_000;
 /** Ceilings that apply to the `diff` payload only (docs/v0.3-scope.md). */
 const MAX_DIFF_ARRAY = 10_000;
 const MAX_FACET_DELTA_KEYS = 1_000;
@@ -838,10 +839,12 @@ function parseSnapshotInterpretation(
 ): PflSnapshotInterpretation {
   if (!isRecord(value)) throw shapeError(at, "an object");
   const facets = value.facets;
-  if (
-    !Array.isArray(facets) ||
-    facets.some((facet) => typeof facet !== "string" || facet.length === 0)
-  )
+  if (!Array.isArray(facets) || facets.length > MAX_ELEMENT_FACETS)
+    throw shapeError(
+      `${at}.facets`,
+      `an array of at most ${MAX_ELEMENT_FACETS} items`,
+    );
+  if (facets.some((facet) => typeof facet !== "string" || facet.length === 0))
     throw shapeError(`${at}.facets`, "an array of non-empty strings");
   for (const [index, facet] of facets.entries()) {
     if ((facet as string).length > MAX_SCALAR_CHARS)

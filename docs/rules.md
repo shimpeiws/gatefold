@@ -26,6 +26,9 @@ confidence per `schema/claim-result.v2.json`.
 | `export-described` | Which runtime, adapter, and project the export snapshot describes. | 1.0 |
 | `export-snapshot-contents` | How many joined elements, relations, and findings the export carries, and how many elements carry each nullable layer. | 1.0 when `completeness` is `complete`, else 0.8 |
 | `export-interpretation-provenance` | Which classifier produced the export's interpretation, with which origin, resolution semantics version, and resolution confidence. | 1.0 |
+| `element-observed-state` | Each element's observed layer: id, redacted source path when present, native kind/origin/scope, status, and reason when present. The claim cites only fields present in the document; `metadata` and `inspectability` are never expanded into prose. | 1.0 |
+| `element-resolved-state` | Each element's resolved layer, emitted only when `resolved` is non-null: status, activation, applicability, strategy, and resolution reason when present. `effective` is phrased as potentially effective in the static environment — never as proof an agent used the element. A null layer emits nothing; it is not a negative finding. | 1.0 |
+| `element-interpretation` | Each element's derived interpretation, emitted only when `interpretation` is non-null: assigned facets, classification confidence, and classification reason. The quoted confidence is pfl's classification confidence cited as data — the claim's own confidence reflects field support, not the classifier's estimate. | 1.0 |
 | `diagnostic-reported` | Each `warning`/`error` diagnostic the export carries: its code, message, and path. Emitted only for warning/error diagnostics. | 1.0 |
 | `completeness-reported` | When the export is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete exports. | 1.0 |
 

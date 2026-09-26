@@ -79,7 +79,7 @@ Each `elements` item joins three layers on one id:
 | `id` | string | The joined element id; unique within `elements`. |
 | `observed` | object | `{ id, native: { kind: string, origin: "project" \| "user" \| "managed" \| "plugin" \| "builtin" \| "unknown", scope: string \| null }, source: { path?: string, digest?: string, sizeBytes?: number, symlink?: boolean }, inspectability: "observable" \| "known-runtime-provided" \| "opaque", metadata: object, status: "observed" \| "unreadable" \| "unsupported" \| "skipped" \| "unknown", reason?: "symlink-not-followed" \| "hardlink-not-followed" \| "non-regular-file-not-opened" \| "limit-exceeded" \| "unsupported-by-adapter" \| "unreadable" \| "unknown" }`. `source` mirrors pfl's `ObservedElementSource`: `path` and `digest` are bounded strings, `sizeBytes` a non-negative safe integer, `symlink` a boolean; all are optional and `path` arrives already redacted by pfl. `observed.id` must equal the element id. |
 | `resolved` | object \| null | Required key. When non-null: `{ id, status: "effective" \| "shadowed" \| "conditional" \| "unresolved" \| "unknown", applicability?: { type: "global" \| "project" \| "directory-subtree" \| "tool-event" \| "config-rule" \| "runtime-defined" \| "unknown", target?: string }, activation: "always" \| "conditional" \| "on-demand" \| "event-driven" \| "unknown", resolution: { strategy: "override" \| "accumulate" \| "available" \| "policy" \| "event-pipeline" \| "runtime-defined" \| "unknown", reason?: string } }`. `resolved.id` must equal the element id. |
-| `interpretation` | object \| null | Required key. When non-null: `{ elementId, facets: string[], confidence: "high" \| "medium" \| "unknown", reason: string }`. Facets are additive in pfl's model, so any non-empty string is accepted. `elementId` must equal the element id. |
+| `interpretation` | object \| null | Required key. When non-null: `{ elementId, facets: string[], confidence: "high" \| "medium" \| "unknown", reason: string }`. Facets are additive in pfl's model, so any non-empty string is accepted; at most 1,000 facets per element. `elementId` must equal the element id. |
 
 A mismatched `observed.id`, `resolved.id`, or `interpretation.elementId`, a
 duplicate element id, or a relation endpoint naming an unknown element id is
@@ -96,6 +96,14 @@ capped at 4,096 characters; the provenance-repeated fields
 (`snapshot.observedSnapshotId`, `snapshot.resolvedSnapshotId`,
 `interpretation.classifier.version`) are capped at 1,024 characters each
 since they repeat per claim.
+
+Analysis output is also bounded: a document whose claims would exceed 50,000
+emitted claims or 100,000 total evidence references is rejected with an
+`invalid-shape` error rather than truncated. Per-element claims
+(`element-observed-state`, `element-resolved-state`, `element-interpretation`)
+cite up to about fifteen pointers per element, so an export that holds close
+to the 10,000-element ceiling with every layer populated can cross the
+evidence ceiling even though each individual input limit is satisfied.
 
 `observed.source.path` values are data, never instructions: Gatefold records
 them verbatim (including redacted forms) and sanitizes them if they are later
@@ -156,8 +164,12 @@ Claim evidence `pointer` values (JSON Pointer, RFC 6901) may reference:
   `/data/findings/<n>`, `/data/findings/<n>/elementIds/<m>`,
   `/data/project/displayName`)
 
-`elementId` on an evidence item names an element id cited by a finding
-(`/data/findings/<n>/elementIds/<m>`), not a path inside this repository.
+`elementId` on an evidence item names the element id the evidence is about —
+for example an element id cited by a finding
+(`/data/findings/<n>/elementIds/<m>`) or the element described by an
+`element-*` claim (`/data/elements/<n>`) — not a path inside this repository.
+It carries the raw document value so JSON consumers can correlate claims back
+to elements; only display paths escape it.
 
 ## Limits
 
@@ -168,7 +180,8 @@ by size before reading, and pipes are cut off at the limit), more than 1,000 `di
 10,000 `elementIds` in total across all findings, or more than
 1,000 `byFacet` keys are rejected with `invalid-shape` errors. Export
 documents additionally reject more than 10,000 `elements`, more than
-20,000 `relations`, metadata nested more than 12 levels, more than
+20,000 `relations`, more than 1,000 `interpretation.facets` per element,
+metadata nested more than 12 levels, more than
 10,000 metadata nodes per element, any scalar string longer than
 4,096 characters — including `diagnostics` `code`/`message`/`path`, which the
 report reader leaves uncapped for v0.2 compatibility. Diff
@@ -224,6 +237,7 @@ Committed fixtures under `test/fixtures/pfl-export/`:
 | `valid-export.json` | accepted; representative full snapshot with relations and findings |
 | `valid-export-empty.json` | accepted; empty elements/relations/findings, null runtime version |
 | `valid-export-partial.json` | accepted; `partial` completeness, diagnostics, nullable layers, and unknown additive fields |
+| `valid-export-layers.json` | accepted; elements covering effective, shadowed, and conditional resolved layers, an unreadable observation, empty facets, and null resolved/interpretation layers |
 | `export-failure-document.json` | rejected (`ok: false` export) |
 | `export-invalid-shape.json` | rejected (missing `data.snapshot`) |
 | `export-mismatched-join.json` | rejected (`resolved.id` differs from element id) |

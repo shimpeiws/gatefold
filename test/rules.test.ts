@@ -452,7 +452,7 @@ describe("descriptive rules", () => {
       c.claim.includes("finding"),
     );
     expect(finding.claim).toContain("\\u202e");
-    expect(finding.claim).not.toContain("‮");
+    expect(finding.claim).not.toContain("\u202e");
   });
 
   it("every registered rule id is documented in docs/rules.md", async () => {
@@ -605,6 +605,250 @@ describe("export snapshot rules", () => {
       "/completeness",
       "/diagnostics",
     ]);
+  });
+
+  it("describes each element's observed layer with cited fields only", async () => {
+    const claims = byRule(
+      analyze(await load("valid-export-layers.json")),
+      "element-observed-state",
+    );
+    expect(claims).toHaveLength(5);
+    expect(claims[0].claim).toBe(
+      "pfl observed element 'el_0fc92802d8f84176' at 'CLAUDE.md' as kind 'instructions' from origin 'project' (scope 'project'); observed status is 'observed'.",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/0/id",
+      "/data/elements/0/observed/native/kind",
+      "/data/elements/0/observed/native/origin",
+      "/data/elements/0/observed/source/path",
+      "/data/elements/0/observed/native/scope",
+      "/data/elements/0/observed/status",
+    ]);
+    expect(
+      claims[0].evidence.every((e) => e.elementId === "el_0fc92802d8f84176"),
+    ).toBe(true);
+    const unreadable = claims[3];
+    expect(unreadable.claim).toContain(
+      "observed status is 'unreadable' ('unreadable')",
+    );
+    expect(unreadable.evidence.map((e) => e.pointer)).toContain(
+      "/data/elements/3/observed/reason",
+    );
+    const skipped = claims[4];
+    expect(skipped.claim).toContain(
+      "observed status is 'skipped' ('symlink-not-followed')",
+    );
+    for (const claim of claims) expect(claim.confidence).toBe(1);
+  });
+
+  it("describes resolved layers, skips null layers, and qualifies 'effective'", async () => {
+    const claims = byRule(
+      analyze(await load("valid-export-layers.json")),
+      "element-resolved-state",
+    );
+    expect(claims).toHaveLength(3);
+    expect(claims[0].claim).toBe(
+      "The resolved layer marks element 'el_0fc92802d8f84176' as 'effective' — potentially effective in the static environment, not evidence that an agent used it, activation 'always', strategy 'accumulate', applicable to 'project'; reason: accumulates with the other layers.",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/0/id",
+      "/data/elements/0/resolved/status",
+      "/data/elements/0/resolved/activation",
+      "/data/elements/0/resolved/resolution/strategy",
+      "/data/elements/0/resolved/applicability",
+      "/data/elements/0/resolved/resolution/reason",
+    ]);
+    expect(claims[1].claim).toContain("as 'shadowed'");
+    expect(claims[1].claim).not.toContain("potentially effective");
+    const conditional = claims[2];
+    expect(conditional.claim).toContain("as 'conditional'");
+    expect(conditional.claim).toContain("applicable to 'tool-event' ('Bash')");
+    const elementIds = claims.map((claim) => claim.evidence[0].elementId);
+    expect(elementIds).not.toContain("el_3dd48ff23ccabb12");
+    expect(elementIds).not.toContain("el_9deadbeef00112233");
+  });
+
+  it("describes interpretations without treating a null layer as a negative finding", async () => {
+    const claims = byRule(
+      analyze(await load("valid-export-layers.json")),
+      "element-interpretation",
+    );
+    expect(claims).toHaveLength(2);
+    expect(claims[0].claim).toBe(
+      "The classifier assigned element 'el_0fc92802d8f84176' facet(s) 'instructions' with confidence 'medium': defines agent behavior.",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/0/id",
+      "/data/elements/0/interpretation/facets",
+      "/data/elements/0/interpretation/confidence",
+      "/data/elements/0/interpretation/reason",
+    ]);
+    // 'medium' is the cited classification confidence, not the claim's own
+    // confidence: the cited fields fully support this statement.
+    expect(claims[0].confidence).toBe(1);
+    expect(claims[1].claim).toBe(
+      "The classifier recorded no facets for element 'el_2cc38ee12bb9aa01' with confidence 'unknown': no facet matched this element.",
+    );
+    expect(claims[1].evidence.map((e) => e.pointer)).toEqual([
+      "/data/elements/2/id",
+      "/data/elements/2/interpretation/facets",
+      "/data/elements/2/interpretation/confidence",
+      "/data/elements/2/interpretation/reason",
+    ]);
+    expect(
+      claims.every(
+        (claim) => claim.claim.includes("no interpretation") === false,
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps element claims deterministic, sanitized, and document-local", async () => {
+    const input = await load("valid-export-layers.json");
+    const result = analyze(input);
+    const elementClaims = result.claims.filter((claim) =>
+      /element-(observed|resolved|interpretation)/.test(claim.ruleId),
+    );
+    expect(elementClaims.length).toBeGreaterThan(0);
+    for (const claim of elementClaims) {
+      expect(claim.claim).toBe(sanitizeText(claim.claim));
+      expect(claim.evidence.length).toBeGreaterThan(0);
+      for (const evidence of claim.evidence) {
+        expect(evidence.pointer).toMatch(/^\/data\/elements\/\d+\//);
+        expect(evidence.elementId).toBeTruthy();
+      }
+    }
+  });
+
+  it("escapes a hostile element id in human-readable evidence output", async () => {
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "export",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        project: { id: "p", displayName: "p" },
+        runtime: {
+          id: "claude-code",
+          version: null,
+          adapter: {
+            id: "claude-code",
+            version: "0.1.1",
+            runtimeCompatibility: "verified",
+          },
+        },
+        snapshot: {
+          observedSnapshotId: "obs_1",
+          resolvedSnapshotId: "res_1",
+          capturedAt: "t",
+          schemaVersion: "1",
+        },
+        resolution: { semanticsVersion: "2", confidence: "verified" },
+        elements: [
+          {
+            id: "el_\x1b[2J\u202eevil",
+            observed: {
+              id: "el_\x1b[2J\u202eevil",
+              native: { kind: "instructions", origin: "project", scope: null },
+              source: {},
+              inspectability: "observable",
+              metadata: {},
+              status: "observed",
+            },
+            resolved: null,
+            interpretation: null,
+          },
+        ],
+        relations: [],
+        findings: [],
+        interpretation: {
+          classifier: { id: "pfl-native", version: "5" },
+          origin: "stored",
+        },
+      },
+    };
+    const result = analyze(parsePflExport(doc, "inline"));
+    const { formatHuman } = await import("../src/output/human.js");
+    const rendered = formatHuman(result);
+    expect(rendered).not.toContain("\x1b[2J");
+    expect(rendered).not.toContain("\u202e");
+    expect(rendered).toContain("\\u001b");
+    // JSON output keeps the raw id for machine correlation; only the
+    // human renderer escapes it.
+    const elementClaims = result.claims.filter((claim) =>
+      claim.ruleId.startsWith("element-"),
+    );
+    expect(
+      elementClaims.every((claim) =>
+        claim.evidence.every((e) => e.elementId === "el_\x1b[2J\u202eevil"),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a document whose claims would exceed the evidence ceiling", () => {
+    const many = Array.from({ length: 8_000 }, (_, i) => {
+      const id = `el_${i}`;
+      return {
+        id,
+        observed: {
+          id,
+          native: { kind: "instructions", origin: "project", scope: "project" },
+          source: { path: `doc-${i}.md` },
+          inspectability: "observable",
+          metadata: {},
+          status: "observed",
+        },
+        resolved: {
+          id,
+          status: "effective",
+          applicability: { type: "project" },
+          activation: "always",
+          resolution: { strategy: "accumulate", reason: "r" },
+        },
+        interpretation: {
+          elementId: id,
+          facets: ["instructions"],
+          confidence: "high",
+          reason: "r",
+        },
+      };
+    });
+    const doc = {
+      pflVersion: "1.0.0",
+      command: "export",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        project: { id: "p", displayName: "p" },
+        runtime: {
+          id: "claude-code",
+          version: null,
+          adapter: {
+            id: "claude-code",
+            version: "0.1.1",
+            runtimeCompatibility: "verified",
+          },
+        },
+        snapshot: {
+          observedSnapshotId: "obs_1",
+          resolvedSnapshotId: "res_1",
+          capturedAt: "t",
+          schemaVersion: "1",
+        },
+        resolution: { semanticsVersion: "2", confidence: "verified" },
+        elements: many,
+        relations: [],
+        findings: [],
+        interpretation: {
+          classifier: { id: "pfl-native", version: "5" },
+          origin: "stored",
+        },
+      },
+    };
+    expect(() => analyze(parsePflExport(doc, "inline"))).toThrow(
+      /evidence references|claim ceiling|invalid-shape/,
+    );
   });
 
   it("sanitizes untrusted strings inside claim prose", () => {

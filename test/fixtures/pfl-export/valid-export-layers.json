@@ -1,0 +1,187 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": {
+      "id": "path-0123456789abcdef",
+      "displayName": "owner/repo"
+    },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.1.272",
+      "adapter": {
+        "id": "claude-code",
+        "version": "0.1.1",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs_0123456789ab",
+      "resolvedSnapshotId": "res_0123456789ab",
+      "capturedAt": "2026-09-18T00:00:00.000Z",
+      "schemaVersion": "1"
+    },
+    "resolution": {
+      "semanticsVersion": "2",
+      "confidence": "verified"
+    },
+    "elements": [
+      {
+        "id": "el_0fc92802d8f84176",
+        "observed": {
+          "id": "el_0fc92802d8f84176",
+          "native": {
+            "kind": "instructions",
+            "origin": "project",
+            "scope": "project"
+          },
+          "source": {
+            "path": "CLAUDE.md",
+            "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "sizeBytes": 12
+          },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el_0fc92802d8f84176",
+          "status": "effective",
+          "applicability": {
+            "type": "project"
+          },
+          "activation": "always",
+          "resolution": {
+            "strategy": "accumulate",
+            "reason": "accumulates with the other layers"
+          }
+        },
+        "interpretation": {
+          "elementId": "el_0fc92802d8f84176",
+          "facets": ["instructions"],
+          "confidence": "medium",
+          "reason": "defines agent behavior"
+        }
+      },
+      {
+        "id": "el_1ab29cd03ef45678",
+        "observed": {
+          "id": "el_1ab29cd03ef45678",
+          "native": {
+            "kind": "mcp-server",
+            "origin": "project",
+            "scope": null
+          },
+          "source": {
+            "path": ".mcp.json",
+            "sizeBytes": 340
+          },
+          "inspectability": "observable",
+          "metadata": {
+            "transport": "stdio"
+          },
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el_1ab29cd03ef45678",
+          "status": "shadowed",
+          "activation": "on-demand",
+          "resolution": {
+            "strategy": "override",
+            "reason": "a managed entry shadows this server"
+          }
+        },
+        "interpretation": null
+      },
+      {
+        "id": "el_2cc38ee12bb9aa01",
+        "observed": {
+          "id": "el_2cc38ee12bb9aa01",
+          "native": {
+            "kind": "skill",
+            "origin": "user",
+            "scope": "user"
+          },
+          "source": {
+            "path": "~/.claude/skills/deploy/SKILL.md",
+            "sizeBytes": 820
+          },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el_2cc38ee12bb9aa01",
+          "status": "conditional",
+          "applicability": {
+            "type": "tool-event",
+            "target": "Bash"
+          },
+          "activation": "conditional",
+          "resolution": {
+            "strategy": "policy"
+          }
+        },
+        "interpretation": {
+          "elementId": "el_2cc38ee12bb9aa01",
+          "facets": [],
+          "confidence": "unknown",
+          "reason": "no facet matched this element"
+        }
+      },
+      {
+        "id": "el_3dd48ff23ccabb12",
+        "observed": {
+          "id": "el_3dd48ff23ccabb12",
+          "native": {
+            "kind": "instructions",
+            "origin": "project",
+            "scope": null
+          },
+          "source": {
+            "path": "AGENTS.md"
+          },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "unreadable",
+          "reason": "unreadable"
+        },
+        "resolved": null,
+        "interpretation": null
+      },
+      {
+        "id": "el_9deadbeef00112233",
+        "observed": {
+          "id": "el_9deadbeef00112233",
+          "native": {
+            "kind": "hook",
+            "origin": "user",
+            "scope": "user"
+          },
+          "source": {
+            "path": "~/.claude/hooks/pre.sh",
+            "symlink": true
+          },
+          "inspectability": "opaque",
+          "metadata": {},
+          "status": "skipped",
+          "reason": "symlink-not-followed"
+        },
+        "resolved": null,
+        "interpretation": null
+      }
+    ],
+    "relations": [],
+    "findings": [],
+    "interpretation": {
+      "classifier": {
+        "id": "pfl-native",
+        "version": "5"
+      },
+      "origin": "stored"
+    }
+  }
+}
