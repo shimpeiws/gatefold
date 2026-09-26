@@ -23,7 +23,7 @@ function byRule(result: { claims: readonly Claim[] }, ruleId: string) {
 }
 
 const ALLOWED_POINTER =
-  /^(|\/data(\/|$)|\/pflVersion|\/completeness|\/diagnostics(\/\d+)?$)/;
+  /^(?:|\/data(?:\/.*)?|\/pflVersion|\/completeness|\/diagnostics(?:\/\d+)?)$/;
 
 describe("descriptive rules", () => {
   it("emits only schema-valid claims for every valid fixture", async () => {
@@ -1113,6 +1113,46 @@ describe("diff comparison rules", () => {
     "valid-diff-partial.json",
   ];
 
+  function diffDoc(data: Record<string, unknown>) {
+    return {
+      pflVersion: "1.0.0",
+      command: "diff",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        runtime: "claude-code",
+        observedSnapshotIdA: "obs_a",
+        observedSnapshotIdB: "obs_b",
+        resolvedSnapshotIdA: "res_a",
+        resolvedSnapshotIdB: "res_b",
+        structural: {
+          added: 0,
+          removed: 0,
+          changed: 0,
+          addedIds: [],
+          removedIds: [],
+          changedIds: [],
+        },
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [],
+        },
+        facetDeltas: {},
+        relations: { added: [], removed: [] },
+        findings: { added: [], removed: [] },
+        versionNotes: [],
+        interpretation: {
+          a: { classifierVersion: "5", origin: "stored" },
+          b: { classifierVersion: "5", origin: "stored" },
+        },
+        ...data,
+      },
+    };
+  }
+
   it("emits only schema-valid claims for every valid diff fixture", async () => {
     for (const name of DIFF_FIXTURES) {
       const result = analyze(await load(name));
@@ -1257,6 +1297,370 @@ describe("diff comparison rules", () => {
     expect(described.claim).toContain("\\u2028");
     const [prov] = byRule(result, "diff-interpretation-provenance");
     expect(prov.claim).toContain("v\\u007f5");
+  });
+
+  it("describes added, removed, and changed element ids with direction", async () => {
+    const result = analyze(await load("valid-diff.json"));
+    const [added] = byRule(result, "diff-element-added");
+    expect(added.claim).toBe(
+      "Element 'el_added' is present in snapshot B with no counterpart in snapshot A.",
+    );
+    expect(added.evidence).toEqual([
+      { pointer: "/data/structural/addedIds/0", elementId: "el_added" },
+    ]);
+    const [removed] = byRule(result, "diff-element-removed");
+    expect(removed.claim).toBe(
+      "Element 'el_removed' was present in snapshot A and is absent from snapshot B.",
+    );
+    const [changed] = byRule(result, "diff-element-changed");
+    expect(changed.claim).toContain("'el_changed'");
+    expect(changed.claim).toContain("present in both snapshots");
+    expect(changed.claim).not.toMatch(/improve|regress|better|worse/i);
+  });
+
+  it("reports empty structural sections without claiming harness identity", async () => {
+    const result = analyze(await load("valid-diff-empty.json"));
+    const [added] = byRule(result, "diff-element-added");
+    expect(added.claim).toBe(
+      "The diff reports no elements present only in snapshot B.",
+    );
+    expect(added.evidence).toEqual([{ pointer: "/data/structural/added" }]);
+    expect(byRule(result, "diff-element-removed")[0].evidence[0].pointer).toBe(
+      "/data/structural/removed",
+    );
+    expect(byRule(result, "diff-element-changed")[0].evidence[0].pointer).toBe(
+      "/data/structural/changed",
+    );
+    for (const claim of result.claims)
+      expect(claim.claim).not.toMatch(
+        /identical|same harness|unchanged harness/i,
+      );
+  });
+
+  it("reports aggregate effective totals with the inclusion caveat", async () => {
+    const [claim] = byRule(
+      analyze(await load("valid-diff.json")),
+      "diff-effective-totals",
+    );
+    expect(claim.claim).toContain("2 element(s) became effective");
+    expect(claim.claim).toContain("1 stopped being effective");
+    expect(claim.claim).toContain("potentially effective");
+    expect(claim.claim).toContain(
+      "need not equal the number of status-change records",
+    );
+  });
+
+  it("describes status transitions and links them to changed ids only when listed", async () => {
+    const claims = byRule(
+      analyze(await load("valid-diff.json")),
+      "diff-status-transition",
+    );
+    expect(claims).toHaveLength(2);
+    expect(claims[0].claim).toBe(
+      "Element 'el_changed' resolved status went from 'shadowed' in A to 'effective' in B; it is also listed among the changed element ids.",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/effective/statusChanges/0/id",
+      "/data/effective/statusChanges/0/from",
+      "/data/effective/statusChanges/0/to",
+      "/data/structural/changedIds/0",
+    ]);
+    expect(claims[1].claim).toBe(
+      "Element 'el_other' resolved status went from 'effective' in A to 'unresolved' in B.",
+    );
+    expect(claims[1].evidence.map((e) => e.pointer)).toEqual([
+      "/data/effective/statusChanges/1/id",
+      "/data/effective/statusChanges/1/from",
+      "/data/effective/statusChanges/1/to",
+    ]);
+  });
+
+  it("phrases null status-change sides as absence, not a negative fact", () => {
+    const doc = diffDoc({
+      structural: {
+        added: 1,
+        removed: 0,
+        changed: 0,
+        addedIds: ["el_new"],
+        removedIds: [],
+        changedIds: [],
+      },
+      effective: {
+        newlyEffective: 1,
+        noLongerEffective: 0,
+        activationChanged: 0,
+        statusChanges: [{ id: "el_new", from: null, to: "effective" }],
+      },
+    });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-status-transition",
+    );
+    expect(claim.claim).toBe(
+      "Element 'el_new' resolved status went from no resolved status in A to 'effective' in B.",
+    );
+    expect(claim.claim).not.toMatch(/broken|missing|absent.*bad/i);
+  });
+
+  it("describes a pure content change without inventing a status transition", () => {
+    const doc = diffDoc({
+      structural: {
+        added: 0,
+        removed: 0,
+        changed: 1,
+        addedIds: [],
+        removedIds: [],
+        changedIds: ["el_x"],
+      },
+    });
+    const result = analyze(parsePflExport(doc, "inline"));
+    const [changed] = byRule(result, "diff-element-changed");
+    expect(changed.claim).toContain("'el_x'");
+    expect(byRule(result, "diff-status-transition")).toEqual([]);
+  });
+
+  it("describes added and removed relations with direction", async () => {
+    const result = analyze(await load("valid-diff.json"));
+    const [added] = byRule(result, "diff-relation-added");
+    expect(added.claim).toBe(
+      "Present in B but not in A: element 'el_added' overrides element 'el_changed'.",
+    );
+    expect(added.evidence.map((e) => e.pointer)).toEqual([
+      "/data/relations/added/0/type",
+      "/data/relations/added/0/from",
+      "/data/relations/added/0/to",
+    ]);
+    const [removed] = byRule(result, "diff-relation-removed");
+    expect(removed.claim).toBe(
+      "Present in A but not in B: element 'el_removed' shadows element 'el_other'.",
+    );
+  });
+
+  it("reports legacy relation types without interpreting semantics", () => {
+    const doc = diffDoc({
+      relations: {
+        added: [{ type: "contains", from: "el_a", to: "el_b" }],
+        removed: [],
+      },
+    });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-relation-added",
+    );
+    expect(claim.claim).toContain("'contains'");
+    expect(claim.claim).toContain("semantics not interpreted");
+  });
+
+  it("describes added and removed findings with cited ids", async () => {
+    const result = analyze(await load("valid-diff.json"));
+    const [added] = byRule(result, "diff-finding-added");
+    expect(added.claim).toContain("'shadowed-element'");
+    expect(added.claim).toContain("'el_changed'");
+    expect(added.claim).not.toMatch(/improve|better/i);
+    const [removed] = byRule(result, "diff-finding-removed");
+    expect(removed.claim).toContain("'broad-tool-access'");
+    expect(removed.claim).toContain("'el_removed', 'el_other'");
+    expect(removed.evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/removed/0/rule",
+      "/data/findings/removed/0/message",
+      "/data/findings/removed/0/elementIds",
+      "/data/findings/removed/0/elementIds/0",
+      "/data/findings/removed/0/elementIds/1",
+    ]);
+  });
+
+  it("notes a same-rule, same-elements add/remove as a reworded pair, not a proven harness change", () => {
+    const doc = diffDoc({
+      findings: {
+        added: [
+          {
+            rule: "broad-tool-access",
+            message: "element el_a grants wide access now",
+            elementIds: ["el_a"],
+          },
+        ],
+        removed: [
+          {
+            rule: "broad-tool-access",
+            message: "element el_a granted wide access",
+            elementIds: ["el_a"],
+          },
+          {
+            rule: "unrelated",
+            message: "different finding",
+            elementIds: ["el_z"],
+          },
+        ],
+      },
+    });
+    const claims = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-finding-added",
+    );
+    expect(claims[0].claim).toContain("add-plus-remove pair");
+    expect(claims[0].claim).toContain(
+      "does not by itself prove a harness change",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/added/0/rule",
+      "/data/findings/added/0/message",
+      "/data/findings/added/0/elementIds",
+      "/data/findings/added/0/elementIds/0",
+      "/data/findings/removed/0",
+    ]);
+    const removed = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-finding-removed",
+    );
+    expect(removed[0].claim).toContain("add-plus-remove pair");
+    expect(removed[0].claim).toContain(
+      "does not by itself prove a harness change",
+    );
+    expect(removed[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/removed/0/rule",
+      "/data/findings/removed/0/message",
+      "/data/findings/removed/0/elementIds",
+      "/data/findings/removed/0/elementIds/0",
+      "/data/findings/added/0",
+    ]);
+    expect(removed[1].claim).not.toContain("add-plus-remove");
+  });
+
+  it("pairs reworded findings even when element ids are reordered", () => {
+    const doc = diffDoc({
+      findings: {
+        added: [
+          {
+            rule: "r",
+            message: "reworded message",
+            elementIds: ["el_b", "el_a"],
+          },
+        ],
+        removed: [
+          {
+            rule: "r",
+            message: "original message",
+            elementIds: ["el_a", "el_b"],
+          },
+        ],
+      },
+    });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-finding-added",
+    );
+    expect(claim.claim).toContain("add-plus-remove pair");
+    expect(claim.evidence.map((e) => e.pointer)).toContain(
+      "/data/findings/removed/0",
+    );
+  });
+
+  it("caps the listed element ids inside a finding claim", () => {
+    const doc = diffDoc({
+      findings: {
+        added: [
+          {
+            rule: "r",
+            message: "m",
+            elementIds: ["e1", "e2", "e3", "e4", "e5", "e6", "e7"],
+          },
+        ],
+        removed: [],
+      },
+    });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-finding-added",
+    );
+    expect(claim.claim).toContain("'e1'");
+    expect(claim.claim).toContain("and 2 more");
+    expect(claim.claim).not.toContain("'e7'");
+  });
+
+  it("describes facet deltas including zero, never as improvement or per-element attribution", async () => {
+    const result = analyze(await load("valid-diff.json"));
+    const deltas = byRule(result, "diff-facet-delta");
+    expect(deltas).toHaveLength(6);
+    const controls = deltas.find((c) => c.claim.includes("'controls'"));
+    expect(controls?.claim).toContain("increased by 2");
+    expect(controls?.claim).toContain(
+      "not attributable to an individual element",
+    );
+    const memory = deltas.find((c) => c.claim.includes("'memory'"));
+    expect(memory?.claim).toContain("decreased by 1");
+    const knowledge = deltas.find((c) => c.claim.includes("'knowledge'"));
+    expect(knowledge?.claim).toContain("is unchanged");
+    for (const claim of deltas)
+      expect(claim.claim).not.toMatch(/improve|regress|better|worse/i);
+  });
+
+  it("escapes facet names inside evidence pointers per RFC 6901", () => {
+    const doc = diffDoc({ facetDeltas: { "a/b~c": 1 } });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-facet-delta",
+    );
+    expect(claim.claim).toContain("'a/b~c'");
+    expect(claim.evidence).toEqual([{ pointer: "/data/facetDeltas/a~1b~0c" }]);
+  });
+
+  it("rejects malformed pointers in the shared assertion pattern", () => {
+    expect("foobar").not.toMatch(ALLOWED_POINTER);
+    expect("/dat").not.toMatch(ALLOWED_POINTER);
+    expect("/data/findings/added/0/elementIds/3").toMatch(ALLOWED_POINTER);
+    expect("").toMatch(ALLOWED_POINTER);
+  });
+
+  it("quotes version notes as prose caveats", async () => {
+    const notes = byRule(
+      analyze(await load("valid-diff.json")),
+      "diff-version-note",
+    );
+    expect(notes).toHaveLength(2);
+    expect(notes[0].claim).toBe(
+      "The diff records a comparison caveat: 'classifier version differs: 5 → 6'.",
+    );
+    expect(notes[0].evidence[0].pointer).toBe("/data/versionNotes/0");
+  });
+
+  it("flags recomputed origins and differing classifier versions as caveats", async () => {
+    const caveats = byRule(
+      analyze(await load("valid-diff.json")),
+      "diff-comparison-caveats",
+    );
+    expect(caveats).toHaveLength(2);
+    expect(caveats[0].claim).toContain("Side B");
+    expect(caveats[0].claim).toContain("recomputed rather than stored");
+    expect(caveats[1].claim).toContain("'5' vs '6'");
+    expect(caveats[1].claim).toContain(
+      "may reflect the classifier change rather than a harness change",
+    );
+    const quiet = analyze(
+      parsePflExport(
+        diffDoc({
+          interpretation: {
+            a: { classifierVersion: "5", origin: "stored" },
+            b: { classifierVersion: "5", origin: "stored" },
+          },
+        }),
+        "inline",
+      ),
+    );
+    expect(byRule(quiet, "diff-comparison-caveats")).toEqual([]);
+  });
+
+  it("keeps claim order stable: new rules before diagnostic and completeness", async () => {
+    const result = analyze(await load("valid-diff-partial.json"));
+    const ruleIds = result.claims.map((claim) => claim.ruleId);
+    const first = (id: string) => ruleIds.indexOf(id);
+    expect(first("diff-described")).toBe(0);
+    expect(first("diff-element-added")).toBeGreaterThan(
+      first("diff-interpretation-provenance"),
+    );
+    expect(first("diff-comparison-caveats")).toBeLessThan(
+      first("diagnostic-reported"),
+    );
+    expect(first("completeness-reported")).toBe(ruleIds.length - 1);
   });
 
   it("every registered diff rule id is documented in docs/rules.md", async () => {
