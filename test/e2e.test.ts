@@ -413,12 +413,85 @@ describe("gatefold e2e (real process)", () => {
 
   it.each([
     "export-failure-document.json",
-    "unsupported-command-diff.json",
     "export-invalid-shape.json",
     "export-mismatched-join.json",
     "export-wrong-enum.json",
   ])(
     "rejects invalid export %s with exit 3 and a stderr-only error",
+    async (name) => {
+      const run = await gatefold([fixture(name)]);
+      expect(run.code).toBe(3);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+      expect(run.stderr.trim().length).toBeGreaterThan(10);
+    },
+  );
+
+  it("accepts a pfl diff from a file with schema-valid output", async () => {
+    const run = await gatefold([
+      fixture("valid-diff.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code).toBe(0);
+    expect(run.stderr).toBe("");
+    const result = JSON.parse(run.stdout);
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+    expect(result.schemaVersion).toBe(2);
+    expect(result.source).toEqual({
+      pflVersion: "1.4.0",
+      command: "diff",
+    });
+    expect(result.claims.length).toBeGreaterThan(0);
+  });
+
+  it("accepts a pfl diff from stdin", async () => {
+    const input = readFileSync(fixture("valid-diff.json"), "utf8");
+    const run = await gatefoldWithStdin(["-", "--format", "json"], input);
+    expect(run.code).toBe(0);
+    expect(run.stderr).toBe("");
+    const result = JSON.parse(run.stdout);
+    expect(validate(result), JSON.stringify(validate.errors)).toBe(true);
+    expect(result.source.command).toBe("diff");
+    for (const claim of result.claims) {
+      expect(claim.provenance.sourceFile).toBe("<stdin>");
+    }
+  });
+
+  it("produces human-readable claims for a pfl diff", async () => {
+    const run = await gatefold([fixture("valid-diff.json")]);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("1. The diff compares");
+    expect(run.stdout).toContain("confidence:");
+  });
+
+  it("accepts empty and partial pfl diffs", async () => {
+    for (const name of ["valid-diff-empty.json", "valid-diff-partial.json"]) {
+      const run = await gatefold([fixture(name), "--format", "json"]);
+      expect(run.code, name).toBe(0);
+      expect(run.stderr, name).toBe("");
+      const result = JSON.parse(run.stdout);
+      expect(validate(result), name).toBe(true);
+      expect(result.source.command, name).toBe("diff");
+    }
+    const partial = JSON.parse(
+      (await gatefold([fixture("valid-diff-partial.json"), "--format", "json"]))
+        .stdout,
+    );
+    expect(
+      partial.claims.some((c: { claim: string }) =>
+        c.claim.includes("'partial'"),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    "diff-failure-document.json",
+    "diff-invalid-shape.json",
+    "diff-count-mismatch.json",
+    "diff-bad-status.json",
+  ])(
+    "rejects invalid diff %s with exit 3 and a stderr-only error",
     async (name) => {
       const run = await gatefold([fixture(name)]);
       expect(run.code).toBe(3);

@@ -17,6 +17,10 @@ export {
 export type {
   Completeness,
   PflDiagnostic,
+  PflDiffData,
+  PflDiffDocument,
+  PflDiffInterpretationSide,
+  PflDiffStatusChange,
   PflDocument,
   PflExport,
   PflExportDocument,

@@ -1,0 +1,45 @@
+{
+  "pflVersion": "1.2.0",
+  "command": "diff",
+  "ok": true,
+  "completeness": "partial",
+  "futureEnvelopeField": { "any": ["value"] },
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "code": "snapshot-unreadable",
+      "message": "snapshot obs_dead00 could not be read",
+      "path": "/redacted/path"
+    }
+  ],
+  "data": {
+    "runtime": "codex",
+    "observedSnapshotIdA": "obs_ccc333",
+    "observedSnapshotIdB": "obs_ddd444",
+    "resolvedSnapshotIdA": "res_ccc333",
+    "resolvedSnapshotIdB": "res_ddd444",
+    "futureDataField": true,
+    "structural": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0,
+      "addedIds": [],
+      "removedIds": [],
+      "changedIds": []
+    },
+    "effective": {
+      "newlyEffective": 0,
+      "noLongerEffective": 0,
+      "activationChanged": 0,
+      "statusChanges": []
+    },
+    "facetDeltas": { "instructions": 0, "future-facet": -3 },
+    "relations": { "added": [], "removed": [] },
+    "findings": { "added": [], "removed": [] },
+    "versionNotes": ["resolution semantics differ: 2 → 3"],
+    "interpretation": {
+      "a": { "classifierVersion": "5", "origin": "recomputed" },
+      "b": { "classifierVersion": "5", "origin": "recomputed" }
+    }
+  }
+}

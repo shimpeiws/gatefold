@@ -4,19 +4,21 @@ This document defines the exact `pfl` document shapes Gatefold accepts
 (current release: v0.3). It is
 grounded in pfl's frozen v1.0 `--json` document contract
 (`docs/design/pfl-json-contract.md` in the pfl repository, verified against
-`pfl@1.0.0`, `src/cli/report.ts` `ReportData`, on 2026-09-25, and
-`src/cli/export.ts` `ExportData` plus its core types). Gatefold has no
+`pfl@1.0.0`, `src/cli/report.ts` `ReportData`, on 2026-09-25,
+`src/cli/export.ts` `ExportData` plus its core types, and `src/cli/diff.ts`
+`DiffData`). Gatefold has no
 runtime dependency on pfl; the export document is the only boundary.
 
 ## Accepted document
 
-Gatefold accepts two kinds of pfl documents dispatched on the top-level
+Gatefold accepts three kinds of pfl documents dispatched on the top-level
 `command` field: a successful `pfl report --json` export — the descriptive
-interpretation surface (counts, facets, findings) — and a successful
+interpretation surface (counts, facets, findings) — a successful
 `pfl export --json` document — one full snapshot joining observed, resolved,
-and interpretation layers. Other commands (`inspect`, `list`, `show`,
-`graph`, `snapshots`, `gc`) are rejected, and `diff` documents are rejected
-until the v0.3 diff issues land.
+and interpretation layers — and a successful `pfl diff --json` document —
+one pfl-computed A → B comparison between two snapshots of the same project
+and runtime. Other commands (`inspect`, `list`, `show`,
+`graph`, `snapshots`, `gc`) are rejected.
 
 The document reaches Gatefold as a file argument or on standard input
 (`gatefold -`). Stdin is an additional transport for the same document, not a
@@ -32,7 +34,7 @@ before parsing; a BOM anywhere else is invalid JSON.
 | Field | Type | Requirement |
 | --- | --- | --- |
 | `pflVersion` | string | Semver version of the pfl that produced the document. Must satisfy `>=1.0.0 <2.0.0`. |
-| `command` | string | Must be `"report"` or `"export"`. Any other value is rejected. |
+| `command` | string | Must be `"report"`, `"export"`, or `"diff"`. Any other value is rejected. |
 | `ok` | boolean | Must be `true`. A failure document (`ok: false`, with `data.error`) is rejected and its `error.code`/`error.message` are surfaced. |
 | `completeness` | string | One of `"complete"`, `"partial"`, `"unknown"`. `"partial"` is accepted — best-effort results are normal operation — and is recorded for provenance. |
 | `diagnostics` | array | Must be an array of at most 1,000 items. Items carry `severity` (`"info"`/`"warning"`/`"error"`), `code` (string), `message` (string), optional `path` (string). Items with other shapes are rejected. |
@@ -100,6 +102,31 @@ them verbatim (including redacted forms) and sanitizes them if they are later
 displayed. Gatefold never opens, reads, or executes a path or payload taken
 from the document.
 
+## `data` payload (`diff`)
+
+Required fields when `command` is `"diff"`. A diff is a self-contained
+comparison pfl already computed; it carries no element set, so relation
+endpoints and finding element ids are opaque references — validated as
+strings, never resolved.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `runtime` | string | Runtime id shared by both snapshots. |
+| `observedSnapshotIdA` / `observedSnapshotIdB` | string | Observed snapshot id on side A / side B. At most 1,024 characters each — a diff has two of each kind, so they ride in `diff-described` claim text rather than the single-valued provenance fields. |
+| `resolvedSnapshotIdA` / `resolvedSnapshotIdB` | string | Resolved snapshot id on side A / side B. At most 1,024 characters each (same claim-text repetition bound). |
+| `structural` | object | `{ added, removed, changed: non-negative safe integer, addedIds, removedIds, changedIds: string[] }`. Each count must equal its ID list's length; the three lists are unique within themselves and pairwise disjoint (an element cannot be both added and removed). |
+| `effective` | object | `{ newlyEffective, noLongerEffective, activationChanged: non-negative safe integer, statusChanges: { id: string, from: status \| null, to: status \| null }[] }`. Status is `"effective" \| "shadowed" \| "conditional" \| "unresolved" \| "unknown"`; `null` marks a side where the element did not exist. Status-change ids are unique. The aggregate counts include added/removed elements, so they are not required to equal the number of status-change records. |
+| `facetDeltas` | object | Record of facet name → signed safe integer delta. Facets are additive in pfl's model, so unknown facet names are accepted; at most 1,000 keys, names bounded as scalar strings. |
+| `relations` | object | `{ added: RelationRef[], removed: RelationRef[] }` with `RelationRef = { type, from, to }`. The accepted type set is the same seven persisted values as export relations. Each array at most 10,000 items. |
+| `findings` | object | `{ added: Finding[], removed: Finding[] }`; the same item shape and per-finding `elementIds` limits as report/export findings. Each array at most 10,000 items, and the `elementIds` total across both sides combined is capped at 10,000 — the ceiling is per document, not per side. |
+| `versionNotes` | array | Human-readable notes pfl emitted (classifier version, runtime version, or resolution semantics differences). Strings of at most 4,096 characters; at most 10,000 items. |
+| `interpretation` | object | `{ a: Side, b: Side }` where `Side = { classifierVersion: string (at most 1,024 characters, repeated in claim text), origin: "stored" \| "recomputed" }`. The diff document carries no classifier id; Gatefold does not invent one. |
+
+Direction is part of the contract: `added`/`removed` and every `from`/`to`
+pair describe the A → B transition, and Gatefold preserves that direction in
+claims. Facts absent from the diff (the elements behind an id, per-element
+facet attribution) cannot be recovered and are never reconstructed.
+
 ## Unknown fields
 
 Readers ignore unknown fields, matching pfl's compatibility rule: a document
@@ -144,7 +171,13 @@ documents additionally reject more than 10,000 `elements`, more than
 20,000 `relations`, metadata nested more than 12 levels, more than
 10,000 metadata nodes per element, any scalar string longer than
 4,096 characters — including `diagnostics` `code`/`message`/`path`, which the
-report reader leaves uncapped for v0.2 compatibility. Metadata
+report reader leaves uncapped for v0.2 compatibility. Diff
+documents reject more than 10,000 items in any structural ID list, in
+`statusChanges`, in `relations.added`/`removed`, in
+`findings.added`/`removed`, or in `versionNotes`; more than 1,000
+`facetDeltas` keys; and the same 4,096-character scalar ceiling. Diff snapshot
+ids and `interpretation.a`/`b` `classifierVersion` repeat in per-side claim
+text and are capped at 1,024 characters. Metadata
 strings copied into every claim's provenance — `pflVersion`,
 `data.interpretation.classifierVersion`, `data.runtimeName`,
 `data.observedSnapshotId`, `data.resolvedSnapshotId`, and `data.confidence` —
@@ -192,7 +225,13 @@ Committed fixtures under `test/fixtures/pfl-export/`:
 | `valid-export-empty.json` | accepted; empty elements/relations/findings, null runtime version |
 | `valid-export-partial.json` | accepted; `partial` completeness, diagnostics, nullable layers, and unknown additive fields |
 | `export-failure-document.json` | rejected (`ok: false` export) |
-| `unsupported-command-diff.json` | rejected (`command` is `diff`, not yet accepted) |
 | `export-invalid-shape.json` | rejected (missing `data.snapshot`) |
 | `export-mismatched-join.json` | rejected (`resolved.id` differs from element id) |
 | `export-wrong-enum.json` | rejected (unknown `observed.status`) |
+| `valid-diff.json` | accepted; non-empty A → B comparison with status changes, relation/finding deltas, version notes, and stored + recomputed provenance |
+| `valid-diff-empty.json` | accepted; zero counts and empty arrays throughout |
+| `valid-diff-partial.json` | accepted; `partial` completeness, diagnostics, an unknown facet delta, and unknown additive fields |
+| `diff-failure-document.json` | rejected (`ok: false` diff) |
+| `diff-invalid-shape.json` | rejected (empty `data`) |
+| `diff-count-mismatch.json` | rejected (`structural.added` differs from `addedIds` length) |
+| `diff-bad-status.json` | rejected (unknown `statusChanges` status) |

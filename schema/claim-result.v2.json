@@ -26,7 +26,7 @@
         "command": {
           "type": "string",
           "minLength": 1,
-          "description": "The input document's command (e.g. 'report' or 'export')."
+          "description": "The input document's command ('report', 'export', or 'diff')."
         }
       }
     },

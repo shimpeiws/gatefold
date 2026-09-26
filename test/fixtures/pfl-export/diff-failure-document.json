@@ -1,0 +1,13 @@
+{
+  "pflVersion": "1.0.0",
+  "command": "diff",
+  "ok": false,
+  "completeness": "unknown",
+  "diagnostics": [],
+  "data": {
+    "error": {
+      "code": "CONFIG_ERROR",
+      "message": "cannot diff snapshots from different runtimes"
+    }
+  }
+}

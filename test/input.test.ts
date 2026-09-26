@@ -498,7 +498,7 @@ describe("pfl export snapshot contract", () => {
       expect(Array.isArray(exported.data.elements)).toBe(true);
   });
 
-  it.each(["diff", "inspect", "list", "show", 5, null])(
+  it.each(["inspect", "list", "show", 5, null])(
     "rejects command %s as unsupported-command",
     (command) => {
       const doc = validExportDoc();
@@ -866,5 +866,345 @@ describe("pfl export snapshot contract", () => {
           .futureObservedField,
       ).toBeUndefined();
     }
+  });
+});
+
+function validDiffDoc(): Record<string, any> {
+  return {
+    pflVersion: "1.0.0",
+    command: "diff",
+    ok: true,
+    completeness: "complete",
+    diagnostics: [],
+    data: {
+      runtime: "claude-code",
+      observedSnapshotIdA: "obs_a",
+      observedSnapshotIdB: "obs_b",
+      resolvedSnapshotIdA: "res_a",
+      resolvedSnapshotIdB: "res_b",
+      structural: {
+        added: 1,
+        removed: 0,
+        changed: 0,
+        addedIds: ["el_added"],
+        removedIds: [],
+        changedIds: [],
+      },
+      effective: {
+        newlyEffective: 1,
+        noLongerEffective: 0,
+        activationChanged: 0,
+        statusChanges: [{ id: "el_shared", from: "shadowed", to: "effective" }],
+      },
+      facetDeltas: { instructions: 1, memory: -1 },
+      relations: {
+        added: [{ type: "overrides", from: "el_added", to: "el_base" }],
+        removed: [],
+      },
+      findings: {
+        added: [
+          {
+            rule: "shadowed-element",
+            message: "el_added is shadowed",
+            elementIds: ["el_added"],
+          },
+        ],
+        removed: [],
+      },
+      versionNotes: ["classifier version differs: 5 → 6"],
+      interpretation: {
+        a: { classifierVersion: "5", origin: "stored" },
+        b: { classifierVersion: "6", origin: "recomputed" },
+      },
+    },
+  };
+}
+
+const VALID_DIFF = [
+  "valid-diff.json",
+  "valid-diff-empty.json",
+  "valid-diff-partial.json",
+];
+
+describe("pfl diff contract", () => {
+  it("loads every valid diff fixture as typed data", async () => {
+    for (const name of VALID_DIFF) {
+      const result = await readPflExport(fixture(name));
+      expect(result.command, name).toBe("diff");
+      expect(result.data.runtime, name).toBeTruthy();
+    }
+  });
+
+  it("loads diffs from stdin with the same validation", async () => {
+    async function* chunks(): AsyncGenerator<Buffer> {
+      const text = await import("node:fs/promises").then((fs) =>
+        fs.readFile(fixture("valid-diff.json"), "utf8"),
+      );
+      yield Buffer.from(text.slice(0, 100));
+      yield Buffer.from(text.slice(100));
+    }
+    const result = await readPflExportStdin(chunks());
+    expect(result.command).toBe("diff");
+    expect(result.sourcePath).toBe(STDIN_SOURCE);
+  });
+
+  it("dispatches diff documents to the diff reader", () => {
+    const diff = parsePflExport(validDiffDoc(), "inline");
+    expect(diff.command).toBe("diff");
+    if (diff.command === "diff") {
+      expect(diff.data.structural.added).toBe(1);
+      expect(diff.data.interpretation.a.origin).toBe("stored");
+      expect(diff.data.interpretation.b.origin).toBe("recomputed");
+    }
+  });
+
+  it("rejects a diff failure document with its pfl error", async () => {
+    const error = await readPflExport(
+      fixture("diff-failure-document.json"),
+    ).catch((e) => e);
+    expect(error).toBeInstanceOf(PflExportError);
+    expect(error.code).toBe("export-failed");
+    expect(error.message).toContain("CONFIG_ERROR");
+  });
+
+  it("rejects diff documents missing required sections", () => {
+    for (const key of [
+      "runtime",
+      "observedSnapshotIdA",
+      "resolvedSnapshotIdB",
+      "structural",
+      "effective",
+      "facetDeltas",
+      "relations",
+      "findings",
+      "versionNotes",
+      "interpretation",
+    ]) {
+      const doc = validDiffDoc();
+      delete doc.data[key];
+      expect(() => parsePflExport(doc, "inline"), key).toThrow(
+        /invalid|must be/,
+      );
+    }
+  });
+
+  it("enforces structural count/list invariants", () => {
+    const mismatch = validDiffDoc();
+    mismatch.data.structural.added = 5;
+    expect(() => parsePflExport(mismatch, "inline")).toThrow(/length/);
+
+    const duplicated = validDiffDoc();
+    duplicated.data.structural.addedIds = ["el_added", "el_added"];
+    duplicated.data.structural.added = 2;
+    expect(() => parsePflExport(duplicated, "inline")).toThrow(/unique/);
+
+    const overlap = validDiffDoc();
+    overlap.data.structural.removedIds = ["el_added"];
+    overlap.data.structural.removed = 1;
+    expect(() => parsePflExport(overlap, "inline")).toThrow(/disjoint/);
+
+    const emptyId = validDiffDoc();
+    emptyId.data.structural.addedIds = [""];
+    expect(() => parsePflExport(emptyId, "inline")).toThrow(/non-empty/);
+
+    const badCount = validDiffDoc();
+    badCount.data.structural.changed = -1;
+    expect(() => parsePflExport(badCount, "inline")).toThrow(/non-negative/);
+  });
+
+  it("validates statusChanges ids and statuses, allowing explicit nulls", () => {
+    const doc = validDiffDoc();
+    // The contract permits a null side even though pfl only emits
+    // statusChanges for ids present on both snapshots; a null side would pair
+    // with an added/removed id, which el_added is.
+    doc.data.effective.statusChanges.push({
+      id: "el_added",
+      from: null,
+      to: "effective",
+    });
+    const parsed = parsePflExport(doc, "inline");
+    if (parsed.command === "diff")
+      expect(parsed.data.effective.statusChanges[1].from).toBeNull();
+
+    const badStatus = validDiffDoc();
+    badStatus.data.effective.statusChanges[0].to = "enabled";
+    expect(() => parsePflExport(badStatus, "inline")).toThrow(/one of/);
+
+    const dupId = validDiffDoc();
+    dupId.data.effective.statusChanges.push({
+      id: "el_shared",
+      from: "effective",
+      to: "shadowed",
+    });
+    expect(() => parsePflExport(dupId, "inline")).toThrow(/unique/);
+
+    const nonInt = validDiffDoc();
+    nonInt.data.effective.newlyEffective = 1.5;
+    expect(() => parsePflExport(nonInt, "inline")).toThrow(/non-negative/);
+  });
+
+  it("accepts signed facet deltas and unknown facets, rejects non-integers", () => {
+    const doc = parsePflExport(validDiffDoc(), "inline");
+    if (doc.command === "diff") expect(doc.data.facetDeltas.memory).toBe(-1);
+
+    const bad = validDiffDoc();
+    bad.data.facetDeltas.future = 1.5;
+    expect(() => parsePflExport(bad, "inline")).toThrow(/safe integer/);
+  });
+
+  it("validates relations and findings on both sides", () => {
+    const badType = validDiffDoc();
+    badType.data.relations.added[0].type = "invents";
+    expect(() => parsePflExport(badType, "inline")).toThrow(/one of/);
+
+    const legacy = validDiffDoc();
+    legacy.data.relations.added[0].type = "contains";
+    expect(() => parsePflExport(legacy, "inline")).not.toThrow();
+
+    const badFinding = validDiffDoc();
+    badFinding.data.findings.removed = [{ rule: "x", message: "m" }];
+    expect(() => parsePflExport(badFinding, "inline")).toThrow(/elementIds/);
+  });
+
+  it("validates interpretation provenance for both sides", () => {
+    const bad = validDiffDoc();
+    bad.data.interpretation.a.origin = "fresh";
+    expect(() => parsePflExport(bad, "inline")).toThrow(/stored|recomputed/);
+
+    const missing = validDiffDoc();
+    delete missing.data.interpretation.b;
+    expect(() => parsePflExport(missing, "inline")).toThrow(/must be/);
+  });
+
+  it("enforces diff resource ceilings at their exact boundaries", () => {
+    const atIds = validDiffDoc();
+    atIds.data.structural.addedIds = Array.from(
+      { length: 10_000 },
+      (_, i) => `el_${i}`,
+    );
+    atIds.data.structural.added = 10_000;
+    expect(() => parsePflExport(atIds, "inline")).not.toThrow();
+    const overIds = validDiffDoc();
+    overIds.data.structural.addedIds = Array.from(
+      { length: 10_001 },
+      (_, i) => `el_${i}`,
+    );
+    overIds.data.structural.added = 10_001;
+    expect(() => parsePflExport(overIds, "inline")).toThrow(/at most/);
+
+    const overChanges = validDiffDoc();
+    overChanges.data.effective.statusChanges = Array.from(
+      { length: 10_001 },
+      (_, i) => ({ id: `el_${i}`, from: "effective", to: "shadowed" }),
+    );
+    expect(() => parsePflExport(overChanges, "inline")).toThrow(/at most/);
+
+    const overRelations = validDiffDoc();
+    overRelations.data.relations.added = Array.from({ length: 10_001 }, () => ({
+      type: "shadows",
+      from: "a",
+      to: "b",
+    }));
+    expect(() => parsePflExport(overRelations, "inline")).toThrow(/at most/);
+
+    const overFindings = validDiffDoc();
+    overFindings.data.findings.added = Array.from({ length: 10_001 }, () => ({
+      rule: "r",
+      message: "m",
+      elementIds: [],
+    }));
+    expect(() => parsePflExport(overFindings, "inline")).toThrow(/at most/);
+
+    const overNotes = validDiffDoc();
+    overNotes.data.versionNotes = Array.from({ length: 10_001 }, () => "n");
+    expect(() => parsePflExport(overNotes, "inline")).toThrow(/at most/);
+
+    const overFacets = validDiffDoc();
+    overFacets.data.facetDeltas = Object.fromEntries(
+      Array.from({ length: 1_001 }, (_, i) => [`f${i}`, 0]),
+    );
+    expect(() => parsePflExport(overFacets, "inline")).toThrow(/at most/);
+    const atFacets = validDiffDoc();
+    atFacets.data.facetDeltas = Object.fromEntries(
+      Array.from({ length: 1_000 }, (_, i) => [`f${i}`, 0]),
+    );
+    expect(() => parsePflExport(atFacets, "inline")).not.toThrow();
+  });
+
+  it("shares the total element-id budget across both finding sides", () => {
+    const findingsWith = (n: number, prefix: string) =>
+      Array.from({ length: n }, (_, i) => ({
+        rule: "r",
+        message: "m",
+        elementIds: [`${prefix}${i}`],
+      }));
+    const over = validDiffDoc();
+    over.data.findings.added = findingsWith(6_000, "a");
+    over.data.findings.removed = findingsWith(6_000, "r");
+    expect(() => parsePflExport(over, "inline")).toThrow(/at most/);
+
+    const at = validDiffDoc();
+    at.data.findings.added = findingsWith(6_000, "a");
+    at.data.findings.removed = findingsWith(4_000, "r");
+    expect(() => parsePflExport(at, "inline")).not.toThrow();
+  });
+
+  it("caps displayed and provenance-repeated diff strings", () => {
+    const longNote = validDiffDoc();
+    longNote.data.versionNotes = ["n".repeat(4_097)];
+    expect(() => parsePflExport(longNote, "inline")).toThrow(/at most 4096/);
+    const atNote = validDiffDoc();
+    atNote.data.versionNotes = ["n".repeat(4_096)];
+    expect(() => parsePflExport(atNote, "inline")).not.toThrow();
+
+    const longSnapshotId = validDiffDoc();
+    longSnapshotId.data.resolvedSnapshotIdA = "s".repeat(1_025);
+    expect(() => parsePflExport(longSnapshotId, "inline")).toThrow(
+      /at most 1024/,
+    );
+
+    const longClassifier = validDiffDoc();
+    longClassifier.data.interpretation.b.classifierVersion = "c".repeat(1_025);
+    expect(() => parsePflExport(longClassifier, "inline")).toThrow(
+      /at most 1024/,
+    );
+
+    const longDiagnostic = validDiffDoc();
+    longDiagnostic.diagnostics = [
+      { severity: "warning", code: "c", message: "m".repeat(4_097) },
+    ];
+    expect(() => parsePflExport(longDiagnostic, "inline")).toThrow(
+      /at most 4096/,
+    );
+  });
+
+  it("sanitizes untrusted diff text in error messages", () => {
+    const doc = validDiffDoc();
+    doc.data.structural.addedIds = ["el_1\boverride"];
+    doc.data.structural.removedIds = ["el_1\boverride"];
+    doc.data.structural.removed = 1;
+    const error = (() => {
+      try {
+        parsePflExport(doc, "inline");
+        return null;
+      } catch (e) {
+        return e as PflExportError;
+      }
+    })();
+    expect(error?.message).toContain("\\u0008");
+    expect(error?.message).not.toContain("\b");
+  });
+
+  it("ignores unknown additive diff fields without echoing them", async () => {
+    const result = await readPflExport(fixture("valid-diff-partial.json"));
+    expect(result.command).toBe("diff");
+    if (result.command === "diff") {
+      const data = result.data as Record<string, unknown>;
+      expect(data.futureDataField).toBeUndefined();
+      expect(Object.keys(data.facetDeltas)).toContain("future-facet");
+    }
+    expect(
+      (result as Record<string, unknown>).futureEnvelopeField,
+    ).toBeUndefined();
   });
 });

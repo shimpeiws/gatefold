@@ -30,9 +30,18 @@ confidence per `schema/claim-result.v2.json`.
 | `completeness-reported` | When the export is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete exports. | 1.0 |
 
 `diagnostic-reported` and `completeness-reported` are shared claim
-vocabulary: both command rule sets may emit them, and their provenance
+vocabulary: every command rule set may emit them, and their provenance
 `transform` chain records which envelope produced the claim
 (`pfl-report-envelope` versus `pfl-export-envelope`).
+
+## `diff` rules
+
+| Rule | Claim | Confidence |
+| --- | --- | --- |
+| `diff-described` | The comparison's direction and scope: runtime plus the resolved and observed snapshot identifiers on sides A and B. | 1.0 |
+| `diff-interpretation-provenance` | Which classifier version produced each side's interpretation and whether it was stored or recomputed. | 1.0 |
+| `diagnostic-reported` | Each `warning`/`error` diagnostic the diff carries: its code, message, and path. Emitted only for warning/error diagnostics. | 1.0 |
+| `completeness-reported` | When the diff is `partial` or `unknown`, that fact and the diagnostic count. Emitted only for non-complete diffs. | 1.0 |
 
 ## Conventions
 
@@ -49,6 +58,9 @@ vocabulary: both command rule sets may emit them, and their provenance
   export's interpretation
   metadata: `classifierVersion`, `interpretationOrigin`, and — when the export
   carries them — `observedSnapshotId`, `resolvedSnapshotId`, and `runtimeName`.
+  Diff claims use the same `pfl-export-envelope` transform label and carry the
+  per-side snapshot ids and classifier versions in claim text instead: a diff
+  has two of each, which the single-valued provenance fields cannot express.
 - Strings interpolated into claim text — and provenance strings copied from
   the export (`classifierVersion`, `observedSnapshotId`,
   `resolvedSnapshotId`, `runtimeName`) — pass through Gatefold's canonical

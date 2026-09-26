@@ -1,0 +1,71 @@
+{
+  "pflVersion": "1.4.0",
+  "command": "diff",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "runtime": "claude-code",
+    "observedSnapshotIdA": "obs_aaa111",
+    "observedSnapshotIdB": "obs_bbb222",
+    "resolvedSnapshotIdA": "res_aaa111",
+    "resolvedSnapshotIdB": "res_bbb222",
+    "structural": {
+      "added": 1,
+      "removed": 1,
+      "changed": 1,
+      "addedIds": ["el_added"],
+      "removedIds": ["el_removed"],
+      "changedIds": ["el_changed"]
+    },
+    "effective": {
+      "newlyEffective": 2,
+      "noLongerEffective": 1,
+      "activationChanged": 1,
+      "statusChanges": [
+        { "id": "el_changed", "from": "shadowed", "to": "effective" },
+        { "id": "el_other", "from": "effective", "to": "unresolved" }
+      ]
+    },
+    "facetDeltas": {
+      "instructions": 1,
+      "knowledge": 0,
+      "memory": -1,
+      "actions": 0,
+      "delegation": 0,
+      "controls": 2
+    },
+    "relations": {
+      "added": [
+        { "type": "overrides", "from": "el_added", "to": "el_changed" }
+      ],
+      "removed": [
+        { "type": "shadows", "from": "el_removed", "to": "el_other" }
+      ]
+    },
+    "findings": {
+      "added": [
+        {
+          "rule": "shadowed-element",
+          "message": "element el_changed is shadowed",
+          "elementIds": ["el_changed"]
+        }
+      ],
+      "removed": [
+        {
+          "rule": "broad-tool-access",
+          "message": "element el_removed granted broad tool access",
+          "elementIds": ["el_removed", "el_other"]
+        }
+      ]
+    },
+    "versionNotes": [
+      "classifier version differs: 5 → 6",
+      "runtime version differs: 1.0.0 → 1.1.0"
+    ],
+    "interpretation": {
+      "a": { "classifierVersion": "5", "origin": "stored" },
+      "b": { "classifierVersion": "6", "origin": "recomputed" }
+    }
+  }
+}
