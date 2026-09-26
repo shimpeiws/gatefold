@@ -1113,6 +1113,32 @@ describe("diff comparison rules", () => {
     );
   });
 
+  it("does not pair findings whose distinct id sets collide on a delimiter", () => {
+    const doc = diffDoc({
+      findings: {
+        added: [
+          {
+            rule: "r",
+            message: "added",
+            elementIds: ["a\u0001b"],
+          },
+        ],
+        removed: [
+          {
+            rule: "r",
+            message: "removed",
+            elementIds: ["a", "b"],
+          },
+        ],
+      },
+    });
+    const [claim] = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "diff-finding-added",
+    );
+    expect(claim.claim).not.toContain("add-plus-remove pair");
+  });
+
   it("caps the listed element ids inside a finding claim", () => {
     const doc = diffDoc({
       findings: {

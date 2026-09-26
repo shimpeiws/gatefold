@@ -83,7 +83,7 @@ function findingList(elementIds: readonly string[]): string {
 }
 
 function findingKey(finding: PflFinding): string {
-  return `${finding.rule}\u0000${[...finding.elementIds].sort().join("\u0001")}`;
+  return JSON.stringify([finding.rule, [...finding.elementIds].sort()]);
 }
 
 function pairQueues(findings: readonly PflFinding[]): Map<string, number[]> {
