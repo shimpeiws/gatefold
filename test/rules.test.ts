@@ -785,6 +785,204 @@ describe("export snapshot rules", () => {
     ).toBe(true);
   });
 
+  function exportDocWith(overrides: {
+    elements?: unknown[];
+    relations?: unknown[];
+    findings?: unknown[];
+  }) {
+    return {
+      pflVersion: "1.0.0",
+      command: "export",
+      ok: true,
+      completeness: "complete",
+      diagnostics: [],
+      data: {
+        project: { id: "p", displayName: "p" },
+        runtime: {
+          id: "claude-code",
+          version: null,
+          adapter: {
+            id: "claude-code",
+            version: "0.1.1",
+            runtimeCompatibility: "verified",
+          },
+        },
+        snapshot: {
+          observedSnapshotId: "obs_1",
+          resolvedSnapshotId: "res_1",
+          capturedAt: "t",
+          schemaVersion: "1",
+        },
+        resolution: { semanticsVersion: "2", confidence: "verified" },
+        elements: overrides.elements ?? [],
+        relations: overrides.relations ?? [],
+        findings: overrides.findings ?? [],
+        interpretation: {
+          classifier: { id: "pfl-native", version: "5" },
+          origin: "stored",
+        },
+      },
+    };
+  }
+
+  function layerElement(id: string) {
+    return {
+      id,
+      observed: {
+        id,
+        native: { kind: "instructions", origin: "project", scope: null },
+        source: {},
+        inspectability: "observable",
+        metadata: {},
+        status: "observed",
+      },
+      resolved: null,
+      interpretation: null,
+    };
+  }
+
+  it("describes relations with direction and neutral legacy phrasing", async () => {
+    const claims = byRule(
+      analyze(await load("valid-export.json")),
+      "export-relation-described",
+    );
+    expect(claims).toHaveLength(2);
+    // 'from' is the winner: el_1ab… shadows el_0fc…, not the reverse.
+    expect(claims[0].claim).toBe(
+      "element 'el_1ab29cd03ef45678' shadows element 'el_0fc92802d8f84176'.",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/relations/0/type",
+      "/data/relations/0/from",
+      "/data/relations/0/to",
+    ]);
+    expect(claims[0].evidence[1].elementId).toBe("el_1ab29cd03ef45678");
+    expect(claims[0].evidence[2].elementId).toBe("el_0fc92802d8f84176");
+    expect(claims[1].claim).toBe(
+      "element 'el_0fc92802d8f84176' accumulates with element 'el_1ab29cd03ef45678'.",
+    );
+
+    const doc = exportDocWith({
+      elements: [layerElement("el_a"), layerElement("el_b")],
+      relations: [
+        { type: "overrides", from: "el_a", to: "el_b" },
+        { type: "contains", from: "el_b", to: "el_a" },
+      ],
+    });
+    const legacy = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "export-relation-described",
+    );
+    expect(legacy[0].claim).toBe("element 'el_a' overrides element 'el_b'.");
+    expect(legacy[1].claim).toBe(
+      "pfl declares a 'contains' relation from element 'el_b' to element 'el_a'.",
+    );
+  });
+
+  it("contextualizes findings with element kind, path, and status", async () => {
+    const claims = byRule(
+      analyze(await load("valid-export.json")),
+      "export-finding-context",
+    );
+    expect(claims).toHaveLength(3);
+    expect(claims[0].claim).toBe(
+      "Finding 'shadowed-element' states: element el_1ab29cd03ef45678 is shadowed by a managed entry. It references element 'el_1ab29cd03ef45678' (kind 'mcp-server' at '.mcp.json', observed status 'observed', resolved 'shadowed').",
+    );
+    expect(claims[0].evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/0",
+      "/data/findings/0/elementIds/0",
+      "/data/elements/1/id",
+      "/data/elements/1/observed/native/kind",
+      "/data/elements/1/observed/source/path",
+      "/data/elements/1/observed/status",
+      "/data/elements/1/resolved/status",
+    ]);
+    // Null-layer element: no resolved status is fabricated.
+    const skipped = claims.find((c) =>
+      c.claim.includes("el_9deadbeef00112233"),
+    );
+    expect(skipped?.claim).toContain("observed status 'skipped'");
+    expect(skipped?.claim).not.toContain("resolved");
+    expect(skipped?.evidence.map((e) => e.pointer)).not.toContain(
+      "/data/elements/2/resolved/status",
+    );
+  });
+
+  it("describes unresolved, repeated, and empty finding references without inventing context", () => {
+    const doc = exportDocWith({
+      elements: [layerElement("el_a")],
+      findings: [
+        {
+          rule: "r1",
+          message: "m1",
+          elementIds: ["el_a", "el_missing", "el_a"],
+        },
+        { rule: "r2", message: "m2", elementIds: [] },
+      ],
+    });
+    const claims = byRule(
+      analyze(parsePflExport(doc, "inline")),
+      "export-finding-context",
+    );
+    expect(claims).toHaveLength(3);
+    expect(claims[0].claim).toContain("It references element 'el_a'");
+    const unresolved = claims[1];
+    expect(unresolved.claim).toBe(
+      "Finding 'r1' states: m1. It references element 'el_missing', which is not among the export's joined elements.",
+    );
+    expect(unresolved.evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/0",
+      "/data/findings/0/elementIds/1",
+    ]);
+    // The repeated 'el_a' emits no second claim.
+    expect(claims[2].claim).toBe("Finding 'r2' states: m2.");
+    expect(claims[2].evidence.map((e) => e.pointer)).toEqual([
+      "/data/findings/1",
+    ]);
+  });
+
+  it("rejects a relation/finding-heavy export that exceeds the evidence ceiling", () => {
+    const ids = Array.from({ length: 5_000 }, (_, i) => `el_${i}`);
+    const doc = exportDocWith({
+      elements: ids.map(layerElement),
+      relations: Array.from({ length: 20_000 }, (_, i) => ({
+        type: "shadows",
+        from: ids[i % ids.length],
+        to: ids[(i + 1) % ids.length],
+      })),
+      findings: Array.from({ length: 5 }, (_, f) => ({
+        rule: `r${f}`,
+        message: "m",
+        elementIds: ids.slice(f * 1_000, f * 1_000 + 1_000),
+      })),
+    });
+    // 5,000 observed claims × 4 + 20,000 relations × 3 + 5,000 finding
+    // references × 5 exceeds 100,000 evidence references while staying
+    // under the claim ceiling: the deterministic input error must fire.
+    expect(() => analyze(parsePflExport(doc, "inline"))).toThrow(
+      /evidence references/,
+    );
+  });
+
+  it("keeps claim order stable across the new rules", async () => {
+    const result = analyze(await load("valid-export.json"));
+    const ruleIds = result.claims.map((claim) => claim.ruleId);
+    const first = (id: string) => ruleIds.indexOf(id);
+    expect(first("element-observed-state")).toBeGreaterThanOrEqual(0);
+    expect(first("element-observed-state")).toBeLessThan(
+      first("element-resolved-state"),
+    );
+    expect(first("element-resolved-state")).toBeLessThan(
+      first("element-interpretation"),
+    );
+    expect(first("element-interpretation")).toBeLessThan(
+      first("export-relation-described"),
+    );
+    expect(first("export-relation-described")).toBeLessThan(
+      first("export-finding-context"),
+    );
+  });
+
   it("rejects a document whose claims would exceed the evidence ceiling", () => {
     const many = Array.from({ length: 8_000 }, (_, i) => {
       const id = `el_${i}`;

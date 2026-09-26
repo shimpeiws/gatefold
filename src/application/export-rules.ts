@@ -224,6 +224,125 @@ export const EXPORT_RULES: readonly ExportClaimRule[] = [
       }),
   },
   {
+    id: "export-relation-described",
+    description:
+      "Describes each explicit relation edge with direction: 'from' is the winner for shadows/overrides, one side for accumulates-with. Persisted legacy types are stated without interpreting semantics.",
+    evaluate: (input) =>
+      input.data.relations.map((relation, index) => {
+        const at = `/data/relations/${index}`;
+        const evidence: EvidenceReference[] = [
+          { pointer: `${at}/type` },
+          { pointer: `${at}/from`, elementId: relation.from },
+          { pointer: `${at}/to`, elementId: relation.to },
+        ];
+        let verb: string;
+        switch (relation.type) {
+          case "shadows":
+            verb = "shadows";
+            break;
+          case "overrides":
+            verb = "overrides";
+            break;
+          case "accumulates-with":
+            verb = "accumulates with";
+            break;
+          default:
+            return makeClaim(
+              input,
+              "export-relation-described",
+              `pfl declares a '${relation.type}' relation from element '${relation.from}' to element '${relation.to}'.`,
+              evidence,
+              1,
+            );
+        }
+        return makeClaim(
+          input,
+          "export-relation-described",
+          `element '${relation.from}' ${verb} element '${relation.to}'.`,
+          evidence,
+          1,
+        );
+      }),
+  },
+  {
+    id: "export-finding-context",
+    description:
+      "Restates each export finding with its element context: kind, path, and status of each referenced element. References to ids outside the joined elements are described, not invented.",
+    evaluate: (input) => {
+      const byId = new Map(
+        input.data.elements.map((element, index) => [
+          element.id,
+          { element, index },
+        ]),
+      );
+      return input.data.findings.flatMap((finding, findingIndex) => {
+        const findingAt = `/data/findings/${findingIndex}`;
+        const prefix = `Finding '${finding.rule}' states: ${finding.message}.`;
+        if (finding.elementIds.length === 0)
+          return [
+            makeClaim(
+              input,
+              "export-finding-context",
+              prefix,
+              [{ pointer: findingAt }],
+              1,
+            ),
+          ];
+        const emitted = new Set<string>();
+        return finding.elementIds.flatMap((elementId, refIndex) => {
+          if (emitted.has(elementId)) return [];
+          emitted.add(elementId);
+          const refAt = `${findingAt}/elementIds/${refIndex}`;
+          const hit = byId.get(elementId);
+          if (hit === undefined)
+            return [
+              makeClaim(
+                input,
+                "export-finding-context",
+                `${prefix} It references element '${elementId}', which is not among the export's joined elements.`,
+                [{ pointer: findingAt }, { pointer: refAt, elementId }],
+                1,
+              ),
+            ];
+          const { element, index } = hit;
+          const observedAt = `/data/elements/${index}/observed`;
+          const evidence: EvidenceReference[] = [
+            { pointer: findingAt },
+            { pointer: refAt, elementId },
+            { pointer: `/data/elements/${index}/id`, elementId },
+            { pointer: `${observedAt}/native/kind`, elementId },
+          ];
+          let context = `kind '${element.observed.native.kind}'`;
+          if (element.observed.source.path !== undefined) {
+            context += ` at '${element.observed.source.path}'`;
+            evidence.push({
+              pointer: `${observedAt}/source/path`,
+              elementId,
+            });
+          }
+          context += `, observed status '${element.observed.status}'`;
+          evidence.push({ pointer: `${observedAt}/status`, elementId });
+          if (element.resolved !== null) {
+            context += `, resolved '${element.resolved.status}'`;
+            evidence.push({
+              pointer: `/data/elements/${index}/resolved/status`,
+              elementId,
+            });
+          }
+          return [
+            makeClaim(
+              input,
+              "export-finding-context",
+              `${prefix} It references element '${elementId}' (${context}).`,
+              evidence,
+              1,
+            ),
+          ];
+        });
+      });
+    },
+  },
+  {
     id: "diagnostic-reported",
     description:
       "Reports each warning or error diagnostic the export carries: code, message, and path.",
