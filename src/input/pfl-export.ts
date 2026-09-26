@@ -308,13 +308,24 @@ function enumField<T extends string>(
   return value as T;
 }
 
-function parseDiagnostics(value: unknown): readonly PflDiagnostic[] {
+/**
+ * Shared envelope diagnostics. `scalarLimit` caps displayed strings; the v0.2
+ * report contract leaves them uncapped, so only the export path passes one.
+ */
+function parseDiagnostics(
+  value: unknown,
+  scalarLimit?: number,
+): readonly PflDiagnostic[] {
   if (!Array.isArray(value)) throw shapeError("diagnostics", "an array");
   if (value.length > MAX_DIAGNOSTICS)
     throw shapeError(
       "diagnostics",
       `an array with at most ${MAX_DIAGNOSTICS} items`,
     );
+  const bounded = (record: Record<string, unknown>, key: string, at: string) =>
+    scalarLimit === undefined
+      ? stringField(record, key, at)
+      : boundedStringField(record, key, at, scalarLimit);
   return value.map((item, index) => {
     const at = `diagnostics[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
@@ -323,12 +334,17 @@ function parseDiagnostics(value: unknown): readonly PflDiagnostic[] {
       throw shapeError(`${at}.severity`, '"info", "warning", or "error"');
     const diagnostic: PflDiagnostic = {
       severity,
-      code: stringField(item, "code", `${at}.code`),
-      message: stringField(item, "message", `${at}.message`),
+      code: bounded(item, "code", `${at}.code`),
+      message: bounded(item, "message", `${at}.message`),
     };
     const path = item.path;
     if (path !== undefined) {
       if (typeof path !== "string") throw shapeError(`${at}.path`, "a string");
+      if (scalarLimit !== undefined && path.length > scalarLimit)
+        throw shapeError(
+          `${at}.path`,
+          `a string of at most ${scalarLimit} characters`,
+        );
       return { ...diagnostic, path };
     }
     return diagnostic;
@@ -1040,7 +1056,10 @@ export function parsePflExport(
     sourcePath: sanitizeText(sourcePath),
     pflVersion,
     completeness: completeness as Completeness,
-    diagnostics: parseDiagnostics(value.diagnostics),
+    diagnostics: parseDiagnostics(
+      value.diagnostics,
+      command === "export" ? MAX_SCALAR_CHARS : undefined,
+    ),
   };
   return command === "report"
     ? { ...base, command, data: parseReportData(value.data) }

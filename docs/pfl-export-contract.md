@@ -75,7 +75,7 @@ Each `elements` item joins three layers on one id:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `id` | string | The joined element id; unique within `elements`. |
-| `observed` | object | `{ id, native: { kind: string, origin: "project" \| "user" \| "managed" \| "plugin" \| "builtin" \| "unknown", scope: string \| null }, source: object, inspectability: "observable" \| "known-runtime-provided" \| "opaque", metadata: object, status: "observed" \| "unreadable" \| "unsupported" \| "skipped" \| "unknown", reason?: "symlink-not-followed" \| "hardlink-not-followed" \| "non-regular-file-not-opened" \| "limit-exceeded" \| "unsupported-by-adapter" \| "unreadable" \| "unknown" }`. `observed.id` must equal the element id. |
+| `observed` | object | `{ id, native: { kind: string, origin: "project" \| "user" \| "managed" \| "plugin" \| "builtin" \| "unknown", scope: string \| null }, source: { path?: string, digest?: string, sizeBytes?: number, symlink?: boolean }, inspectability: "observable" \| "known-runtime-provided" \| "opaque", metadata: object, status: "observed" \| "unreadable" \| "unsupported" \| "skipped" \| "unknown", reason?: "symlink-not-followed" \| "hardlink-not-followed" \| "non-regular-file-not-opened" \| "limit-exceeded" \| "unsupported-by-adapter" \| "unreadable" \| "unknown" }`. `source` mirrors pfl's `ObservedElementSource`: `path` and `digest` are bounded strings, `sizeBytes` a non-negative safe integer, `symlink` a boolean; all are optional and `path` arrives already redacted by pfl. `observed.id` must equal the element id. |
 | `resolved` | object \| null | Required key. When non-null: `{ id, status: "effective" \| "shadowed" \| "conditional" \| "unresolved" \| "unknown", applicability?: { type: "global" \| "project" \| "directory-subtree" \| "tool-event" \| "config-rule" \| "runtime-defined" \| "unknown", target?: string }, activation: "always" \| "conditional" \| "on-demand" \| "event-driven" \| "unknown", resolution: { strategy: "override" \| "accumulate" \| "available" \| "policy" \| "event-pipeline" \| "runtime-defined" \| "unknown", reason?: string } }`. `resolved.id` must equal the element id. |
 | `interpretation` | object \| null | Required key. When non-null: `{ elementId, facets: string[], confidence: "high" \| "medium" \| "unknown", reason: string }`. Facets are additive in pfl's model, so any non-empty string is accepted. `elementId` must equal the element id. |
 
@@ -140,8 +140,9 @@ by size before reading, and pipes are cut off at the limit), more than 1,000 `di
 1,000 `byFacet` keys are rejected with `invalid-shape` errors. Export
 documents additionally reject more than 10,000 `elements`, more than
 20,000 `relations`, metadata nested more than 12 levels, more than
-10,000 metadata nodes per element, or any scalar string longer than
-4,096 characters. Metadata
+10,000 metadata nodes per element, any scalar string longer than
+4,096 characters — including `diagnostics` `code`/`message`/`path`, which the
+report reader leaves uncapped for v0.2 compatibility. Metadata
 strings copied into every claim's provenance — `pflVersion`,
 `data.interpretation.classifierVersion`, `data.runtimeName`,
 `data.observedSnapshotId`, `data.resolvedSnapshotId`, and `data.confidence` —

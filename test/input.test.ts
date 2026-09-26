@@ -812,6 +812,17 @@ describe("pfl export snapshot contract", () => {
     expect(() => parsePflExport(semantics, "inline")).not.toThrow();
     semantics.data.resolution.semanticsVersion = over;
     expect(() => parsePflExport(semantics, "inline")).toThrow(/at most 4096/);
+
+    const diagnostics = validExportDoc();
+    diagnostics.diagnostics = [
+      { severity: "warning", code: "w", message: over },
+    ];
+    expect(() => parsePflExport(diagnostics, "inline")).toThrow(/at most 4096/);
+    const reportLong = validDoc();
+    reportLong.diagnostics = [
+      { severity: "warning", code: "w", message: over },
+    ];
+    expect(() => parsePflExport(reportLong, "inline")).not.toThrow();
   });
 
   it("sanitizes untrusted export text in error messages", () => {
