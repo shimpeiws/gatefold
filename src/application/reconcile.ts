@@ -49,12 +49,56 @@ export interface ElementReconciliation {
   }[];
 }
 
+/**
+ * One relation change from the diff, joined to the endpoint elements in each
+ * export. Endpoint absence on a partial side stays unobserved.
+ */
+export interface RelationReconciliation {
+  readonly direction: "added" | "removed";
+  /** Index into diff.data.relations[direction]. */
+  readonly index: number;
+  readonly type: string;
+  readonly from: string;
+  readonly to: string;
+  readonly fromBeforeIndex: number | null;
+  readonly fromAfterIndex: number | null;
+  readonly toBeforeIndex: number | null;
+  readonly toAfterIndex: number | null;
+}
+
+/**
+ * One finding change from the diff, joined to the cited elements in each
+ * export. `counterpart` links a removed finding to the added finding that
+ * shares (rule, sorted elementIds) with a different message — descriptive
+ * evidence of a possible rewording, not a semantic resolution.
+ */
+export interface FindingReconciliation {
+  readonly direction: "added" | "removed";
+  /** Index into diff.data.findings[direction]. */
+  readonly index: number;
+  readonly rule: string;
+  readonly message: string;
+  readonly elementIds: readonly string[];
+  readonly elementIndexes: readonly {
+    readonly id: string;
+    readonly beforeIndex: number | null;
+    readonly afterIndex: number | null;
+  }[];
+  /**
+   * For a removed finding: index into findings.added of a same-rule,
+   * same-elements finding with a different message, or null.
+   */
+  readonly counterpart: number | null;
+}
+
 /** The joined per-element comparison view consumed by the compare rules. */
 export interface ComparisonView {
   readonly before: PflExportDocument;
   readonly after: PflExportDocument;
   readonly diff: PflDiffDocument;
   readonly elements: readonly ElementReconciliation[];
+  readonly relations: readonly RelationReconciliation[];
+  readonly findings: readonly FindingReconciliation[];
 }
 
 function indexElements(document: PflExportDocument): Map<string, number> {
@@ -356,5 +400,62 @@ export function reconcileDocuments(
     };
   });
 
-  return { before, after, diff, elements };
+  const relations: RelationReconciliation[] = (
+    ["added", "removed"] as const
+  ).flatMap((direction) =>
+    diff.data.relations[direction].map((relation, index) => ({
+      direction,
+      index,
+      type: relation.type,
+      from: relation.from,
+      to: relation.to,
+      fromBeforeIndex: beforeIndex.get(relation.from) ?? null,
+      fromAfterIndex: afterIndex.get(relation.from) ?? null,
+      toBeforeIndex: beforeIndex.get(relation.to) ?? null,
+      toAfterIndex: afterIndex.get(relation.to) ?? null,
+    })),
+  );
+
+  // A removed finding pairs with an added finding for the same rule and the
+  // same element set when the message differs — the diff-visible shape of a
+  // reworded finding (removal plus addition).
+  const addedFindingKeys = new Map<string, number>();
+  diff.data.findings.added.forEach((finding, index) => {
+    const key = JSON.stringify([finding.rule, [...finding.elementIds].sort()]);
+    if (!addedFindingKeys.has(key)) addedFindingKeys.set(key, index);
+  });
+  const findings: FindingReconciliation[] = (
+    ["added", "removed"] as const
+  ).flatMap((direction) =>
+    diff.data.findings[direction].map((finding, index) => {
+      let counterpart: number | null = null;
+      if (direction === "removed") {
+        const key = JSON.stringify([
+          finding.rule,
+          [...finding.elementIds].sort(),
+        ]);
+        const candidate = addedFindingKeys.get(key);
+        if (
+          candidate !== undefined &&
+          diff.data.findings.added[candidate].message !== finding.message
+        )
+          counterpart = candidate;
+      }
+      return {
+        direction,
+        index,
+        rule: finding.rule,
+        message: finding.message,
+        elementIds: finding.elementIds,
+        elementIndexes: finding.elementIds.map((id) => ({
+          id,
+          beforeIndex: beforeIndex.get(id) ?? null,
+          afterIndex: afterIndex.get(id) ?? null,
+        })),
+        counterpart,
+      };
+    }),
+  );
+
+  return { before, after, diff, elements, relations, findings };
 }

@@ -520,3 +520,215 @@ describe("compare claims (#35)", () => {
     expect(transitions[0].claim).toContain("'a'");
   });
 });
+
+describe("compare claims (#36)", () => {
+  it("contextualizes an added relation with both endpoints", () => {
+    const before = makeExport(
+      exportData([element("x"), element("y")], {}, "a"),
+    );
+    const after = makeExport(
+      exportData(
+        [element("x", { status: "shadowed" }), element("y")],
+        {
+          relations: [{ type: "shadows", from: "x", to: "y" }],
+        },
+        "b",
+      ),
+    );
+    const diff = makeDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 1,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: "effective", to: "shadowed" }],
+        },
+        relations: {
+          added: [{ type: "shadows", from: "x", to: "y" }],
+          removed: [],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const relation = result.claims.find(
+      (c) => c.ruleId === "compare-relation-added",
+    );
+    expect(relation).toBeDefined();
+    expect(relation!.claim).toContain("'x' shadows element 'y'");
+    expect(relation!.claim).toContain("'x' resolves as 'shadowed' in B");
+    expect(relation!.claim).toContain("not a cause");
+    const sources = relation!.evidence.map((e) => `${e.source}:${e.pointer}`);
+    expect(sources).toContain("diff:/data/relations/added/0/type");
+    expect(sources).toContain("after:/data/elements/0/resolved/status");
+    expect(sources).toContain("after:/data/elements/1/resolved/status");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("preserves uncertainty for a relation endpoint missing on a partial side", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"), {
+      completeness: "partial",
+    });
+    const diff = makeDiff(
+      diffData({
+        relations: {
+          added: [{ type: "shadows", from: "x", to: "gone" }],
+          removed: [],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const relation = result.claims.find(
+      (c) => c.ruleId === "compare-relation-added",
+    );
+    expect(relation).toBeDefined();
+    expect(relation!.claim).toContain("a new relation");
+    expect(relation!.claim).toContain("'gone'");
+    expect(relation!.claim).toContain("absence may be unobserved");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("contextualizes added and removed findings with their cited elements", () => {
+    const findingA = {
+      rule: "shadowed-instructions",
+      message: "instruction shadowed",
+      elementIds: ["x"],
+    };
+    const before = makeExport(
+      exportData([element("x")], { findings: [findingA] }, "a"),
+    );
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        findings: { added: [], removed: [findingA] },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const removed = result.claims.find(
+      (c) => c.ruleId === "compare-finding-removed",
+    );
+    expect(removed).toBeDefined();
+    expect(removed!.claim).toContain("'shadowed-instructions'");
+    expect(removed!.claim).toContain("'x' resolves as 'effective' in A");
+    const sources = removed!.evidence.map((e) => `${e.source}:${e.pointer}`);
+    expect(sources).toContain("diff:/data/findings/removed/0/rule");
+    expect(sources).toContain("before:/data/elements/0/resolved/status");
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("reports a reworded finding as removal plus addition", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        findings: {
+          added: [
+            {
+              rule: "r1",
+              message: "element x is shadowed now",
+              elementIds: ["x"],
+            },
+          ],
+          removed: [
+            { rule: "r1", message: "element x shadowed", elementIds: ["x"] },
+          ],
+        },
+      }),
+    );
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const reworded = result.claims.filter(
+      (c) => c.ruleId === "compare-finding-reworded",
+    );
+    expect(reworded.length).toBe(1);
+    expect(reworded[0].claim).toContain("same rule and element ids");
+    expect(reworded[0].claim).toContain(
+      "not evidence that the underlying condition resolved",
+    );
+    const removed = result.claims.find(
+      (c) => c.ruleId === "compare-finding-removed",
+    );
+    expect(removed!.claim).toContain(
+      "the diff also adds a finding for the same rule and element ids",
+    );
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("keeps relation/finding claims deterministic and after element claims", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        relations: {
+          added: [
+            { type: "shadows", from: "x", to: "y" },
+            { type: "overrides", from: "y", to: "x" },
+          ],
+          removed: [],
+        },
+      }),
+    );
+    const first = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    const second = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+    expect(first.claims).toEqual(second.claims);
+    const rules = first.claims.map((c) => c.ruleId);
+    const lastElementRule = Math.max(
+      ...rules.map((r, i) =>
+        [
+          "compare-element-added",
+          "compare-element-removed",
+          "compare-element-changed",
+          "compare-status-transition",
+          "compare-activation-change",
+          "compare-facet-change",
+        ].includes(r)
+          ? i
+          : -1,
+      ),
+    );
+    const firstRelationRule = rules.indexOf("compare-relation-added");
+    expect(firstRelationRule).toBeGreaterThan(lastElementRule);
+    expect(
+      first.claims.filter((c) => c.ruleId === "compare-relation-added").length,
+    ).toBe(2);
+  });
+});
