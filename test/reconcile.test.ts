@@ -318,9 +318,10 @@ describe("reconcileDocuments", () => {
     expect(byId.get("stayer")!.contradictions[0]).toContain(
       "present in the after",
     );
-    expect(byId.get("missing")!.contradictions[0]).toContain(
-      "absent from a complete export",
-    );
+    expect(byId.get("missing")!.contradictions).toEqual([
+      "listed as changed by the diff but absent from the complete before export",
+      "listed as changed by the diff but absent from the complete after export",
+    ]);
     expect(byId.get("x")!.contradictions).toEqual([
       "diff records status from 'shadowed' but the before export resolves 'effective'",
       "diff records status to 'effective' but the after export resolves 'shadowed'",
@@ -414,5 +415,57 @@ describe("reconcileDocuments", () => {
     expect(record.facetChange).toBeNull();
     expect(record.activationChange).toBeNull();
     expect(record.contradictions).toEqual([]);
+  });
+});
+
+describe("reconcileDocuments review findings", () => {
+  it("flags a changed id absent from a complete side even when the other side is partial", () => {
+    const partialBefore = parsePflExport(
+      {
+        pflVersion: "1.0.0",
+        command: "export",
+        ok: true,
+        completeness: "partial",
+        diagnostics: [],
+        data: exportData([]),
+      },
+      "test",
+    ) as PflExportDocument;
+    const after = parseExport(exportData([]));
+    const diff = parseDiff(
+      diffData({
+        structural: {
+          added: 0,
+          removed: 0,
+          changed: 1,
+          addedIds: [],
+          removedIds: [],
+          changedIds: ["x"],
+        },
+      }),
+    );
+    const [record] = reconcileDocuments(partialBefore, after, diff).elements;
+    expect(record.contradictions).toEqual([
+      "listed as changed by the diff but absent from the complete after export",
+    ]);
+  });
+
+  it("flags a null-side status change contradicted by an export's resolved status", () => {
+    const before = parseExport(exportData([element("x")]));
+    const after = parseExport(exportData([element("x")]));
+    const diff = parseDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 1,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: "effective", to: null }],
+        },
+      }),
+    );
+    const [record] = reconcileDocuments(before, after, diff).elements;
+    expect(record.contradictions).toEqual([
+      "diff records no after status but the after export resolves 'effective'",
+    ]);
   });
 });

@@ -101,6 +101,8 @@ export function reconcileDocuments(
   ]);
 
   const elements: ElementReconciliation[] = [...ids].sort().map((id) => {
+    // The reader enforces pairwise disjointness of the structural lists, so
+    // an id belongs to at most one bucket.
     const structural: StructuralChange =
       (Object.keys(buckets) as Exclude<StructuralChange, "none">[]).find(
         (key) => buckets[key].includes(id),
@@ -158,14 +160,16 @@ export function reconcileDocuments(
       contradictions.push(
         "listed as removed by the diff but absent from the complete before export",
       );
-    if (
-      structural === "changed" &&
-      (bi === null || ai === null) &&
-      (bi === null ? before : after).completeness === "complete"
-    )
-      contradictions.push(
-        "listed as changed by the diff but absent from a complete export",
-      );
+    if (structural === "changed") {
+      if (bi === null && before.completeness === "complete")
+        contradictions.push(
+          "listed as changed by the diff but absent from the complete before export",
+        );
+      if (ai === null && after.completeness === "complete")
+        contradictions.push(
+          "listed as changed by the diff but absent from the complete after export",
+        );
+    }
     if (statusChange !== null) {
       if (
         (bi === null && before.completeness === "complete") ||
@@ -189,6 +193,16 @@ export function reconcileDocuments(
       )
         contradictions.push(
           `diff records status to '${statusChange.to}' but the after export resolves '${afterElement.resolved.status}'`,
+        );
+      // A null side marks the element as absent on that side in the diff;
+      // an export that still carries a resolved status contradicts that.
+      if (statusChange.from === null && beforeElement?.resolved != null)
+        contradictions.push(
+          `diff records no before status but the before export resolves '${beforeElement.resolved.status}'`,
+        );
+      if (statusChange.to === null && afterElement?.resolved != null)
+        contradictions.push(
+          `diff records no after status but the after export resolves '${afterElement.resolved.status}'`,
         );
     }
 
