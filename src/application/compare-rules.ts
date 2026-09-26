@@ -335,7 +335,10 @@ function findingClaims(
           : ` citing ${idList(finding.elementIds)}`) +
         `: '${finding.message}'`;
       const parts: string[] = [];
-      for (const element of finding.elementIndexes) {
+      for (const element of finding.elementIndexes.slice(
+        0,
+        MAX_LISTED_FINDING_IDS,
+      )) {
         const index =
           target === "after" ? element.afterIndex : element.beforeIndex;
         const context = endpointContext(
@@ -348,6 +351,9 @@ function findingClaims(
         parts.push(context.text);
         evidence.push(...context.evidence);
       }
+      const uncited = finding.elementIndexes.length - MAX_LISTED_FINDING_IDS;
+      if (uncited > 0)
+        parts.push(`and ${uncited} more cited elements without context`);
       if (parts.length > 0) text += `; ${parts.join("; ")}`;
       if (finding.counterpart !== null)
         text +=
@@ -899,8 +905,8 @@ export const COMPARE_RULES: readonly CompareRule[] = [
   },
   {
     ruleId: "compare-contradiction",
-    evaluate: (view) =>
-      view.elements.flatMap((element) =>
+    evaluate: (view) => [
+      ...view.elements.flatMap((element) =>
         element.contradictions.map((contradiction) =>
           claim(
             "compare-contradiction",
@@ -910,5 +916,34 @@ export const COMPARE_RULES: readonly CompareRule[] = [
           ),
         ),
       ),
+      ...view.relations.flatMap((relation) =>
+        relation.contradictions.map((contradiction) =>
+          claim(
+            "compare-contradiction",
+            `The documents disagree about the '${relation.type}' relation ` +
+              `from element '${relation.from}' to element ` +
+              `'${relation.to}': ${contradiction.detail}.`,
+            contradiction.evidence,
+          ),
+        ),
+      ),
+      ...view.findings.flatMap((finding) =>
+        finding.contradictions.map((contradiction) =>
+          claim(
+            "compare-contradiction",
+            `The documents disagree about the ${finding.direction} ` +
+              `finding for rule '${finding.rule}': ${contradiction.detail}.`,
+            contradiction.evidence,
+          ),
+        ),
+      ),
+      ...view.documentContradictions.map((contradiction) =>
+        claim(
+          "compare-contradiction",
+          `The documents disagree: ${contradiction.detail}.`,
+          contradiction.evidence,
+        ),
+      ),
+    ],
   },
 ];

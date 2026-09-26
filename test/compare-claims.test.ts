@@ -1178,3 +1178,146 @@ describe("compare review fixes (devin-review round 2)", () => {
     expect(noteClaims(result1)).toEqual(noteClaims(result2));
   });
 });
+
+describe("compare review fixes (devin-review round 3)", () => {
+  function compare(
+    before: { doc: PflExportDocument },
+    after: { doc: PflExportDocument },
+    diff: { doc: PflDiffDocument },
+  ) {
+    return compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+  }
+
+  const contradictions = (result: ComparisonResult) =>
+    result.claims.filter((c) => c.ruleId === "compare-contradiction");
+
+  it("flags identical elements listed as changed in complete exports", () => {
+    const before = makeExport(exportData([element("x")], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        structural: {
+          added: 0,
+          removed: 0,
+          changed: 1,
+          addedIds: [],
+          removedIds: [],
+          changedIds: ["x"],
+        },
+      }),
+    );
+    const result = compare(before, after, diff);
+    expect(
+      contradictions(result).some((c) =>
+        c.claim.includes("identical in the two complete exports"),
+      ),
+    ).toBe(true);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("flags a relation delta that disagrees with complete exports", () => {
+    const rel = { type: "shadows", from: "x", to: "y" };
+    const before = makeExport(
+      exportData([element("x"), element("y")], { relations: [rel] }, "a"),
+    );
+    const after = makeExport(exportData([element("x"), element("y")], {}, "b"));
+    const diff = makeDiff(
+      diffData({ relations: { added: [rel], removed: [] } }),
+    );
+    const result = compare(before, after, diff);
+    const claims = contradictions(result).map((c) => c.claim);
+    expect(
+      claims.some((c) =>
+        c.includes("already present in the complete before export"),
+      ),
+    ).toBe(true);
+    expect(
+      claims.some((c) => c.includes("absent from the complete after export")),
+    ).toBe(true);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("flags a finding delta that disagrees with complete exports", () => {
+    const finding = { rule: "r", message: "m", elementIds: ["x"] };
+    const before = makeExport(
+      exportData([element("x")], { findings: [finding] }, "a"),
+    );
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({ findings: { added: [], removed: [finding] } }),
+    );
+    const result = compare(before, after, diff);
+    expect(
+      contradictions(result).some((c) =>
+        c.claim.includes(
+          "listed as a removed finding but absent from the complete before export",
+        ),
+      ),
+    ).toBe(false);
+    // The finding is present in before and absent in after — consistent.
+    expect(contradictions(result)).toHaveLength(0);
+    const reversed = compare(
+      before,
+      after,
+      makeDiff(diffData({ findings: { added: [finding], removed: [] } })),
+    );
+    expect(
+      contradictions(reversed).some((c) =>
+        c.claim.includes("already present in the complete before export"),
+      ),
+    ).toBe(true);
+  });
+
+  it("flags aggregate totals that disagree with the derived changes", () => {
+    const before = makeExport(
+      exportData([element("x", { activation: "always" })], {}, "a"),
+    );
+    const after = makeExport(
+      exportData(
+        [element("x", { activation: "on-demand", facets: ["glossary"] })],
+        {},
+        "b",
+      ),
+    );
+    const diff = makeDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [],
+        },
+        facetDeltas: {},
+      }),
+    );
+    const result = compare(before, after, diff);
+    const claims = contradictions(result).map((c) => c.claim);
+    expect(
+      claims.some((c) =>
+        c.includes(
+          "records 0 activation changes but the two complete exports derive 1",
+        ),
+      ),
+    ).toBe(true);
+    expect(claims.some((c) => c.includes("facet delta 0 for 'glossary'"))).toBe(
+      true,
+    );
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+});

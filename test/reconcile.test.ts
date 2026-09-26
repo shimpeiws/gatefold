@@ -367,7 +367,9 @@ describe("reconcileDocuments", () => {
 
   it("does not attribute aggregate counts to individual elements", () => {
     const before = parseExport(exportData([element("x")]));
-    const after = parseExport(exportData([element("x")]));
+    const after = parseExport(
+      exportData([element("x", { status: "shadowed" })]),
+    );
     const diff = parseDiff(
       diffData({
         effective: {

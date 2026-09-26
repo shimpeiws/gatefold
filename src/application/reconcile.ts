@@ -7,6 +7,12 @@ import type {
 /** Structural bucket an element id falls into per the diff. */
 export type StructuralChange = "added" | "removed" | "changed" | "none";
 
+/** A recorded disagreement between the diff and the exports. */
+export interface ReconciliationContradiction {
+  readonly detail: string;
+  readonly evidence: readonly ComparisonEvidenceReference[];
+}
+
 export interface ElementReconciliation {
   readonly id: string;
   /** The diff's structural classification; "none" when only statusChanges names it. */
@@ -43,10 +49,7 @@ export interface ElementReconciliation {
    * data on a partial or unknown-completeness side is recorded as
    * unobserved instead — partial observation is not a contradiction.
    */
-  readonly contradictions: readonly {
-    readonly detail: string;
-    readonly evidence: readonly ComparisonEvidenceReference[];
-  }[];
+  readonly contradictions: readonly ReconciliationContradiction[];
 }
 
 /**
@@ -64,6 +67,12 @@ export interface RelationReconciliation {
   readonly fromAfterIndex: number | null;
   readonly toBeforeIndex: number | null;
   readonly toAfterIndex: number | null;
+  /**
+   * Presence disagreements between this delta and the complete exports.
+   * A partial or unknown side never produces one — its absence stays
+   * unobserved.
+   */
+  readonly contradictions: readonly ReconciliationContradiction[];
 }
 
 /**
@@ -89,6 +98,11 @@ export interface FindingReconciliation {
    * same-elements finding with a different message, or null.
    */
   readonly counterpart: number | null;
+  /**
+   * Presence disagreements between this delta and the complete exports,
+   * same gating as relation contradictions.
+   */
+  readonly contradictions: readonly ReconciliationContradiction[];
 }
 
 /** The joined per-element comparison view consumed by the compare rules. */
@@ -99,6 +113,12 @@ export interface ComparisonView {
   readonly elements: readonly ElementReconciliation[];
   readonly relations: readonly RelationReconciliation[];
   readonly findings: readonly FindingReconciliation[];
+  /**
+   * Document-level disagreements that no single element owns, such as
+   * aggregate activation/facet totals that contradict what the two complete
+   * exports derive.
+   */
+  readonly documentContradictions: readonly ReconciliationContradiction[];
 }
 
 const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -312,6 +332,32 @@ export function reconcileDocuments(
             { source: "after", pointer: "/data/elements", elementId: id },
           ],
         });
+      // Two complete exports holding identical elements for a changed id
+      // contradict the diff's assertion that the element differs.
+      if (
+        bi !== null &&
+        ai !== null &&
+        before.completeness === "complete" &&
+        after.completeness === "complete" &&
+        JSON.stringify(beforeElement) === JSON.stringify(afterElement)
+      )
+        contradictions.push({
+          detail:
+            "listed as changed by the diff but identical in the two complete exports",
+          evidence: [
+            diffRef(structuralPointer!),
+            {
+              source: "before",
+              pointer: `/data/elements/${bi}`,
+              elementId: id,
+            },
+            {
+              source: "after",
+              pointer: `/data/elements/${ai}`,
+              elementId: id,
+            },
+          ],
+        });
     }
     if (statusChange !== null) {
       const statusRef = (field: string): ComparisonEvidenceReference => ({
@@ -449,20 +495,142 @@ export function reconcileDocuments(
     };
   });
 
+  // Aggregate disagreements: when both exports are complete and every
+  // shared element carries the layer being derived, the exports' totals
+  // are authoritative — a different diff aggregate is a contradiction.
+  // Missing layers or a non-complete side make the totals inconclusive.
+  const documentContradictions: ReconciliationContradiction[] = [];
+  if (before.completeness === "complete" && after.completeness === "complete") {
+    const shared = elements.filter(
+      (el) => el.beforeIndex !== null && el.afterIndex !== null,
+    );
+    if (
+      shared.every(
+        (el) =>
+          before.data.elements[el.beforeIndex!].resolved !== null &&
+          after.data.elements[el.afterIndex!].resolved !== null,
+      )
+    ) {
+      const derived = shared.filter(
+        (el) => el.activationChange !== null,
+      ).length;
+      const recorded = diff.data.effective.activationChanged;
+      if (derived !== recorded)
+        documentContradictions.push({
+          detail: `the diff records ${recorded} activation changes but the two complete exports derive ${derived}`,
+          evidence: [
+            { source: "diff", pointer: "/data/effective/activationChanged" },
+          ],
+        });
+    }
+    if (
+      shared.every(
+        (el) =>
+          before.data.elements[el.beforeIndex!].interpretation !== null &&
+          after.data.elements[el.afterIndex!].interpretation !== null,
+      )
+    ) {
+      const derivedDeltas = new Map<string, number>();
+      for (const el of shared) {
+        for (const facet of el.facetChange?.added ?? [])
+          derivedDeltas.set(facet, (derivedDeltas.get(facet) ?? 0) + 1);
+        for (const facet of el.facetChange?.removed ?? [])
+          derivedDeltas.set(facet, (derivedDeltas.get(facet) ?? 0) - 1);
+      }
+      const facets = [
+        ...new Set([
+          ...derivedDeltas.keys(),
+          ...Object.keys(diff.data.facetDeltas),
+        ]),
+      ].sort();
+      for (const facet of facets) {
+        const derived = derivedDeltas.get(facet) ?? 0;
+        const hasFacet = Object.hasOwn(diff.data.facetDeltas, facet);
+        const recorded = hasFacet ? diff.data.facetDeltas[facet] : 0;
+        if (derived !== recorded)
+          documentContradictions.push({
+            detail: `the diff records facet delta ${recorded} for '${facet}' but the two complete exports derive ${derived}`,
+            evidence: [
+              {
+                source: "diff",
+                pointer: hasFacet
+                  ? `/data/facetDeltas/${facet.replace(/~/g, "~0").replace(/\//g, "~1")}`
+                  : "/data/facetDeltas",
+              },
+            ],
+          });
+      }
+    }
+  }
+
+  // A relation delta asserts presence on one side and absence on the
+  // other; check each record against the complete exports' collections.
+  const relationIdentity = (relation: {
+    type: string;
+    from: string;
+    to: string;
+  }): string => JSON.stringify([relation.type, relation.from, relation.to]);
+  const beforeRelations = new Set(before.data.relations.map(relationIdentity));
+  const afterRelations = new Set(after.data.relations.map(relationIdentity));
   const relations: RelationReconciliation[] = (
     ["added", "removed"] as const
   ).flatMap((direction) =>
-    diff.data.relations[direction].map((relation, index) => ({
-      direction,
-      index,
-      type: relation.type,
-      from: relation.from,
-      to: relation.to,
-      fromBeforeIndex: beforeIndex.get(relation.from) ?? null,
-      fromAfterIndex: afterIndex.get(relation.from) ?? null,
-      toBeforeIndex: beforeIndex.get(relation.to) ?? null,
-      toAfterIndex: afterIndex.get(relation.to) ?? null,
-    })),
+    diff.data.relations[direction].map((relation, index) => {
+      const base = `/data/relations/${direction}/${index}`;
+      const diffEvidence: ComparisonEvidenceReference[] = [
+        { source: "diff", pointer: `${base}/type` },
+        { source: "diff", pointer: `${base}/from`, elementId: relation.from },
+        { source: "diff", pointer: `${base}/to`, elementId: relation.to },
+      ];
+      const contradictions: ReconciliationContradiction[] = [];
+      const inBefore = beforeRelations.has(relationIdentity(relation));
+      const inAfter = afterRelations.has(relationIdentity(relation));
+      const exportSide = (
+        source: "before" | "after",
+      ): ComparisonEvidenceReference => ({
+        source,
+        pointer: "/data/relations",
+      });
+      if (direction === "added") {
+        if (before.completeness === "complete" && inBefore)
+          contradictions.push({
+            detail:
+              "listed as an added relation but already present in the complete before export",
+            evidence: [...diffEvidence, exportSide("before")],
+          });
+        if (after.completeness === "complete" && !inAfter)
+          contradictions.push({
+            detail:
+              "listed as an added relation but absent from the complete after export",
+            evidence: [...diffEvidence, exportSide("after")],
+          });
+      } else {
+        if (before.completeness === "complete" && !inBefore)
+          contradictions.push({
+            detail:
+              "listed as a removed relation but absent from the complete before export",
+            evidence: [...diffEvidence, exportSide("before")],
+          });
+        if (after.completeness === "complete" && inAfter)
+          contradictions.push({
+            detail:
+              "listed as a removed relation but still present in the complete after export",
+            evidence: [...diffEvidence, exportSide("after")],
+          });
+      }
+      return {
+        direction,
+        index,
+        type: relation.type,
+        from: relation.from,
+        to: relation.to,
+        fromBeforeIndex: beforeIndex.get(relation.from) ?? null,
+        fromAfterIndex: afterIndex.get(relation.from) ?? null,
+        toBeforeIndex: beforeIndex.get(relation.to) ?? null,
+        toAfterIndex: afterIndex.get(relation.to) ?? null,
+        contradictions,
+      };
+    }),
   );
 
   // A removed finding pairs with an added finding for the same rule and the
@@ -507,23 +675,85 @@ export function reconcileDocuments(
     );
     if (position !== -1) counterpartOf.set(index, queue.splice(position, 1)[0]);
   }
+  // Finding presence is checked on the full identity (rule, message,
+  // element ids): a reworded message is a different finding, not a
+  // contradiction.
+  const exportFindingIdentity = (finding: {
+    rule: string;
+    message: string;
+    elementIds: readonly string[];
+  }): string =>
+    JSON.stringify([
+      finding.rule,
+      finding.message,
+      [...finding.elementIds].sort(),
+    ]);
+  const beforeFindings = new Set(
+    before.data.findings.map(exportFindingIdentity),
+  );
+  const afterFindings = new Set(after.data.findings.map(exportFindingIdentity));
   const findings: FindingReconciliation[] = (
     ["added", "removed"] as const
   ).flatMap((direction) =>
-    diff.data.findings[direction].map((finding, index) => ({
-      direction,
-      index,
-      rule: finding.rule,
-      message: finding.message,
-      elementIds: finding.elementIds,
-      elementIndexes: finding.elementIds.map((id) => ({
-        id,
-        beforeIndex: beforeIndex.get(id) ?? null,
-        afterIndex: afterIndex.get(id) ?? null,
-      })),
-      counterpart:
-        direction === "removed" ? (counterpartOf.get(index) ?? null) : null,
-    })),
+    diff.data.findings[direction].map((finding, index) => {
+      const base = `/data/findings/${direction}/${index}`;
+      const diffEvidence: ComparisonEvidenceReference[] = [
+        { source: "diff", pointer: `${base}/rule` },
+        { source: "diff", pointer: `${base}/message` },
+        { source: "diff", pointer: `${base}/elementIds` },
+      ];
+      const contradictions: ReconciliationContradiction[] = [];
+      const inBefore = beforeFindings.has(exportFindingIdentity(finding));
+      const inAfter = afterFindings.has(exportFindingIdentity(finding));
+      const exportSide = (
+        source: "before" | "after",
+      ): ComparisonEvidenceReference => ({
+        source,
+        pointer: "/data/findings",
+      });
+      if (direction === "added") {
+        if (before.completeness === "complete" && inBefore)
+          contradictions.push({
+            detail:
+              "listed as an added finding but already present in the complete before export",
+            evidence: [...diffEvidence, exportSide("before")],
+          });
+        if (after.completeness === "complete" && !inAfter)
+          contradictions.push({
+            detail:
+              "listed as an added finding but absent from the complete after export",
+            evidence: [...diffEvidence, exportSide("after")],
+          });
+      } else {
+        if (before.completeness === "complete" && !inBefore)
+          contradictions.push({
+            detail:
+              "listed as a removed finding but absent from the complete before export",
+            evidence: [...diffEvidence, exportSide("before")],
+          });
+        if (after.completeness === "complete" && inAfter)
+          contradictions.push({
+            detail:
+              "listed as a removed finding but still present in the complete after export",
+            evidence: [...diffEvidence, exportSide("after")],
+          });
+      }
+      return {
+        direction,
+        index,
+        rule: finding.rule,
+        message: finding.message,
+        elementIds: finding.elementIds,
+        elementIndexes: finding.elementIds.map((id) => ({
+          id,
+          beforeIndex: beforeIndex.get(id) ?? null,
+          afterIndex: afterIndex.get(id) ?? null,
+        })),
+        counterpart:
+          direction === "removed" ? (counterpartOf.get(index) ?? null) : null,
+        contradictions,
+      };
+    }),
   );
 
   // Sort by stable identifying fields so a permutation of the diff arrays
@@ -550,5 +780,6 @@ export function reconcileDocuments(
     elements,
     relations: relationsSorted,
     findings: findingsSorted,
+    documentContradictions,
   };
 }
