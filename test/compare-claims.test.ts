@@ -387,6 +387,11 @@ describe("compare claims (#35)", () => {
       (c) => c.ruleId === "compare-element-removed",
     );
     expect(removed!.claim).toContain("absence may be unobserved");
+    const removedEvidence = removed!.evidence.map(
+      (e) => `${e.source}:${e.pointer}`,
+    );
+    expect(removedEvidence).toContain("after:/data/elements");
+    expect(removedEvidence).toContain("after:/completeness");
     expect(
       result.claims.some((c) => c.ruleId === "compare-contradiction"),
     ).toBe(false);

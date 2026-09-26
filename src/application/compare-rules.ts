@@ -114,16 +114,26 @@ function diffListPointer(
 }
 
 /**
- * Context statement for a side where the export may lack the element:
- * partial or unknown completeness means absence may be unobserved.
+ * Context statement for a side where the export lacks the element, with the
+ * evidence that proves the absence (the elements list, plus /completeness
+ * when the hedge comes from partial capture).
  */
 function absentContext(
+  source: "before" | "after",
   completeness: PflExportDocument["completeness"],
   side: "A" | "B",
-): string {
-  return completeness === "complete"
-    ? `the ${side} export contains no element with this id`
-    : `the ${side} export does not record an element with this id, but it was captured with completeness '${completeness}' so absence may be unobserved`;
+  elementId: string,
+): { text: string; evidence: ComparisonEvidenceReference[] } {
+  const evidence: ComparisonEvidenceReference[] = [
+    { source, pointer: "/data/elements", elementId },
+  ];
+  if (completeness !== "complete")
+    evidence.push({ source, pointer: "/completeness" });
+  const text =
+    completeness === "complete"
+      ? `the ${side} export contains no element with this id`
+      : `the ${side} export does not record an element with this id, but it was captured with completeness '${completeness}' so absence may be unobserved`;
+  return { text, evidence };
 }
 
 /**
@@ -293,7 +303,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
             );
             text += `; ${side.text}`;
             evidence.push(...side.evidence);
-          } else text += `; ${absentContext(view.after.completeness, "B")}`;
+          } else {
+            const absent = absentContext(
+              "after",
+              view.after.completeness,
+              "B",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           if (element.beforeIndex !== null) {
             text += "; the A export also contains an element with this id";
             evidence.push({
@@ -301,7 +320,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
               pointer: `/data/elements/${element.beforeIndex}/id`,
               elementId: element.id,
             });
-          } else text += `; ${absentContext(view.before.completeness, "A")}`;
+          } else {
+            const absent = absentContext(
+              "before",
+              view.before.completeness,
+              "A",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           return claim("compare-element-added", `${text}.`, evidence);
         }),
   },
@@ -322,7 +350,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
             );
             text += `; ${side.text}`;
             evidence.push(...side.evidence);
-          } else text += `; ${absentContext(view.before.completeness, "A")}`;
+          } else {
+            const absent = absentContext(
+              "before",
+              view.before.completeness,
+              "A",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           if (element.afterIndex !== null) {
             text += "; the B export also contains an element with this id";
             evidence.push({
@@ -330,7 +367,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
               pointer: `/data/elements/${element.afterIndex}/id`,
               elementId: element.id,
             });
-          } else text += `; ${absentContext(view.after.completeness, "B")}`;
+          } else {
+            const absent = absentContext(
+              "after",
+              view.after.completeness,
+              "B",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           return claim("compare-element-removed", `${text}.`, evidence);
         }),
   },
@@ -353,7 +399,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
             );
             text += `; ${side.text}`;
             evidence.push(...side.evidence);
-          } else text += `; ${absentContext(view.before.completeness, "A")}`;
+          } else {
+            const absent = absentContext(
+              "before",
+              view.before.completeness,
+              "A",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           if (element.afterIndex !== null) {
             const side = describeElement(
               view.after,
@@ -363,7 +418,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
             );
             text += `; ${side.text}`;
             evidence.push(...side.evidence);
-          } else text += `; ${absentContext(view.after.completeness, "B")}`;
+          } else {
+            const absent = absentContext(
+              "after",
+              view.after.completeness,
+              "B",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           return claim("compare-element-changed", `${text}.`, evidence);
         }),
   },
@@ -402,7 +466,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
                 elementId: element.id,
               });
             } else text += "; the before export has no resolved entry for it";
-          } else text += `; ${absentContext(view.before.completeness, "A")}`;
+          } else {
+            const absent = absentContext(
+              "before",
+              view.before.completeness,
+              "A",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           if (element.afterIndex !== null) {
             const resolved =
               view.after.data.elements[element.afterIndex].resolved;
@@ -414,7 +487,16 @@ export const COMPARE_RULES: readonly CompareRule[] = [
                 elementId: element.id,
               });
             } else text += "; the after export has no resolved entry for it";
-          } else text += `; ${absentContext(view.after.completeness, "B")}`;
+          } else {
+            const absent = absentContext(
+              "after",
+              view.after.completeness,
+              "B",
+              element.id,
+            );
+            text += `; ${absent.text}`;
+            evidence.push(...absent.evidence);
+          }
           if (change.to === "effective")
             text +=
               " — 'effective' means potentially effective in the static " +

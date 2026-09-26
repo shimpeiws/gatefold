@@ -257,21 +257,24 @@ export function reconcileDocuments(
         pointer: `${statusPointer}/${field}`,
         elementId: id,
       });
-      if (
-        (bi === null && before.completeness === "complete") ||
-        (ai === null && after.completeness === "complete")
-      )
+      const absentCompleteSides: ComparisonEvidenceReference[] = [];
+      if (bi === null && before.completeness === "complete")
+        absentCompleteSides.push({
+          source: "before",
+          pointer: "/data/elements",
+          elementId: id,
+        });
+      if (ai === null && after.completeness === "complete")
+        absentCompleteSides.push({
+          source: "after",
+          pointer: "/data/elements",
+          elementId: id,
+        });
+      if (absentCompleteSides.length > 0)
         contradictions.push({
           detail:
             "has a diff status change but is absent from a complete export",
-          evidence: [
-            statusRef("id"),
-            {
-              source: bi === null ? "before" : "after",
-              pointer: "/data/elements",
-              elementId: id,
-            },
-          ],
+          evidence: [statusRef("id"), ...absentCompleteSides],
         });
       if (
         statusChange.from !== null &&

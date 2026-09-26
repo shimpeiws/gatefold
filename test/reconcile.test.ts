@@ -457,6 +457,38 @@ describe("reconcileDocuments review findings", () => {
     ]);
   });
 
+  it("points status-change absence evidence at the complete side when the other side is partial", () => {
+    const partialBefore = parsePflExport(
+      {
+        pflVersion: "1.0.0",
+        command: "export",
+        ok: true,
+        completeness: "partial",
+        diagnostics: [],
+        data: exportData([]),
+      },
+      "test",
+    ) as PflExportDocument;
+    const after = parseExport(exportData([]));
+    const diff = parseDiff(
+      diffData({
+        effective: {
+          newlyEffective: 0,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: "effective", to: "shadowed" }],
+        },
+      }),
+    );
+    const [record] = reconcileDocuments(partialBefore, after, diff).elements;
+    const [contradiction] = record.contradictions;
+    expect(contradiction.detail).toContain("absent from a complete export");
+    expect(contradiction.evidence.map((e) => e.source)).toEqual([
+      "diff",
+      "after",
+    ]);
+  });
+
   it("flags a null-side status change contradicted by an export's resolved status", () => {
     const before = parseExport(exportData([element("x")]));
     const after = parseExport(exportData([element("x")]));
