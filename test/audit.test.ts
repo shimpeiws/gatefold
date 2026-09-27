@@ -160,6 +160,7 @@ interface RunOptions {
   patch?: string | null;
   patchTruncated?: boolean;
   result?: string | null;
+  resultTruncated?: boolean;
   baselineManifest?: string | null;
   changes?: string | null;
 }
@@ -193,6 +194,7 @@ function writeRun(base: string, name: string, opts: RunOptions = {}): string {
       path: "result.txt",
       kind: "result",
       digest: sha256(result),
+      ...(opts.resultTruncated ? { truncated: true } : {}),
     });
   }
   const baselineManifest =
@@ -425,8 +427,170 @@ describe("audit-run", () => {
         completeness: "partial",
       });
       // 'complete' declares full coverage; the cut prefix covers only a
-      // subset, so the records contradict.
+      // subset, so the records contradict — on partial evidence.
       expect(factAt(result, "seed.changes-patch")).toMatchObject({
+        state: "inconsistent",
+        completeness: "partial",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves patch completeness unverifiable when a 'complete' record coexists with omission diagnostics", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(
+        writeRun(base, "run", {
+          trace: seededTrace({
+            diagnostics: ["patch: 1 binary file(s) omitted"],
+          }),
+        }),
+      );
+      expect(factAt(result, "patch.record").state).toBe("inconsistent");
+      expect(factAt(result, "patch.completeness")).toMatchObject({
+        state: "unverifiable",
+        completeness: "partial",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves patch completeness unverifiable when a 'complete' record coexists with a generation-failed diagnostic", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(
+        writeRun(base, "run", {
+          trace: seededTrace({
+            diagnostics: ["patch: generation failed; patch.diff not recorded"],
+          }),
+        }),
+      );
+      expect(factAt(result, "patch.record").state).toBe("inconsistent");
+      expect(factAt(result, "patch.completeness")).toMatchObject({
+        state: "unverifiable",
+        completeness: "partial",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a stored patch with no seed.changes record as inconsistent even without a patch record", async () => {
+    const base = tmp();
+    try {
+      const trace = seededTrace({ seed: seedDoc(null) });
+      delete trace.patch;
+      const result = await audit(
+        writeRun(base, "run", { trace, changes: null }),
+      );
+      expect(factAt(result, "patch.record").state).toBe("not-recorded");
+      expect(factAt(result, "seed.changes-patch")).toMatchObject({
+        state: "inconsistent",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a diagnostically published patch with no seed.changes record as inconsistent", async () => {
+    const base = tmp();
+    try {
+      const trace = seededTrace({
+        seed: seedDoc(null),
+        diagnostics: ["patch: 1 binary file(s) omitted"],
+      });
+      delete trace.patch;
+      const result = await audit(
+        writeRun(base, "run", { trace, patch: null, changes: null }),
+      );
+      expect(factAt(result, "patch.record").state).toBe("not-recorded");
+      expect(factAt(result, "seed.changes-patch")).toMatchObject({
+        state: "inconsistent",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves the count comparison unverifiable when a declared patch is not stored", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(writeRun(base, "run", { patch: null }));
+      expect(factAt(result, "patch.record").state).toBe("inconsistent");
+      expect(factAt(result, "seed.changes-patch")).toMatchObject({
+        state: "unverifiable",
+        completeness: "unknown",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("marks count and path contradictions on a truncated patch as inconsistent with partial completeness", async () => {
+    const base = tmp();
+    try {
+      // Two sealed added-file blocks in a truncated patch while
+      // seed.changes.added is 1 and changes.json lists neither path.
+      const extra =
+        "--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+x\n" +
+        "--- /dev/null\n+++ b.ts\n@@ -0,0 +1,1 @@\n+y\n";
+      const result = await audit(
+        writeRun(base, "run", { patch: extra, patchTruncated: true }),
+      );
+      expect(factAt(result, "seed.changes-patch")).toMatchObject({
+        state: "inconsistent",
+        completeness: "partial",
+      });
+      expect(factAt(result, "changes.patch-agreement")).toMatchObject({
+        state: "inconsistent",
+        completeness: "partial",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a truncated decodable result as unverifiable content", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(
+        writeRun(base, "run", { resultTruncated: true }),
+      );
+      expect(factAt(result, "result.stored")).toMatchObject({
+        state: "verified",
+        completeness: "partial",
+      });
+      expect(factAt(result, "result.content")).toMatchObject({
+        state: "unverifiable",
+        completeness: "partial",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a baseline manifest file entry outside the documented shape", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(
+        writeRun(base, "run", {
+          baselineManifest: JSON.stringify(
+            baselineManifestDoc({
+              files: {
+                "a.txt": { digest: "bogus", mode: 420, bytes: 5 },
+                "b.txt": {
+                  digest: "sha256:" + "1".repeat(64),
+                  mode: -1,
+                  bytes: 7,
+                },
+              },
+            }),
+          ),
+        }),
+      );
+      expect(factAt(result, "baseline-manifest.record")).toMatchObject({
         state: "inconsistent",
         completeness: "complete",
       });
@@ -862,6 +1026,53 @@ describe("audit-run check reports", () => {
       expect(factAt(result, "check-report.patch-binding", report).state).toBe(
         "unverifiable",
       );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a truncated patch digest binding partial whether it matches or not", async () => {
+    const base = tmp();
+    try {
+      const cut = seededPatch.slice(0, seededPatch.indexOf("+++ test/"));
+      const runDir = writeRun(base, "run", {
+        patch: cut,
+        patchTruncated: true,
+      });
+      const match = writeReport(
+        base,
+        "match.json",
+        reportDoc({
+          subject: {
+            taskDigest: "sha256:task-x",
+            baselineDigest: BASELINE_DIGEST,
+            patchDigest: sha256(cut),
+          },
+        }),
+      );
+      const mismatch = writeReport(
+        base,
+        "mismatch.json",
+        reportDoc({
+          subject: {
+            taskDigest: "sha256:task-x",
+            patchDigest: sha256("other bytes"),
+          },
+        }),
+      );
+      const result = await audit(runDir, [match, mismatch]);
+      expect(factAt(result, "check-report.patch-binding", match)).toMatchObject(
+        {
+          state: "verified",
+          completeness: "partial",
+        },
+      );
+      expect(
+        factAt(result, "check-report.patch-binding", mismatch),
+      ).toMatchObject({
+        state: "inconsistent",
+        completeness: "partial",
+      });
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

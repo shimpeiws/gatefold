@@ -583,7 +583,9 @@ function auditBaselineManifest(run: AuditedRun): AuditFact[] {
       typeof entry !== "object" ||
       entry === null ||
       typeof entry.digest !== "string" ||
+      !SHA256_DIGEST.test(entry.digest) ||
       !Number.isSafeInteger(entry.mode) ||
+      (entry.mode as number) < 0 ||
       !Number.isSafeInteger(entry.bytes) ||
       (entry.bytes as number) < 0
     ) {
@@ -594,7 +596,7 @@ function auditBaselineManifest(run: AuditedRun): AuditFact[] {
           "inconsistent",
           "complete",
           `the verified ${path} file entry '${path}' is not the ` +
-            "documented { digest, mode, bytes } shape",
+            "documented { digest: sha256:…, mode ≥ 0, bytes ≥ 0 } shape",
           [
             recordEv(
               "baselineManifest",
@@ -1001,25 +1003,49 @@ function auditPatchCompleteness(run: AuditedRun): AuditFact {
         "coverage of the change set cannot be assessed",
       [entryRef],
     );
-  if (rec === undefined)
+  if (rec === undefined) {
+    const omitted = run.patchOmissionIndex !== -1;
+    const failed = run.patchFailureIndex !== -1;
     return fact(
       id,
       "unverifiable",
-      run.patchOmissionIndex === -1 ? "unknown" : "partial",
+      omitted || failed ? "partial" : "unknown",
       "the trace predates the patch completeness record; an untruncated " +
         "patch does not certify coverage of the change set" +
-        (run.patchOmissionIndex === -1
-          ? ""
-          : ", and the trace records omitted patch content"),
+        (omitted ? ", and the trace records omitted patch content" : "") +
+        (failed
+          ? ", and a patch generation-failed diagnostic contradicts the " +
+            "stored entry"
+          : ""),
       [
         traceEv("", "no patch field"),
+        entryRef,
+        ...(omitted ? [diagnosticEv(run.patchOmissionIndex)] : []),
+        ...(failed ? [diagnosticEv(run.patchFailureIndex)] : []),
+      ],
+    );
+  }
+  // rec.state === "complete": an omission or generation-failed diagnostic
+  // contradicting the declaration leaves coverage uncertified too —
+  // patch.record reports the same contradiction as inconsistent.
+  if (run.patchOmissionIndex !== -1 || run.patchFailureIndex !== -1)
+    return fact(
+      id,
+      "unverifiable",
+      "partial",
+      "the trace's patch diagnostics contradict its 'complete' " +
+        "declaration; coverage of the change set cannot be certified",
+      [
+        traceEv("/patch/state"),
         entryRef,
         ...(run.patchOmissionIndex === -1
           ? []
           : [diagnosticEv(run.patchOmissionIndex)]),
+        ...(run.patchFailureIndex === -1
+          ? []
+          : [diagnosticEv(run.patchFailureIndex)]),
       ],
     );
-  // rec.state === "complete"
   return fact(
     id,
     "verified",
@@ -1044,25 +1070,42 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
       [traceEv("", "no seed field")],
     );
   const changes = run.trace.seed!.changes;
-  const patchStateEvidence = [
-    traceEv("/patch/state"),
-    traceEv("/seed", "no changes field"),
-  ];
-  if (
-    changes === undefined &&
-    run.patchRecord !== undefined &&
-    run.patchRecord.state !== "absent"
-  )
-    return fact(
-      id,
-      "inconsistent",
-      "complete",
-      `patch.state '${run.patchRecord.state}' declares a published ` +
-        "patch but the trace records no seed.changes — shipped yuurei " +
-        "publishes a patch only when change collection completes",
-      patchStateEvidence,
-    );
-  if (changes === undefined)
+  if (changes === undefined) {
+    const declared =
+      run.patchRecord !== undefined && run.patchRecord.state !== "absent";
+    // A manifest patch.diff entry or a patch-omission diagnostic is itself
+    // a published-patch record; each contradicts an absent seed.changes
+    // even on traces that predate the patch record
+    // (docs/yuurei-seeded-run-contract.md).
+    const publishedBy = [
+      ...(declared ? [`patch.state '${run.patchRecord!.state}'`] : []),
+      ...(run.patchEntryIndex === null
+        ? []
+        : ["the manifest's patch.diff entry"]),
+      ...(run.patchOmissionIndex === -1
+        ? []
+        : ["the trace's patch omission diagnostics"]),
+    ];
+    if (publishedBy.length > 0)
+      return fact(
+        id,
+        "inconsistent",
+        "complete",
+        `${publishedBy.join(" and ")} ` +
+          `${publishedBy.length > 1 ? "record" : "records"} a published ` +
+          "patch but the trace records no seed.changes — shipped yuurei " +
+          "publishes a patch only when change collection completes",
+        [
+          traceEv("/seed", "no changes field"),
+          ...(declared ? [traceEv("/patch/state")] : []),
+          ...(run.patchEntryIndex === null
+            ? []
+            : [artifactEv("patch", run, run.patchEntryIndex)]),
+          ...(run.patchOmissionIndex === -1
+            ? []
+            : [diagnosticEv(run.patchOmissionIndex)]),
+        ],
+      );
     return fact(
       id,
       "not-recorded",
@@ -1071,6 +1114,7 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
         "against declared counts",
       [traceEv("/seed", "no changes field")],
     );
+  }
 
   const countsEvidence = (): AuditEvidenceReference[] => [
     traceEv("/seed/changes"),
@@ -1080,7 +1124,35 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
   ];
 
   if (run.patch === null) {
-    if (run.patchEntryIndex === null)
+    if (run.patchEntryIndex === null) {
+      const declares =
+        run.patchRecord !== undefined && run.patchRecord.state !== "absent";
+      if (declares || run.patchOmissionIndex !== -1)
+        // The trace declares a published patch (the record, or omission
+        // diagnostics on a pre-record trace) that the manifest does not
+        // store — patch.record reports the contradiction where one is
+        // recorded; with no bytes to parse, the count comparison itself
+        // cannot run.
+        return fact(
+          id,
+          "unverifiable",
+          "unknown",
+          (declares
+            ? `patch.state '${run.patchRecord!.state}' declares a ` +
+              "published patch"
+            : "the trace's patch omission diagnostics record a published " +
+              "patch") +
+            " but no patch.diff is stored; its per-kind counts cannot " +
+            "be checked against the declared change set",
+          [
+            traceEv("/seed/changes"),
+            ...(declares ? [traceEv("/patch/state")] : []),
+            ...(run.patchOmissionIndex === -1
+              ? []
+              : [diagnosticEv(run.patchOmissionIndex)]),
+            manifestEv("", "no patch.diff entry"),
+          ],
+        );
       return fact(
         id,
         "verified",
@@ -1089,6 +1161,7 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
           "counts",
         [traceEv("/seed/changes"), manifestEv("", "no patch.diff entry")],
       );
+    }
     return fact(
       id,
       "unverifiable",
@@ -1099,13 +1172,18 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
     );
   }
 
+  const partial =
+    run.patchRecord?.state === "partial" ||
+    run.patchEntryTruncated ||
+    run.patch.complete === false;
+  const completeness: AuditCompleteness = partial ? "partial" : "complete";
   for (const kind of CHANGE_KINDS) {
     const count = run.patch.files.filter((f) => f.change === kind).length;
     if (count > changes[kind])
       return fact(
         id,
         "inconsistent",
-        "complete",
+        completeness,
         `patch.diff records ${count} ${kind} file(s) but ` +
           `seed.changes.${kind} is ${changes[kind]}`,
         [traceEv(`/seed/changes/${kind}`), ...countsEvidence()],
@@ -1114,16 +1192,12 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
       return fact(
         id,
         "inconsistent",
-        "complete",
+        completeness,
         `patch.state 'complete' contradicts seed.changes.${kind} ` +
           `${changes[kind]}: patch.diff covers ${count}`,
         [traceEv(`/seed/changes/${kind}`), ...countsEvidence()],
       );
   }
-  const partial =
-    run.patchRecord?.state === "partial" ||
-    run.patchEntryTruncated ||
-    run.patch.complete === false;
   return fact(
     id,
     "verified",
@@ -1210,6 +1284,11 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
     recordEv("changes", record, ""),
     artifactEv("patch", run, run.patchEntryIndex!),
   ];
+  const partial =
+    run.patchRecord?.state !== "complete" ||
+    run.patchEntryTruncated ||
+    patch.complete === false;
+  const completeness: AuditCompleteness = partial ? "partial" : "complete";
   for (const kind of CHANGE_KINDS) {
     const patched = patch.files.filter((f) => f.change === kind);
     const missing = patched.find((f) => !sets[kind].has(f.path));
@@ -1217,7 +1296,7 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
       return fact(
         id,
         "inconsistent",
-        "complete",
+        completeness,
         `patch.diff records a ${kind} change for '${missing.path}' that ` +
           "the verified changes.json does not list",
         evidence(),
@@ -1229,20 +1308,16 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
       return fact(
         id,
         "inconsistent",
-        "complete",
+        completeness,
         `patch.state 'complete' contradicts the ${kind} set in the ` +
           "verified changes.json that patch.diff does not cover",
         evidence(),
       );
   }
-  const partial =
-    run.patchRecord?.state !== "complete" ||
-    run.patchEntryTruncated ||
-    patch.complete === false;
   return fact(
     id,
     "verified",
-    partial ? "partial" : "complete",
+    completeness,
     partial
       ? "every parsed patch block names a path the verified " +
           "changes.json lists under its kind; a partial patch may " +
@@ -1338,6 +1413,16 @@ function auditResultContent(run: AuditedRun): AuditFact {
       completeness,
       "the verified result.txt bytes do not decode to the contract's " +
         "UTF-8 text",
+      evidence,
+    );
+  if (state === "verified-truncated")
+    return fact(
+      id,
+      "unverifiable",
+      "partial",
+      "the verified result.txt bytes are a cut prefix that decodes to " +
+        "text; the complete result content is not stored and cannot be " +
+        "verified",
       evidence,
     );
   return fact(
@@ -1551,14 +1636,23 @@ function auditCheckReportFacts(
       );
     } else {
       const matches = entry.digest === report.patchDigest;
+      // The recorded digest attests a truncated entry's cut prefix only;
+      // the binding keeps that partial completeness either way.
+      const bindingCompleteness: AuditCompleteness =
+        entry.state === "verified-truncated" ? "partial" : "complete";
+      const truncatedNote =
+        entry.state === "verified-truncated"
+          ? " — the digest attests the cut prefix only"
+          : "";
       facts.push(
         matches
           ? f(
               "patch-binding",
               "verified",
-              "complete",
+              bindingCompleteness,
               `the declared subject.patchDigest matches the run's ` +
-                `verified patch.diff digest; ${SELF_DECLARED}`,
+                `verified patch.diff digest${truncatedNote}; ` +
+                SELF_DECLARED,
               [
                 reportEv(label, "/subject/patchDigest"),
                 entryEv(run.patchEntryIndex),
@@ -1567,9 +1661,9 @@ function auditCheckReportFacts(
           : f(
               "patch-binding",
               "inconsistent",
-              "complete",
+              bindingCompleteness,
               `the declared subject.patchDigest does not match the ` +
-                "run's verified patch.diff digest",
+                `run's verified patch.diff digest${truncatedNote}`,
               [
                 reportEv(label, "/subject/patchDigest"),
                 entryEv(run.patchEntryIndex),
