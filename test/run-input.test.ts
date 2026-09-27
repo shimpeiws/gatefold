@@ -243,6 +243,29 @@ describe("readYuureiRun", () => {
     }
   });
 
+  it("rejects an escaping patch symlink even when its digest is invalid", async () => {
+    const base = tmp();
+    try {
+      const outside = join(base, "outside.diff");
+      writeFileSync(outside, "outside");
+      const runDir = writeRun(base, { patch: null });
+      symlinkSync(outside, join(runDir, "patch.diff"));
+      writeFileSync(
+        join(runDir, "artifacts.json"),
+        JSON.stringify({
+          artifacts: [
+            { path: "patch.diff", kind: "patch", digest: "not-a-digest" },
+          ],
+        }),
+      );
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("marks a listed-but-absent patch.diff as missing", async () => {
     const base = tmp();
     try {
