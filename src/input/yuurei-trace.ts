@@ -453,18 +453,24 @@ export function parseYuureiTrace(
       "invalid-shape",
       "yuurei trace must contain an object at the top level",
     );
-  // A document of a different supported kind passed where a trace is
-  // expected (for example a pfl export) is a kind mismatch, not a bad token.
+  // A document of a different supported kind passed where a trace is expected
+  // (for example a pfl export) is a kind mismatch, not a bad token. The check
+  // reads the pfl envelope — a pfl command or `pflVersion`, with no trace
+  // `schema_version` — so a trace carrying one of those names as an unknown
+  // additive field is still accepted: the trace contract ignores unknown
+  // fields.
   const command = value.command;
-  if (command === "report" || command === "export" || command === "diff")
+  const isPflCommand =
+    command === "report" || command === "export" || command === "diff";
+  if (
+    !("schema_version" in value) &&
+    (isPflCommand || typeof value.pflVersion === "string")
+  )
     throw new PflExportError(
       "mismatched-inputs",
-      `expected a yuurei trace document but got a pfl ${command} document`,
-    );
-  if (typeof value.pflVersion === "string")
-    throw new PflExportError(
-      "mismatched-inputs",
-      "expected a yuurei trace document but got a pfl document",
+      isPflCommand
+        ? `expected a yuurei trace document but got a pfl ${command} document`
+        : "expected a yuurei trace document but got a pfl document",
     );
   const schemaVersion = value.schema_version;
   if (typeof schemaVersion !== "string" || schemaVersion.length === 0)

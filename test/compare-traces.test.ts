@@ -159,8 +159,10 @@ describe("gatefold compare-traces", () => {
       after: await readYuureiTrace(traceB),
     });
     const [execution] = claimsOf(result, "trace-execution");
-    expect(execution.claim).toContain("run A exited 0");
-    expect(execution.claim).toContain("run B exited 0");
+    // All three required execution fields are stated on each side.
+    expect(execution.claim).toContain("run A was not timed out, exited 0");
+    expect(execution.claim).toContain("run B was not timed out, exited 0");
+    expect(execution.claim).toContain("recorded no signal (unobserved)");
     expect(execution.claim).toContain("not answer quality");
   });
 
@@ -737,5 +739,70 @@ describe("gatefold compare-traces review regressions", () => {
       expect(claimed.claim, ruleId).not.toContain("Infinity");
       expect(claimed.claim, ruleId).not.toContain("NaN");
     }
+  });
+
+  it("states a null exit code as unobserved for a signal-terminated run", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    after.execution = {
+      exit_code: null,
+      signal: "SIGKILL",
+      duration_ms: 41800,
+      timed_out: false,
+    };
+    const [execution] = claimsOf(compareDocs(before, after), "trace-execution");
+    expect(execution.claim).toContain("recorded no exit code (unobserved)");
+    expect(execution.claim).toContain("terminated with signal 'SIGKILL'");
+    expect(execution.claim).toContain("was not timed out");
+  });
+
+  it("keeps significant digits in a recorded usage difference", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    before.usage = { tokens: 0 };
+    after.usage = { tokens: 1.000000000000001 };
+    const [usage] = claimsOf(compareDocs(before, after), "trace-usage");
+    expect(usage.claim).toContain("run B recorded 1.000000000000001");
+    expect(usage.claim).toContain("difference of 1.000000000000001");
+  });
+
+  it("orders usage keys by UTF-8 byte order, not UTF-16 code units", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    const keys = ["\u{1F600}", "\uFFFD"];
+    before.usage = Object.fromEntries(keys.map((key) => [key, 1]));
+    after.usage = Object.fromEntries(keys.map((key) => [key, 1]));
+    const order = claimsOf(compareDocs(before, after), "trace-usage").map(
+      (claimed) => claimed.claim.match(/usage key '(.*)'/)?.[1],
+    );
+    // U+FFFD (bytes EF BF BD) sorts before U+1F600 (bytes F0 9F 98 80); by
+    // UTF-16 code unit the surrogate pair would sort first instead.
+    expect(order).toEqual(["\uFFFD", "\u{1F600}"]);
+  });
+
+  it("accepts a valid trace that carries extra pfl-like fields", () => {
+    const doc = docA() as any;
+    doc.command = "report";
+    doc.pflVersion = "1.0.0";
+    expect(() => parseYuureiTrace(doc, "before.json")).not.toThrow();
+  });
+
+  it("still rejects a real pfl document as a kind mismatch", () => {
+    const pfl = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL("fixtures/pfl-export/valid-report.json", import.meta.url),
+        ),
+        "utf8",
+      ),
+    );
+    let error: unknown;
+    try {
+      parseYuureiTrace(pfl, "before.json");
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(PflExportError);
+    expect((error as PflExportError).code).toBe("mismatched-inputs");
   });
 });

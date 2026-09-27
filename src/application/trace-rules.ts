@@ -3,6 +3,7 @@ import type {
   TraceEvidenceReference,
 } from "../domain/trace-comparison.js";
 import { sanitizeText } from "../domain/sanitize.js";
+import { compareBytes } from "../domain/byte-order.js";
 import type { YuureiTrace } from "../input/yuurei-trace.js";
 import type { TraceComparisonView } from "./trace-comparability.js";
 
@@ -21,7 +22,7 @@ function sortEvidence(
   return [...evidence].sort(
     (a, b) =>
       SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] ||
-      (a.pointer < b.pointer ? -1 : a.pointer > b.pointer ? 1 : 0),
+      compareBytes(a.pointer, b.pointer),
   );
 }
 
@@ -71,16 +72,6 @@ function formatNumber(value: number): string {
 }
 
 /**
- * Renders a computed difference. Double-precision noise is dropped, but a
- * nonzero difference is never rendered as zero.
- */
-function formatNumberDelta(value: number): string {
-  if (value === 0) return "0";
-  const cleaned = Number(value.toPrecision(15));
-  return formatNumber(cleaned === 0 ? value : cleaned);
-}
-
-/**
  * A cost delta is an estimate displayed to at most six decimal places, so
  * binary floating-point tails never reach the claim text. A nonzero
  * difference below that threshold keeps its precision rather than being
@@ -108,22 +99,23 @@ function pointerSegment(key: string): string {
 }
 
 /**
- * The recorded outcome of one side's `execution` object as a phrase:
- * timeout, then exit code and signal as recorded. A recorded signal is
- * reported even when an exit code is present, and the missing-exit-code
- * phrase is reserved for a run with neither. Null fields are stated as
- * unobserved, never as zero or failure.
+ * The recorded outcome of one side's `execution` object as a phrase. All three
+ * required fields are stated on every side: a false timeout as "was not timed
+ * out", and a null exit code or signal as unobserved, never as zero or
+ * failure. A recorded signal is reported even when an exit code is present.
  */
 function executionOutcome(trace: YuureiTrace, side: "A" | "B"): string {
   const execution = trace.execution;
-  const parts: string[] = [];
-  if (execution.timedOut) parts.push("timed out");
-  if (execution.exitCode !== null) parts.push(`exited ${execution.exitCode}`);
-  if (execution.signal !== null)
-    parts.push(`terminated with signal '${execution.signal}'`);
-  if (execution.exitCode === null && execution.signal === null)
-    parts.push("recorded no exit code");
-  return `run ${side} ${parts.join(" and ")}`;
+  const parts = [
+    execution.timedOut ? "timed out" : "was not timed out",
+    execution.exitCode === null
+      ? "recorded no exit code (unobserved)"
+      : `exited ${execution.exitCode}`,
+    execution.signal === null
+      ? "recorded no signal (unobserved)"
+      : `terminated with signal '${execution.signal}'`,
+  ];
+  return `run ${side} ${parts.join(", ")}`;
 }
 
 export const TRACE_RULES: readonly TraceRule[] = [
@@ -348,7 +340,7 @@ export const TRACE_RULES: readonly TraceRule[] = [
               `computed.`
             : `Run A recorded a duration of ${formatNumber(a)} ms and run B ` +
               `${formatNumber(b)} ms, a recorded difference of ` +
-              `${formatNumberDelta(delta)} ms.`;
+              `${formatNumber(delta)} ms.`;
       } else if (a === null && b === null)
         text = `Neither run recorded a duration; no difference is computed.`;
       else
@@ -370,7 +362,7 @@ export const TRACE_RULES: readonly TraceRule[] = [
       const { before, after } = view;
       const keys = [
         ...new Set([...Object.keys(before.usage), ...Object.keys(after.usage)]),
-      ].sort();
+      ].sort(compareBytes);
       const claims: TraceClaim[] = [];
       for (const key of keys) {
         const aHas = Object.prototype.hasOwnProperty.call(before.usage, key);
@@ -399,7 +391,7 @@ export const TRACE_RULES: readonly TraceRule[] = [
                     `difference is computed.`
                 : `Run A recorded ${formatNumber(a)} for ${keyText}; run B ` +
                     `recorded ${formatNumber(b)} (a recorded difference of ` +
-                    `${formatNumberDelta(delta)}).`,
+                    `${formatNumber(delta)}).`,
               [aPointer, bPointer],
             ),
           );

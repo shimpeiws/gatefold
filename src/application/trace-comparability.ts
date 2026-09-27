@@ -1,4 +1,5 @@
 import type { TraceEvidenceReference } from "../domain/trace-comparison.js";
+import { compareBytes } from "../domain/byte-order.js";
 import { PflExportError } from "../input/pfl-export.js";
 import type { YuureiTrace } from "../input/yuurei-trace.js";
 
@@ -271,7 +272,5 @@ export function checkTraceComparability(
       ],
     });
 
-  return caveats.sort((a, b) =>
-    a.field < b.field ? -1 : a.field > b.field ? 1 : 0,
-  );
+  return caveats.sort((a, b) => compareBytes(a.field, b.field));
 }
