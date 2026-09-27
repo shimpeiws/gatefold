@@ -59,6 +59,19 @@ describe("claim schema validation", () => {
     expect(validateV4(example), JSON.stringify(validateV4.errors)).toBe(true);
   });
 
+  it("accepts the committed v5 run-comparison example", async () => {
+    const v5Schema = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("schema/claim-result.v5.json", root)),
+        "utf8",
+      ),
+    );
+    expect(ajv.validateSchema(v5Schema)).toBe(true);
+    const validateV5 = ajv.compile(v5Schema);
+    const example = await readExample("valid-run-comparison-result.json");
+    expect(validateV5(example), JSON.stringify(validateV5.errors)).toBe(true);
+  });
+
   it("rejects every committed invalid example", async () => {
     const files = await readdir(examplesDir);
     const invalid = files.filter((f) => f.startsWith("invalid-"));

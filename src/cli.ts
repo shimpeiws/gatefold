@@ -1,7 +1,9 @@
 import { analyze } from "./application/analyze.js";
 import { compareDocuments } from "./application/compare.js";
+import { compareRuns } from "./application/compare-runs.js";
 import { compareTraces } from "./application/compare-traces.js";
 import type { ComparisonResult } from "./domain/comparison.js";
+import type { RunComparisonResult } from "./domain/run-comparison.js";
 import { sanitizeText } from "./domain/sanitize.js";
 import type { TraceComparisonResult } from "./domain/trace-comparison.js";
 import {
@@ -10,10 +12,12 @@ import {
   readPflExportStdin,
   STDIN_SOURCE,
 } from "./input/pfl-export.js";
+import { readYuureiRun } from "./input/yuurei-run.js";
 import { readYuureiTrace, readYuureiTraceStdin } from "./input/yuurei-trace.js";
 import {
   formatComparisonHuman,
   formatHuman,
+  formatRunComparisonHuman,
   formatTraceComparisonHuman,
 } from "./output/human.js";
 import { formatJson } from "./output/json.js";
@@ -46,6 +50,10 @@ interface CliOptions {
     before?: string;
     after?: string;
   };
+  readonly compareRuns?: {
+    before?: string;
+    after?: string;
+  };
   readonly format: OutputFormat;
   readonly minConfidence: number;
   /** The --min-confidence token exactly as supplied, for display. */
@@ -73,6 +81,7 @@ function parseArgs(args: readonly string[]): CliOptions {
   let stdin = false;
   let compare: CliOptions["compare"];
   let compareTraces: CliOptions["compareTraces"];
+  let compareRuns: CliOptions["compareRuns"];
   let format: OutputFormat = "human";
   let minConfidence = 0;
   let minConfidenceText = "0";
@@ -95,7 +104,9 @@ function parseArgs(args: readonly string[]): CliOptions {
     }
     if (
       !optionsDone &&
-      (compare !== undefined || compareTraces !== undefined) &&
+      (compare !== undefined ||
+        compareTraces !== undefined ||
+        compareRuns !== undefined) &&
       (argument === "--before" ||
         argument.startsWith("--before=") ||
         argument === "--after" ||
@@ -109,11 +120,13 @@ function parseArgs(args: readonly string[]): CliOptions {
       );
       const [value, consumed] = optionValue(args, index, `--${name}`);
       index = consumed;
-      const target = compare ?? compareTraces;
+      const target = compare ?? compareTraces ?? compareRuns;
       if ((target as Record<string, unknown>)[name] !== undefined)
         throw new CliError(`--${name} is already set`, EXIT_USAGE);
       if (compare !== undefined) compare = { ...compare, [name]: value };
-      else compareTraces = { ...compareTraces, [name]: value };
+      else if (compareTraces !== undefined)
+        compareTraces = { ...compareTraces, [name]: value };
+      else compareRuns = { ...compareRuns, [name]: value };
       continue;
     }
     if (
@@ -163,6 +176,11 @@ function parseArgs(args: readonly string[]): CliOptions {
           "compare-traces inputs must be given with --before/--after; '-' is a flag value, not a positional",
           EXIT_USAGE,
         );
+      if (compareRuns !== undefined)
+        throw new CliError(
+          "compare-runs inputs must be given with --before/--after; '-' is a flag value, not a positional",
+          EXIT_USAGE,
+        );
       if (inputPath !== undefined)
         throw new CliError("only one input file is allowed", EXIT_USAGE);
       inputPath = argument;
@@ -178,11 +196,15 @@ function parseArgs(args: readonly string[]): CliOptions {
       !optionsDone &&
       compare === undefined &&
       compareTraces === undefined &&
+      compareRuns === undefined &&
       inputPath === undefined &&
-      (argument === "compare" || argument === "compare-traces")
+      (argument === "compare" ||
+        argument === "compare-traces" ||
+        argument === "compare-runs")
     ) {
       if (argument === "compare") compare = {};
-      else compareTraces = {};
+      else if (argument === "compare-traces") compareTraces = {};
+      else compareRuns = {};
       continue;
     }
     if (compare !== undefined)
@@ -193,6 +215,11 @@ function parseArgs(args: readonly string[]): CliOptions {
     if (compareTraces !== undefined)
       throw new CliError(
         "compare-traces takes no positional inputs; use --before/--after",
+        EXIT_USAGE,
+      );
+    if (compareRuns !== undefined)
+      throw new CliError(
+        "compare-runs takes no positional inputs; use --before/--after",
         EXIT_USAGE,
       );
     if (inputPath !== undefined)
@@ -235,11 +262,27 @@ function parseArgs(args: readonly string[]): CliOptions {
         EXIT_USAGE,
       );
   }
+  if (compareRuns !== undefined) {
+    const missing = (["before", "after"] as const).filter(
+      (flag) => compareRuns[flag] === undefined,
+    );
+    if (missing.length > 0)
+      throw new CliError(
+        `compare-runs requires ${missing.map((f) => `--${f}`).join(", ")} (see --help)`,
+        EXIT_USAGE,
+      );
+    if (compareRuns.before === "-" || compareRuns.after === "-")
+      throw new CliError(
+        "compare-runs reads run directories; '-' for stdin is not supported",
+        EXIT_USAGE,
+      );
+  }
   return {
     inputPath,
     stdin,
     compare,
     compareTraces,
+    compareRuns,
     format,
     minConfidence,
     minConfidenceText,
@@ -255,6 +298,8 @@ function usage(): string {
     "                              Compare two pfl exports through their diff",
     "       gatefold compare-traces --before <A.trace.json|-> --after <B.trace.json|->",
     "                              Compare two yuurei runs through their traces",
+    "       gatefold compare-runs --before <A-run-dir> --after <B-run-dir>",
+    "                              Compare two yuurei run directories, artifacts included",
     "",
     "Analyze a pfl report, export, or diff and print evidence-backed claims.",
     "The document's top-level 'command' field selects the reader.",
@@ -272,6 +317,12 @@ function usage(): string {
     "for stdin. The runs are compared only when the requested task and",
     "execution conditions match; the profile/harness variant may differ",
     "intentionally. A pfl document passed as a trace input is rejected.",
+    "",
+    "compare-runs reads two yuurei run directories: run A (--before) and",
+    "run B (--after). Each must contain trace.json and artifacts.json; a",
+    "patch.diff listed in the manifest is verified against its recorded",
+    "digest before its generated-file content is compared. Directories",
+    "cannot be read from stdin; '-' is rejected.",
     "",
     "Options:",
     "  --format <human|json>        Output format (default: human)",
@@ -312,6 +363,28 @@ async function readTraceInput(argument: string) {
 export async function runCli(args: readonly string[]): Promise<string> {
   const options = parseArgs(args);
   if (options.help) return usage();
+  if (options.compareRuns !== undefined) {
+    const compareRunsArgs = options.compareRuns as {
+      before: string;
+      after: string;
+    };
+    const result: RunComparisonResult = compareRuns({
+      before: await readYuureiRun(compareRunsArgs.before),
+      after: await readYuureiRun(compareRunsArgs.after),
+      labels: {
+        before: compareRunsArgs.before,
+        after: compareRunsArgs.after,
+      },
+    });
+    const filtered = filterClaims(result, options.minConfidence);
+    return options.format === "json"
+      ? formatJson(filtered)
+      : formatRunComparisonHuman(
+          filtered,
+          options.minConfidence,
+          options.minConfidenceText,
+        );
+  }
   if (options.compareTraces !== undefined) {
     const compareTracesArgs = options.compareTraces as {
       before: string;

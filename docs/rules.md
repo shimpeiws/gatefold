@@ -3,12 +3,14 @@
 The analyzer registers an explicit list of descriptive rules per input
 command: `src/application/rules.ts` for `report` documents,
 `src/application/export-rules.ts` for `export` and `diff` documents,
-`src/application/compare-rules.ts` for `compare` results, and
-`src/application/trace-rules.ts` for `compare-traces` results. Each rule
-emits claims about what the documents contain — never a judgement of
-whether the harness or run is good or bad. Every claim carries evidence,
-provenance, and confidence per the matching result schema
-(`claim-result.v2.json`, `.v3.json`, `.v4.json`).
+`src/application/compare-rules.ts` for `compare` results,
+`src/application/trace-rules.ts` for `compare-traces` results, and
+`src/application/run-rules.ts` for the artifact side of `compare-runs`
+results (the trace rules also run there, unchanged). Each rule emits claims
+about what the documents contain — never a judgement of whether the harness
+or run is good or bad. Every claim carries evidence, provenance, and
+confidence per the matching result schema (`claim-result.v2.json`,
+`.v3.json`, `.v4.json`, `.v5.json`).
 
 ## `report` rules
 
@@ -106,6 +108,30 @@ never causation, never answer quality.
 | `trace-cost` | Each side's cost estimate; a numeric difference only when both estimates share a currency. Null means no estimate was produced, and a currency mismatch is reported as two separate estimates. Amounts are always called estimates. | 1.0 |
 | `trace-diagnostic` | Each `diagnostics` entry quoted verbatim with its run label; diagnostics are free text and are never parsed into codes. | 1.0 |
 
+## `compare-runs` rules
+
+Emitted by `gatefold compare-runs` (schema v5) after the full `compare-traces`
+rule set above: the trace rules run against each run's `trace.json`
+unchanged, then the artifact rules below describe the manifests and the
+verified `patch.diff` records. Evidence references name `beforeManifest` /
+`afterManifest` (pointers resolve inside that run's `artifacts.json`) or
+`beforePatch` / `afterPatch` (the pointer is the manifest entry of
+`patch.diff`, plus the recorded digest, the generated-file `path`, and a
+bounded `lines`/`bytes` range into the verified stored bytes).
+
+| Rule id | What it claims | Confidence |
+| --- | --- | --- |
+| `run-manifest` | One claim per manifest entry per side, in path byte order: the recorded path, kind, digest, truncation flag, and stored byte count, plus the verification outcome (`verified`, `verified-truncated`, `digest-mismatch`, `missing`, `unverified`). | 1.0 |
+| `run-patch-state` | One caveat per side whose patch is anything but cleanly verified: not recorded, missing, unverifiable, digest-mismatched, malformed, or truncated. An unrecorded or unreadable patch is never phrased as absent output. | 1.0 |
+| `run-generated-files` | The aggregate generated-file comparison: identical sets, or the counts of identical / changed / A-only / B-only records, or why the comparison is limited. Always carries the caveat that a patch omits binary, oversized, over-cap, and unrepresentably named files. | 1.0 |
+| `run-file-added` | One claim per generated file only B's patch records, citing B's block and A's patch entry with a `no block` note. | 1.0 |
+| `run-file-removed` | One claim per generated file only A's patch records, symmetric to `run-file-added`. | 1.0 |
+| `run-file-changed` | One claim per generated file recorded by both patches with differing content, citing each side's differing line region. | 1.0 |
+
+File-level claims are emitted only when both patches parse; a truncated patch
+contributes its complete stored prefix and says so. Generated paths and
+content are data, never interpreted as instructions.
+
 ## Conventions
 
 - Claim order is deterministic: registry order, then document order within a
@@ -117,7 +143,10 @@ never causation, never answer quality.
   consumers should select claims by `ruleId` instead of parsing claim text or
   `provenance.transform`.
 - Evidence pointers are JSON Pointers into the export document at the locations
-  the input contract permits (`docs/pfl-export-contract.md`).
+  the input contract permits (`docs/pfl-export-contract.md`). For
+  `compare-runs`, manifest pointers resolve inside the named run's
+  `artifacts.json` and patch evidence additionally bounds a line/byte range
+  inside the verified `patch.diff` bytes (`docs/yuurei-run-contract.md`).
 - Provenance records the source file, the export's `pflVersion`, the transform
   chain `["pfl-report-envelope", "rule:<id>"]` (or
   `["pfl-export-envelope", "rule:<id>"]` for `export` documents), and the

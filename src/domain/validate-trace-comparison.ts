@@ -87,7 +87,7 @@ export function assertValidTraceComparisonResult(
  * holds no member (never the case for JSON documents), so a failed lookup is
  * reported through the `found` flag instead.
  */
-function resolvePointer(
+export function resolvePointer(
   document: unknown,
   pointer: string,
 ): { found: boolean } {
