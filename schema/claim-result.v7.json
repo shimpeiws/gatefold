@@ -204,6 +204,8 @@
         "trace",
         "seeded",
         "baseline",
+        "changes",
+        "patchRecord",
         "patchState",
         "resultState",
         "artifacts"
@@ -219,22 +221,60 @@
         "trace": { "$ref": "#/$defs/traceInput" },
         "seeded": {
           "type": "boolean",
-          "description": "Whether the trace records seeded-workspace provenance (a baseline field)."
+          "description": "Whether the trace records seeded-workspace provenance (a seed field)."
         },
         "baseline": {
           "type": ["object", "null"],
           "additionalProperties": false,
-          "required": ["digest"],
-          "description": "The recorded seeded baseline identity, or null for a legacy empty-workspace run.",
+          "required": ["digest", "materializedDigest"],
+          "description": "The recorded seeded baseline identity (trace.seed.baseline), or null for a legacy empty-workspace run.",
           "properties": {
             "digest": {
               "type": "string",
               "minLength": 1,
-              "description": "Stable identity of the seeded tree's content and paths."
+              "description": "The requested baseline digest — the identity a spec's baseline.digest binds to."
+            },
+            "materializedDigest": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The materialized baseline digest the pre-runtime verification recomputed; identical to digest on any seeded run."
             },
             "source": {
               "type": "string",
-              "description": "Provenance of the seed tree; display only, never part of identity."
+              "description": "The seed tree's source path; provenance only, never part of identity."
+            },
+            "head": {
+              "type": "string",
+              "description": "The source repository's HEAD commit at seed resolution; provenance only."
+            }
+          }
+        },
+        "changes": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["added", "modified", "deleted"],
+          "description": "The recorded change-set counts (trace.seed.changes), or null when the trace records no change set — absence never means no changes.",
+          "properties": {
+            "added": { "type": "integer", "minimum": 0 },
+            "modified": { "type": "integer", "minimum": 0 },
+            "deleted": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "patchRecord": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["base", "state"],
+          "description": "The trace's patch completeness record (trace.patch), or null on traces that predate it. A verified digest proves stored bytes match the manifest; only state 'complete' certifies the patch covers the full change set.",
+          "properties": {
+            "base": {
+              "type": "string",
+              "enum": ["empty", "seeded"],
+              "description": "Which workspace the patch diffs against."
+            },
+            "state": {
+              "type": "string",
+              "enum": ["complete", "partial", "absent"],
+              "description": "complete = the stored diff describes every recorded change; partial = it may omit files (redaction, truncation, binary/oversized/unrepresentable content, or the total cap); absent = patch generation did not succeed."
             }
           }
         },
@@ -261,9 +301,10 @@
             "unverified",
             "not-emitted",
             "parse-failed",
+            "save-failed",
             "not-recorded"
           ],
-          "description": "The state of the run's result.txt: the manifest entry's state when listed, 'not-emitted'/'parse-failed' from the trace's final_result marker, or 'not-recorded' when nothing records a result."
+          "description": "The state of the run's result.txt: the manifest entry's state when listed, 'not-emitted'/'parse-failed'/'save-failed' from the trace's result diagnostics, or 'not-recorded' when nothing records a result."
         },
         "artifacts": {
           "type": "array",

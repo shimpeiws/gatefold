@@ -51,13 +51,14 @@ function checkEvaluationComparability(
     );
   if (
     before.seeded &&
-    before.trace.baseline?.digest !== after.trace.baseline?.digest
+    before.trace.seed?.baseline.requestedDigest !==
+      after.trace.seed?.baseline.requestedDigest
   )
     throw new PflExportError(
       "mismatched-inputs",
       `the runs record different baseline digests ` +
-        `('${before.trace.baseline?.digest}' vs ` +
-        `'${after.trace.baseline?.digest}'); ` +
+        `('${before.trace.seed?.baseline.requestedDigest}' vs ` +
+        `'${after.trace.seed?.baseline.requestedDigest}'); ` +
         `only runs seeded from the same baseline are comparable`,
     );
   return checkTraceComparability(before.trace, after.trace);

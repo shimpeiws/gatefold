@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "baseline_digest": "sha256:baseline-seeded-1",
+  "added": [
+    "test/auth.test.ts"
+  ],
+  "modified": [
+    "src/auth.ts"
+  ],
+  "deleted": [
+    "legacy/util.ts"
+  ]
+}

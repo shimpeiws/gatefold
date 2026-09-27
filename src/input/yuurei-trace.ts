@@ -74,32 +74,58 @@ export interface YuureiTraceDefinition {
 }
 
 /**
- * Seeded-workspace provenance (docs/yuurei-seeded-run-contract.md): the
- * identity of the tree materialized into the cell before execution. A trace
- * carrying `baseline` is a seeded run; one without it is a legacy
- * empty-workspace run.
+ * Seeded-workspace baseline identity (docs/yuurei-seeded-run-contract.md):
+ * the digest the run was asked to materialize and the digest actually
+ * materialized. Shipped yuurei records both; they are identical on any
+ * successfully seeded run.
  */
-export interface YuureiTraceBaseline {
-  /** Stable identity of the seeded tree's content and paths. */
-  readonly digest: string;
-  /** Provenance: where the seed tree came from. Never part of identity. */
-  readonly source?: string;
+export interface YuureiSeedBaseline {
+  readonly requestedDigest: string;
+  readonly materializedDigest: string;
+  readonly files: number;
+  readonly bytes: number;
 }
 
-/** Why `final_result` has its recorded availability. */
-export type YuureiFinalResultStatus =
-  | "recorded"
-  | "not_emitted"
-  | "parse_failed";
+/**
+ * Recorded change-set counts. Absent when change collection did not
+ * complete — absence never means "no changes".
+ */
+export interface YuureiSeedChanges {
+  readonly added: number;
+  readonly modified: number;
+  readonly deleted: number;
+}
 
 /**
- * The durable final-result honesty marker
- * (docs/yuurei-seeded-run-contract.md): distinguishes "no result emitted"
- * from "a result existed but could not be parsed". Absent on older traces —
- * availability is then inferred from the manifest alone.
+ * Seeded-workspace provenance (docs/yuurei-seeded-run-contract.md): the
+ * identity of the tree materialized into the cell before execution. A trace
+ * carrying `seed` is a seeded run; one without it is a legacy
+ * empty-workspace run.
  */
-export interface YuureiTraceFinalResult {
-  readonly status: YuureiFinalResultStatus;
+export interface YuureiTraceSeed {
+  readonly policy: string;
+  readonly source: string;
+  readonly head: string;
+  readonly baseline: YuureiSeedBaseline;
+  readonly changes?: YuureiSeedChanges;
+}
+
+export type YuureiPatchBase = "empty" | "seeded";
+export type YuureiPatchState = "complete" | "partial" | "absent";
+
+/**
+ * The durable patch-completeness record
+ * (docs/yuurei-seeded-run-contract.md): which workspace the patch diffs
+ * against and whether the stored record describes every recorded change.
+ * A verified digest proves stored bytes match the manifest; only
+ * `state: "complete"` certifies the patch covers the full change set.
+ * Absent on traces written before the record shipped — completeness is
+ * then inferred from the manifest's `truncated` flag and `patch:`
+ * diagnostics.
+ */
+export interface YuureiTracePatch {
+  readonly base: YuureiPatchBase;
+  readonly state: YuureiPatchState;
 }
 
 /**
@@ -128,8 +154,8 @@ export interface YuureiTrace {
   readonly requestedCell?: YuureiTraceRequestedCell;
   readonly executionOptions?: YuureiTraceExecutionOptions;
   readonly definition?: YuureiTraceDefinition;
-  readonly baseline?: YuureiTraceBaseline;
-  readonly finalResult?: YuureiTraceFinalResult;
+  readonly seed?: YuureiTraceSeed;
+  readonly patch?: YuureiTracePatch;
   readonly diagnostics: readonly string[];
   readonly document: unknown;
 }
@@ -146,11 +172,10 @@ const MAX_RUNTIME_OPTION_NODES = 10_000;
 const MAX_SCALAR_CHARS = 4_096;
 
 const RESOLVED_REASONS = ["observed", "unobserved", "parse_failed"] as const;
-const FINAL_RESULT_STATUSES = [
-  "recorded",
-  "not_emitted",
-  "parse_failed",
-] as const;
+const PATCH_BASES = ["empty", "seeded"] as const;
+const PATCH_STATES = ["complete", "partial", "absent"] as const;
+/** The only `seed.policy` the shipped seeded workspace accepts. */
+const SEED_POLICY = "git-tracked-files";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -455,37 +480,91 @@ function parseDefinition(value: unknown): YuureiTraceDefinition | undefined {
   };
 }
 
-function parseBaseline(value: unknown): YuureiTraceBaseline | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) throw shapeError("baseline", "an object");
-  const source = value.source;
-  if (
-    source !== undefined &&
-    (typeof source !== "string" || source.length > MAX_SCALAR_CHARS)
-  )
-    throw shapeError(
-      "baseline.source",
-      `a string of at most ${MAX_SCALAR_CHARS} characters`,
-    );
+function parseSeedChanges(
+  value: Record<string, unknown>,
+): YuureiSeedChanges | undefined {
+  if (value.changes === undefined) return undefined;
+  if (!isRecord(value.changes)) throw shapeError("seed.changes", "an object");
   return {
-    digest: stringField(value, "digest", "baseline.digest"),
-    ...(source === undefined ? {} : { source: source as string }),
+    added: nonNegativeIntField(value.changes, "added", "seed.changes.added"),
+    modified: nonNegativeIntField(
+      value.changes,
+      "modified",
+      "seed.changes.modified",
+    ),
+    deleted: nonNegativeIntField(
+      value.changes,
+      "deleted",
+      "seed.changes.deleted",
+    ),
   };
 }
 
-function parseFinalResult(value: unknown): YuureiTraceFinalResult | undefined {
+function parseSeed(value: unknown): YuureiTraceSeed | undefined {
   if (value === undefined) return undefined;
-  if (!isRecord(value)) throw shapeError("final_result", "an object");
-  const status = value.status;
+  if (!isRecord(value)) throw shapeError("seed", "an object");
+  const policy = stringField(value, "policy", "seed.policy");
+  if (policy !== SEED_POLICY)
+    throw shapeError("seed.policy", `"${SEED_POLICY}"`);
+  const baseline = requiredRecord(value, "baseline", "seed.baseline");
+  const changes = parseSeedChanges(value);
+  return {
+    policy,
+    source: stringField(value, "source", "seed.source"),
+    head: stringField(value, "head", "seed.head"),
+    baseline: {
+      requestedDigest: stringField(
+        baseline,
+        "requested_digest",
+        "seed.baseline.requested_digest",
+      ),
+      materializedDigest: stringField(
+        baseline,
+        "materialized_digest",
+        "seed.baseline.materialized_digest",
+      ),
+      files: nonNegativeIntField(baseline, "files", "seed.baseline.files"),
+      bytes: nonNegativeIntField(baseline, "bytes", "seed.baseline.bytes"),
+    },
+    ...(changes === undefined ? {} : { changes }),
+  };
+}
+
+function nonNegativeIntField(
+  record: Record<string, unknown>,
+  key: string,
+  path = key,
+): number {
+  const value = intField(record, key, path);
+  if (value < 0) throw shapeError(path, "a non-negative integer");
+  return value;
+}
+
+function parseTracePatch(value: unknown): YuureiTracePatch | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw shapeError("patch", "an object");
+  const base = value.base;
   if (
-    typeof status !== "string" ||
-    !(FINAL_RESULT_STATUSES as readonly string[]).includes(status)
+    typeof base !== "string" ||
+    !(PATCH_BASES as readonly string[]).includes(base)
   )
     throw shapeError(
-      "final_result.status",
-      `one of ${FINAL_RESULT_STATUSES.map((s) => `"${s}"`).join(", ")}`,
+      "patch.base",
+      `one of ${PATCH_BASES.map((s) => `"${s}"`).join(", ")}`,
     );
-  return { status: status as YuureiFinalResultStatus };
+  const state = value.state;
+  if (
+    typeof state !== "string" ||
+    !(PATCH_STATES as readonly string[]).includes(state)
+  )
+    throw shapeError(
+      "patch.state",
+      `one of ${PATCH_STATES.map((s) => `"${s}"`).join(", ")}`,
+    );
+  return {
+    base: base as YuureiPatchBase,
+    state: state as YuureiPatchState,
+  };
 }
 
 function parseDiagnostics(value: unknown): readonly string[] {
@@ -639,12 +718,10 @@ export function parseYuureiTrace(
     ...(value.definition === undefined
       ? {}
       : { definition: parseDefinition(value.definition) }),
-    ...(value.baseline === undefined
+    ...(value.seed === undefined ? {} : { seed: parseSeed(value.seed) }),
+    ...(value.patch === undefined
       ? {}
-      : { baseline: parseBaseline(value.baseline) }),
-    ...(value.final_result === undefined
-      ? {}
-      : { finalResult: parseFinalResult(value.final_result) }),
+      : { patch: parseTracePatch(value.patch) }),
     diagnostics: parseDiagnostics(value.diagnostics),
     document: value,
   };

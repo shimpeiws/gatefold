@@ -1,6 +1,6 @@
 {
   "schema_version": "0.3",
-  "run_id": "run-seeded-b1",
+  "run_id": "run-seeded-p1",
   "yuurei_version": "0.4.0",
   "started_at": "2026-09-27T09:00:00Z",
   "finished_at": "2026-09-27T09:00:14Z",
@@ -14,8 +14,8 @@
     "resolved_reason": "observed"
   },
   "profile": {
-    "name": "candidate-b",
-    "digest": "sha256:prof-b"
+    "name": "candidate-a",
+    "digest": "sha256:prof-a"
   },
   "task": {
     "source": ".yuurei/tasks/fix-auth.md",
@@ -36,14 +36,14 @@
       "bytes": 141
     },
     "changes": {
-      "added": 0,
+      "added": 1,
       "modified": 1,
-      "deleted": 0
+      "deleted": 1
     }
   },
   "patch": {
     "base": "seeded",
-    "state": "complete"
+    "state": "partial"
   },
   "isolation": {
     "strategy": "cell",
@@ -94,5 +94,9 @@
       "path": "changes.json",
       "kind": "file"
     }
+  ],
+  "diagnostics": [
+    "patch: 1 oversized file(s) omitted",
+    "patch: 1 file(s) omitted; baseline content unavailable"
   ]
 }

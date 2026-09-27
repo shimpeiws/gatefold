@@ -2,13 +2,14 @@ import { PatchParseError } from "./yuurei-patch.js";
 
 /**
  * Parser for a seeded run's `patch.diff`: a UTF-8, LF-terminated unified diff
- * against the seeded baseline (docs/yuurei-seeded-run-contract.md). Each file
- * block is `--- a/<path>` (or `--- /dev/null` for an added file), then
- * `+++ b/<path>` (or `+++ /dev/null` for a deleted file), followed by one or
- * more `@@ -s1,c1 +s2,c2 @@` hunks of ` ` context, `-` removed, and `+` added
- * lines, with an optional `\ No newline at end of file` marker. Line and byte
- * ranges into the stored bytes are recorded so verdicts can cite bounded
- * evidence ranges.
+ * against the seeded baseline (docs/yuurei-seeded-run-contract.md). Shipped
+ * yuurei emits paths without `a/`/`b/` prefixes: each file block is
+ * `--- /dev/null` (added) or `--- <path>`, then `+++ <path>` or
+ * `+++ /dev/null` (deleted), followed by `@@ -s1,c1 +s2,c2 @@` hunks of ` `
+ * context, `-` removed, and `+` added lines, with an optional
+ * `\ No newline at end of file` marker. A modified block names the same path
+ * on both sides. Line and byte ranges into the stored bytes are recorded so
+ * verdicts can cite bounded evidence ranges.
  */
 export { PatchParseError };
 
@@ -29,7 +30,7 @@ export interface SeededPatchContentLine {
 
 /** One changed file as recorded by a seeded patch block. */
 export interface SeededPatchFile {
-  /** Workspace-relative path: `b/`-side for added/modified, `a/`-side for deleted. */
+  /** Workspace-relative path: `+++` side for added/modified, `---` side for deleted. */
   readonly path: string;
   readonly change: SeededChangeKind;
   /** The `+` content lines across all hunks (without the prefix). */
@@ -72,7 +73,10 @@ const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@$/;
 const NO_NEWLINE = "\\ No newline at end of file";
 
 /** Splits the stored bytes into LF-terminated lines, decoding each as UTF-8. */
-function splitLines(bytes: Buffer): { lines: RawLine[]; partialTail: boolean } {
+function splitLines(
+  bytes: Buffer,
+  allowTruncatedTail: boolean,
+): { lines: RawLine[]; partialTail: boolean } {
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const lines: RawLine[] = [];
   let start = 0;
@@ -82,7 +86,15 @@ function splitLines(bytes: Buffer): { lines: RawLine[]; partialTail: boolean } {
     start = i + 1;
   }
   const partialTail = start < bytes.length;
-  if (partialTail) lines.push(decodeLine(decoder, bytes, start, bytes.length));
+  if (partialTail) {
+    try {
+      lines.push(decodeLine(decoder, bytes, start, bytes.length));
+    } catch (error) {
+      // A truncated artifact may end in the middle of a UTF-8 code point.
+      // Keep all complete lines and leave that undecodable tail unknown.
+      if (!allowTruncatedTail) throw error;
+    }
+  }
   return { lines, partialTail };
 }
 
@@ -115,12 +127,15 @@ export function parseSeededPatchDiff(
   bytes: Buffer,
   options: { allowTruncatedTail: boolean },
 ): ParsedSeededPatch {
-  const { lines, partialTail } = splitLines(bytes);
+  const { lines, partialTail } = splitLines(bytes, options.allowTruncatedTail);
   const files: SeededPatchFile[] = [];
   const seenPaths = new Set<string>();
 
   const fail = (message: string): never => {
-    if (options.allowTruncatedTail) throw new CutTail();
+    const errorAtTruncatedBoundary =
+      pos >= lines.length || (partialTail && pos === lines.length - 1);
+    if (options.allowTruncatedTail && errorAtTruncatedBoundary)
+      throw new CutTail();
     throw new PatchParseError(message);
   };
 
@@ -136,31 +151,29 @@ export function parseSeededPatchDiff(
       const oldHeader = lines[pos].text;
       if (!oldHeader.startsWith("--- "))
         fail(
-          `expected a '--- a/<path>' or '--- /dev/null' header at patch line ${pos + 1}, got '${oldHeader}'`,
+          `expected a '--- <path>' or '--- /dev/null' header at patch line ${pos + 1}, got '${oldHeader}'`,
         );
       const oldSide = oldHeader.slice(4);
       const added = oldSide === "/dev/null";
-      if (!added && !oldSide.startsWith("a/"))
-        fail(
-          `expected '--- a/<path>' or '/dev/null' at patch line ${pos + 1}, got '${oldHeader}'`,
-        );
       pos += 1;
 
       if (pos >= lines.length || !lines[pos].text.startsWith("+++ "))
         fail(
-          `expected a '+++ b/<path>' or '+++ /dev/null' header after patch line ${blockStart + 1}`,
+          `expected a '+++ <path>' or '+++ /dev/null' header after patch line ${blockStart + 1}`,
         );
       const newSide = lines[pos].text.slice(4);
       const deleted = newSide === "/dev/null";
-      if (!deleted && !newSide.startsWith("b/"))
-        fail(
-          `expected '+++ b/<path>' or '/dev/null' at patch line ${pos + 1}, got '${lines[pos].text}'`,
-        );
       if (added && deleted)
         fail(
           `a file block cannot have /dev/null on both sides at patch line ${pos + 1}`,
         );
-      const path = deleted ? oldSide.slice(2) : newSide.slice(2);
+      // A modified block must name the same file on both sides: shipped
+      // yuurei records no renames, so differing paths are foreign data.
+      if (!added && !deleted && oldSide !== newSide)
+        fail(
+          `a modified file block names differing paths at patch line ${pos + 1} ('${oldSide}' versus '${newSide}')`,
+        );
+      const path = deleted ? oldSide : newSide;
       if (path.length === 0)
         fail(`empty path in a file header at patch line ${pos + 1}`);
       const change: SeededChangeKind = added
@@ -168,13 +181,21 @@ export function parseSeededPatchDiff(
         : deleted
           ? "deleted"
           : "modified";
+      // A well-formed yuurei patch records each workspace path exactly once;
+      // a duplicate is a grammar violation, not a cut tail, so it stays a
+      // hard error even when truncation is allowed.
+      if (seenPaths.has(path))
+        throw new PatchParseError(
+          `duplicate path '${path}' at patch line ${blockStart + 1}`,
+        );
+      seenPaths.add(path);
       pos += 1;
 
       const content: SeededPatchContentLine[] = [];
       const addedLines: string[] = [];
       const removedLines: string[] = [];
       let hunkCount = 0;
-      let sealedContent = true;
+      let markerSeen = false;
       // A block carries zero or more hunks; each hunk must satisfy its
       // declared old/new line counts.
       while (pos < lines.length && lines[pos].text.startsWith("@@ ")) {
@@ -228,7 +249,10 @@ export function parseSeededPatchDiff(
           }
           pos += 1;
         }
-        if (pos < lines.length && lines[pos].text === NO_NEWLINE) pos += 1;
+        if (pos < lines.length && lines[pos].text === NO_NEWLINE) {
+          markerSeen = true;
+          pos += 1;
+        }
       }
       // An added block with no hunk is an empty added file; a modified or
       // deleted block must carry at least one hunk — otherwise nothing
@@ -238,22 +262,19 @@ export function parseSeededPatchDiff(
           `a ${change} file block carries no hunk at patch line ${blockStart + 1}`,
         );
       // Under a truncation allowance a block is evidence of a complete
-      // record only once a following line seals it: the next block header,
-      // or any complete trailing line that cannot be a lost marker. A block
-      // that reaches the end of the stored bytes mid-structure — or whose
-      // final line could be the start of a cut marker — belongs to the
-      // unknown tail.
-      if (pos >= lines.length && partialTail) sealedContent = false;
-      if (!sealedContent && options.allowTruncatedTail)
+      // record only once its terminator is observed: the `\ No newline`
+      // marker was read, or a following line rules out a marker lost to
+      // the cut — a complete line, or a partial tail that cannot be the
+      // marker's start. A block that reaches the end of the stored bytes
+      // without one belongs to the unknown tail, not to the record.
+      const sealed =
+        markerSeen ||
+        (pos < lines.length &&
+          (pos < lines.length - 1 ||
+            !partialTail ||
+            !NO_NEWLINE.startsWith(lines[pos].text)));
+      if (!sealed && options.allowTruncatedTail)
         return { files, complete: false };
-      // A well-formed yuurei patch records each workspace path exactly once;
-      // a duplicate is a grammar violation, not a cut tail, so it stays a
-      // hard error even when truncation is allowed.
-      if (seenPaths.has(path))
-        throw new PatchParseError(
-          `duplicate path '${path}' at patch line ${blockStart + 1}`,
-        );
-      seenPaths.add(path);
       files.push({
         path,
         change,

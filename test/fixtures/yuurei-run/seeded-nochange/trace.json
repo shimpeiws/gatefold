@@ -1,6 +1,6 @@
 {
   "schema_version": "0.3",
-  "run_id": "run-seeded-b1",
+  "run_id": "run-seeded-n1",
   "yuurei_version": "0.4.0",
   "started_at": "2026-09-27T09:00:00Z",
   "finished_at": "2026-09-27T09:00:14Z",
@@ -14,8 +14,8 @@
     "resolved_reason": "observed"
   },
   "profile": {
-    "name": "candidate-b",
-    "digest": "sha256:prof-b"
+    "name": "candidate-a",
+    "digest": "sha256:prof-a"
   },
   "task": {
     "source": ".yuurei/tasks/fix-auth.md",
@@ -37,7 +37,7 @@
     },
     "changes": {
       "added": 0,
-      "modified": 1,
+      "modified": 0,
       "deleted": 0
     }
   },

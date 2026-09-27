@@ -7,7 +7,7 @@
   "subject": {
     "taskDigest": "sha256:task-seeded-1",
     "baselineDigest": "sha256:baseline-seeded-1",
-    "patchDigest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b"
+    "patchDigest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb"
   },
   "results": [
     {

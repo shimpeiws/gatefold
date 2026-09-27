@@ -13,12 +13,12 @@
     {
       "path": "patch.diff",
       "kind": "patch",
-      "digest": "sha256:1490471d0638072c1ac743b8e42b24b7992bb389c4e26b2b0a9b508b9edfd18e"
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "path": "result.txt",
       "kind": "result",
-      "digest": "sha256:e06984ec27c9dba7a8bfbedff5fd223d0343bd70b695e12f53183f0f7414f446"
+      "digest": "sha256:0e74f403bebf69f9af32c7a96d485ce0d3b35c89e8c8dfb58796e506fb42d780"
     },
     {
       "path": "baseline-manifest.json",
@@ -28,7 +28,7 @@
     {
       "path": "changes.json",
       "kind": "file",
-      "digest": "sha256:c33b9a6d8d17e4411f5b9eefdd4437f4913dbca533470795f0626d6021b545a7"
+      "digest": "sha256:97097caf42c96b749556c24a050a32cf182f4be15109901c61d29f5e02e42b10"
     }
   ]
 }

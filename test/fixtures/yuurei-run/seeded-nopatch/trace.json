@@ -1,6 +1,6 @@
 {
   "schema_version": "0.3",
-  "run_id": "run-seeded-b1",
+  "run_id": "run-seeded-x1",
   "yuurei_version": "0.4.0",
   "started_at": "2026-09-27T09:00:00Z",
   "finished_at": "2026-09-27T09:00:14Z",
@@ -14,8 +14,8 @@
     "resolved_reason": "observed"
   },
   "profile": {
-    "name": "candidate-b",
-    "digest": "sha256:prof-b"
+    "name": "candidate-a",
+    "digest": "sha256:prof-a"
   },
   "task": {
     "source": ".yuurei/tasks/fix-auth.md",
@@ -34,16 +34,11 @@
       "materialized_digest": "sha256:baseline-seeded-1",
       "files": 4,
       "bytes": 141
-    },
-    "changes": {
-      "added": 0,
-      "modified": 1,
-      "deleted": 0
     }
   },
   "patch": {
     "base": "seeded",
-    "state": "complete"
+    "state": "absent"
   },
   "isolation": {
     "strategy": "cell",
@@ -79,20 +74,17 @@
       "kind": "log"
     },
     {
-      "path": "patch.diff",
-      "kind": "patch"
-    },
-    {
       "path": "result.txt",
       "kind": "result"
     },
     {
       "path": "baseline-manifest.json",
       "kind": "file"
-    },
-    {
-      "path": "changes.json",
-      "kind": "file"
     }
+  ],
+  "diagnostics": [
+    "workspace: copy failed; durable workspace may be incomplete",
+    "changes: collection failed; changes.json not recorded",
+    "patch: generation failed; patch.diff not recorded"
   ]
 }
