@@ -1,0 +1,527 @@
+{
+  "schemaVersion": 8,
+  "source": {
+    "command": "audit-run"
+  },
+  "inputs": {
+    "run": {
+      "label": "test/fixtures/yuurei-run/seeded-a",
+      "document": "yuurei-run",
+      "trace": {
+        "label": "test/fixtures/yuurei-run/seeded-a/trace.json",
+        "document": "yuurei-trace",
+        "schemaVersion": "0.3",
+        "runId": "run-seeded-a1",
+        "yuureiVersion": "0.4.0",
+        "startedAt": "2026-09-27T09:00:00Z",
+        "finishedAt": "2026-09-27T09:00:14Z",
+        "runtimeId": "claude-code",
+        "runtimeVersion": "2.1.272",
+        "modelRequested": "claude-sonnet-4-5",
+        "modelResolved": "claude-sonnet-4-5-20250929",
+        "modelResolvedReason": "observed",
+        "profileName": "candidate-a",
+        "profileDigest": "sha256:prof-a",
+        "taskSource": ".yuurei/tasks/fix-auth.md",
+        "taskDigest": "sha256:task-seeded-1",
+        "isolationStrategy": "cell",
+        "isolationVerified": true,
+        "requestedCellDigest": "sha256:cell-seeded",
+        "requestedCellInputsVersion": 2,
+        "executionOptions": {
+          "timeout_ms": 600000,
+          "runtime": {
+            "max_turns": 40
+          }
+        }
+      },
+      "seeded": true,
+      "baseline": {
+        "digest": "sha256:baseline-seeded-1",
+        "materializedDigest": "sha256:baseline-seeded-1",
+        "source": "/seed/fixtures/auth-base",
+        "head": "0123456789abcdef0123456789abcdef01234567"
+      },
+      "changes": {
+        "added": 1,
+        "modified": 1,
+        "deleted": 1
+      },
+      "patchRecord": {
+        "base": "seeded",
+        "state": "complete"
+      },
+      "patchState": "verified",
+      "resultState": "verified",
+      "artifacts": [
+        {
+          "path": "stdout.log",
+          "kind": "log",
+          "digest": "sha256:0ff50b9f0d90e2623e1f27def5c7c553ccafe8023dd208296957bc774f6863cf",
+          "state": "unverified"
+        },
+        {
+          "path": "stderr.log",
+          "kind": "log",
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "state": "unverified"
+        },
+        {
+          "path": "patch.diff",
+          "kind": "patch",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb",
+          "bytes": 398,
+          "state": "verified"
+        },
+        {
+          "path": "result.txt",
+          "kind": "result",
+          "digest": "sha256:b3b2241a2ae8db2bbde000510c4e67d5a8c1516d8b4ee1344c8e1830c9c412d4",
+          "bytes": 62,
+          "state": "verified"
+        },
+        {
+          "path": "baseline-manifest.json",
+          "kind": "file",
+          "digest": "sha256:24e3f9a2759727b5adbc5bee94e59daa678b2b22f62cf9b334d42fe0d4f9f66b",
+          "bytes": 897,
+          "state": "verified"
+        },
+        {
+          "path": "changes.json",
+          "kind": "file",
+          "digest": "sha256:7af41c0bfa787a978e0f5e825e77d21b69193594f71bdf11eaa43eb8d0648930",
+          "bytes": 190,
+          "state": "verified"
+        }
+      ]
+    },
+    "checkReports": []
+  },
+  "context": {
+    "execution": {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false
+    },
+    "model": {
+      "requested": "claude-sonnet-4-5",
+      "resolved": "claude-sonnet-4-5-20250929",
+      "resolvedReason": "observed"
+    },
+    "usage": {
+      "input_tokens": 15000,
+      "output_tokens": 1200
+    },
+    "cost": {
+      "amount": 0.5,
+      "currency": "USD"
+    }
+  },
+  "facts": [
+    {
+      "id": "run.trace",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the run records a trace.json document that conforms to the trace contract",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": ""
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:run.trace"
+        ]
+      }
+    },
+    {
+      "id": "run.manifest",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the run records an artifacts.json manifest that conforms to the run-directory contract",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": ""
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:run.manifest"
+        ]
+      }
+    },
+    {
+      "id": "seed.provenance",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the trace records seeded-workspace provenance",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:seed.provenance"
+        ]
+      }
+    },
+    {
+      "id": "seed.inputs-version",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "requested_cell.inputs_version 2 agrees with the run's seeded record",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/requested_cell/inputs_version"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:seed.inputs-version"
+        ]
+      }
+    },
+    {
+      "id": "seed.patch-base",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "patch.base 'seeded' agrees with the seed record",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/patch/base"
+        },
+        {
+          "source": "trace",
+          "pointer": "/seed"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:seed.patch-base"
+        ]
+      }
+    },
+    {
+      "id": "seed.baseline-materialization",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the declared requested and materialized baseline digests agree; identity equality only — the baseline bytes themselves are never read",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/baseline/materialized_digest"
+        },
+        {
+          "source": "trace",
+          "pointer": "/seed/baseline/requested_digest"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:seed.baseline-materialization"
+        ]
+      }
+    },
+    {
+      "id": "seed.changes-record",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the trace records the change set (added: 1, modified: 1, deleted: 1)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/changes"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:seed.changes-record"
+        ]
+      }
+    },
+    {
+      "id": "baseline-manifest.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the manifest records baseline-manifest.json and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/4"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:baseline-manifest.stored"
+        ]
+      }
+    },
+    {
+      "id": "baseline-manifest.record",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the verified baseline-manifest.json restates the trace's seed record and file inventory",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed"
+        },
+        {
+          "source": "baselineManifest",
+          "pointer": "",
+          "digest": "sha256:24e3f9a2759727b5adbc5bee94e59daa678b2b22f62cf9b334d42fe0d4f9f66b"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:baseline-manifest.record"
+        ]
+      }
+    },
+    {
+      "id": "changes.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the manifest records changes.json and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/5"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:changes.stored"
+        ]
+      }
+    },
+    {
+      "id": "changes.record",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the verified changes.json restates the trace's declared change set",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/changes"
+        },
+        {
+          "source": "changes",
+          "pointer": "",
+          "digest": "sha256:7af41c0bfa787a978e0f5e825e77d21b69193594f71bdf11eaa43eb8d0648930"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:changes.record"
+        ]
+      }
+    },
+    {
+      "id": "patch.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the manifest records patch.diff and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/2"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:patch.stored"
+        ]
+      }
+    },
+    {
+      "id": "patch.interpretable",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the verified patch.diff bytes parse under the run's grammar",
+      "evidence": [
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:patch.interpretable"
+        ]
+      }
+    },
+    {
+      "id": "patch.record",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the patch record (base 'seeded', state 'complete') agrees with the manifest and the trace's diagnostics",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/patch"
+        },
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/2"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:patch.record"
+        ]
+      }
+    },
+    {
+      "id": "patch.completeness",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the trace declares the patch complete over verified untruncated bytes that parse fully",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/patch/state"
+        },
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:patch.completeness"
+        ]
+      }
+    },
+    {
+      "id": "seed.changes-patch",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the parsed patch's per-kind counts agree with the declared change set",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/changes"
+        },
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:seed.changes-patch"
+        ]
+      }
+    },
+    {
+      "id": "changes.patch-agreement",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the parsed patch and the verified changes.json record the same per-kind change sets",
+      "evidence": [
+        {
+          "source": "changes",
+          "pointer": "",
+          "digest": "sha256:7af41c0bfa787a978e0f5e825e77d21b69193594f71bdf11eaa43eb8d0648930"
+        },
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:changes.patch-agreement"
+        ]
+      }
+    },
+    {
+      "id": "result.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the manifest records result.txt and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/3"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:result.stored"
+        ]
+      }
+    },
+    {
+      "id": "result.availability",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the manifest records result.txt (verified) and no result diagnostic contradicts it",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/3"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:result.availability"
+        ]
+      }
+    },
+    {
+      "id": "result.content",
+      "state": "verified",
+      "completeness": "complete",
+      "reason": "the verified result.txt bytes decode to text under the contract normalization",
+      "evidence": [
+        {
+          "source": "result",
+          "pointer": "/artifacts/3",
+          "digest": "sha256:b3b2241a2ae8db2bbde000510c4e67d5a8c1516d8b4ee1344c8e1830c9c412d4",
+          "bytes": {
+            "start": 0,
+            "end": 62
+          }
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "audit-run",
+          "fact:result.content"
+        ]
+      }
+    }
+  ]
+}

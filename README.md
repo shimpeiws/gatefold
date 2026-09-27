@@ -9,9 +9,10 @@ since v0.6 a pair of whole
 [`yuurei` run directories](docs/yuurei-run-contract.md) including their
 artifact manifests and `patch.diff` records, and since v0.7 an explicit
 [task-evaluation spec](docs/v0.7-scope.md) it can evaluate a
-[seeded run](docs/yuurei-seeded-run-contract.md) against. It emits
-descriptive claims, each with evidence, provenance, and confidence. It does
-not score or rank harnesses.
+[seeded run](docs/yuurei-seeded-run-contract.md) against, and since v0.8
+a single run directory it can [audit](docs/v0.8-scope.md) for internal
+consistency — no spec required. It emits descriptive claims, each with
+evidence, provenance, and confidence. It does not score or rank harnesses.
 
 ## CLI usage
 
@@ -41,6 +42,11 @@ gatefold compare-evaluations --before a-run-dir --after b-run-dir \
                              [--before-check-report f] [--after-check-report f] ...
                                                # per-criterion A → B verdict
                                                # transitions (schema v7)
+gatefold audit-run --run run-dir \
+                   [--check-report report.json] ...
+                                               # rubric-free evidence audit
+                                               # of one run's stored records
+                                               # (schema v8)
 ```
 
 `compare-traces` compares two yuurei `trace.json` runs only when they
@@ -75,6 +81,18 @@ transition. Missing, truncated, unverifiable, or contradictory evidence is
 [v0.7 scope](docs/v0.7-scope.md) and the
 [seeded-run contract](docs/yuurei-seeded-run-contract.md).
 
+`audit-run` audits one run directory with no task spec: it reports which
+recorded facts can be verified against the bounded stored inputs
+(`verified`), where well-formed records contradict each other
+(`inconsistent`), which facts cannot be established from what is stored
+(`unverifiable`), and which records were never produced (`not-recorded`) —
+each with a separate `completeness` marker so a verified digest on a
+truncated or partial record is never mistaken for a complete account.
+Optional `--check-report` files are audited for whether their declared
+subject digests match the run's recorded identity; a matching declaration
+never attests the evaluator ran on those bytes. See
+[v0.8 scope](docs/v0.8-scope.md).
+
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
 confidence score — see [the claim model](docs/claim-model.md).
 
@@ -100,6 +118,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.5 scope and run-comparison contract](docs/v0.5-scope.md)
 - [v0.6 scope and run-directory comparison contract](docs/v0.6-scope.md)
 - [v0.7 scope and Outcome-evaluation contract](docs/v0.7-scope.md)
+- [v0.8 scope and run-audit contract](docs/v0.8-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [pfl export contract](docs/pfl-export-contract.md)

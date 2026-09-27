@@ -11,7 +11,11 @@ export interface LoadedCheckReport {
   readonly label: string;
   /** The validated report; null when the document was rejected. */
   readonly report: CheckReport | null;
-  /** The raw report document, for evidence pointer resolution. */
+  /**
+   * The raw report document, for evidence pointer resolution. A document that
+   * parsed but failed validation is kept here, so citing the rejected report
+   * as a whole still resolves; an unparseable document is null.
+   */
   readonly document: unknown;
   /** When non-null, why the report is `invalid`. */
   readonly error: string | null;
@@ -46,7 +50,7 @@ export async function loadCheckReports(
         loaded.push({
           label: path,
           report: null,
-          document: null,
+          document: error.document,
           error: error.message,
         });
         continue;

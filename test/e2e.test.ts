@@ -970,6 +970,29 @@ describe("gatefold e2e (real process)", () => {
         ).toBe(true);
         expect(evalComparison.schemaVersion).toBe(7);
         expect(evalComparison.transitions.length).toBeGreaterThan(0);
+        const auditResult = await installed([
+          "audit-run",
+          "--run",
+          runFixture("seeded-a"),
+          "--check-report",
+          evalFixture("check-report-a.json"),
+          "--format",
+          "json",
+        ]);
+        expect(auditResult.code, auditResult.stderr).toBe(0);
+        const audit = JSON.parse(auditResult.stdout);
+        expect(validateAudit(audit), JSON.stringify(validateAudit.errors)).toBe(
+          true,
+        );
+        expect(audit.schemaVersion).toBe(8);
+        expect(audit.facts.length).toBeGreaterThan(0);
+        const auditLegacy = await installed([
+          "audit-run",
+          "--run",
+          runFixture("run-a"),
+        ]);
+        expect(auditLegacy.code, auditLegacy.stderr).toBe(0);
+        expect(auditLegacy.stdout).toContain("patch.stored: verified");
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -1024,6 +1047,11 @@ const validateEvaluationComparison = new Ajv2020().compile(
 );
 const evalFixture = (name: string): string =>
   `${root}test/fixtures/evaluation/${name}`;
+
+const auditSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v8.json`, "utf8"),
+);
+const validateAudit = new Ajv2020().compile(auditSchema);
 
 describe("gatefold compare e2e (real process)", () => {
   const before = compareFixture("before.json");
@@ -1892,6 +1920,162 @@ describe("gatefold e2e: evaluate-run and compare-evaluations", () => {
       ]);
       expect(run.code).toBe(3);
       expect(run.stderr).toContain("task.digest");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("gatefold e2e: audit-run", () => {
+  const runDir = runFixture;
+
+  it("audit-run emits a schema-valid v8 audit for a seeded run", async () => {
+    const run = await gatefold([
+      "audit-run",
+      "--run",
+      runDir("seeded-a"),
+      "--check-report",
+      evalFixture("check-report-a.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateAudit(result), JSON.stringify(validateAudit.errors)).toBe(
+      true,
+    );
+    expect(result.schemaVersion).toBe(8);
+    expect(result.source.command).toBe("audit-run");
+    expect(result.inputs.run.seeded).toBe(true);
+    expect(result.inputs.checkReports).toHaveLength(1);
+    expect(result.inputs.checkReports[0].state).toBe("parsed");
+    const states = new Map(
+      result.facts.map((f: { id: string; state: string }) => [f.id, f.state]),
+    );
+    for (const id of [
+      "run.trace",
+      "patch.stored",
+      "patch.completeness",
+      "changes.record",
+      "result.availability",
+    ])
+      expect(states.get(id), id).toBe("verified");
+    for (const id of [
+      "check-report.task-binding",
+      "check-report.baseline-binding",
+      "check-report.patch-binding",
+    ])
+      expect(states.get(id), id).toBe("verified");
+    for (const entry of result.facts)
+      expect(entry.evidence.length).toBeGreaterThan(0);
+  });
+
+  it("audit-run audits a legacy run without a spec", async () => {
+    const run = await gatefold([
+      "audit-run",
+      "--run",
+      runDir("run-a"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateAudit(result), JSON.stringify(validateAudit.errors)).toBe(
+      true,
+    );
+    const states = new Map(
+      result.facts.map((f: { id: string; state: string }) => [f.id, f.state]),
+    );
+    expect(states.get("seed.provenance")).toBe("not-recorded");
+    expect(states.get("patch.stored")).toBe("verified");
+    expect(states.get("patch.completeness")).toBe("unverifiable");
+  });
+
+  it("audit-run emits human-readable facts by default", async () => {
+    const run = await gatefold(["audit-run", "--run", runDir("seeded-a")]);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toContain("patch.stored: verified; complete");
+    expect(run.stdout).toContain("evidence:");
+    for (const word of ["[pass]", "[fail]", "criterion", "score"])
+      expect(run.stdout).not.toContain(word);
+  });
+
+  it("rejects audit-run missing flags and stdin with exit 2", async () => {
+    for (const args of [
+      ["audit-run"],
+      ["audit-run", "--run", "-"],
+      ["audit-run", "some-positional", "--run", runDir("seeded-a")],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+    }
+  });
+
+  it("reports a digest-mismatched patch as inconsistent, exit 0", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-audit-e2e-"));
+    try {
+      const source = runDir("seeded-a");
+      const dest = join(dir, "run");
+      mkdirSync(dest, { recursive: true });
+      for (const file of [
+        "trace.json",
+        "artifacts.json",
+        "patch.diff",
+        "result.txt",
+      ])
+        writeFileSync(join(dest, file), readFileSync(join(source, file)));
+      writeFileSync(join(dest, "patch.diff"), "tampered bytes\n");
+      const run = await gatefold([
+        "audit-run",
+        "--run",
+        dest,
+        "--format",
+        "json",
+      ]);
+      expect(run.code, run.stderr).toBe(0);
+      const result = JSON.parse(run.stdout);
+      expect(validateAudit(result), JSON.stringify(validateAudit.errors)).toBe(
+        true,
+      );
+      const states = new Map(
+        result.facts.map((f: { id: string; state: string }) => [f.id, f.state]),
+      );
+      expect(states.get("patch.stored")).toBe("inconsistent");
+      expect(states.get("patch.interpretable")).toBe("unverifiable");
+      expect(states.get("result.stored")).toBe("verified");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a hostile manifest path with exit 3", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-audit-e2e-"));
+    try {
+      const source = runDir("seeded-a");
+      const dest = join(dir, "run");
+      mkdirSync(dest, { recursive: true });
+      writeFileSync(
+        join(dest, "trace.json"),
+        readFileSync(join(source, "trace.json")),
+      );
+      writeFileSync(
+        join(dest, "artifacts.json"),
+        JSON.stringify({
+          artifacts: [
+            {
+              path: "../escape.txt",
+              kind: "patch",
+              digest: "sha256:" + "0".repeat(64),
+            },
+          ],
+        }),
+      );
+      const run = await gatefold(["audit-run", "--run", dest]);
+      expect(run.code).toBe(3);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

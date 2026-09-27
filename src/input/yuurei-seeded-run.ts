@@ -46,14 +46,16 @@ export type FinalResultState =
   | "not-recorded";
 
 /** The fixed result diagnostics the shipped pipeline records (#202). */
-const RESULT_DIAGNOSTIC_STATES: Readonly<Record<string, FinalResultState>> = {
+export const RESULT_DIAGNOSTIC_STATES: Readonly<
+  Record<string, FinalResultState>
+> = {
   "result: no final message emitted": "not-emitted",
   "result: final message could not be parsed": "parse-failed",
   "result: save failed; result.txt not recorded": "save-failed",
 };
 
 /** The fixed diagnostic recorded when no `patch.diff` was published. */
-const PATCH_FAILURE_DIAGNOSTIC =
+export const PATCH_FAILURE_DIAGNOSTIC =
   "patch: generation failed; patch.diff not recorded";
 
 /**
@@ -61,7 +63,7 @@ const PATCH_FAILURE_DIAGNOSTIC =
  * (`patch: <n> binary file(s) omitted`, `patch: <n> file(s) omitted over
  * the total cap`, and so on) — evidence that a stored patch is partial.
  */
-const PATCH_OMISSION_DIAGNOSTIC = /^patch: \d+ /;
+export const PATCH_OMISSION_DIAGNOSTIC = /^patch: \d+ /;
 
 /** One file recorded by a run's patch, in the unified v0.7 shape. */
 export interface OutputFile {
@@ -162,7 +164,7 @@ export function normalizeResultText(bytes: Buffer): string | null {
 }
 
 /** Maps a legacy all-additions patch record into the unified output shape. */
-function legacyPatchToOutput(patch: {
+export function legacyPatchToOutput(patch: {
   files: readonly {
     path: string;
     lines: readonly string[];

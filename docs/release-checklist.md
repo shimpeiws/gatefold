@@ -1,6 +1,6 @@
 # Release checklist
 
-Reproducible steps to cut the current release (v0.7). Every step must pass in
+Reproducible steps to cut the current release (v0.8). Every step must pass in
 order.
 
 ## 1. Clean install
@@ -21,7 +21,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.7 scope](v0.7-scope.md).
+release gate in [v0.8 scope](v0.8-scope.md).
 
 ## 3. Package validation
 
@@ -33,9 +33,9 @@ npm pack --dry-run --json
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
 `.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
-`claim-result.v7.json`, including `schema/examples/` and the v4
-trace-comparison, v5 run-comparison, v6 evaluation, and v7
-evaluation-comparison examples), `README.md`,
+`claim-result.v8.json`, including `schema/examples/` and the v4
+trace-comparison, v5 run-comparison, v6 evaluation, v7
+evaluation-comparison, and v8 audit examples), `README.md`,
 and `package.json`. All of `docs/` is shipped intentionally — keep only
 public-facing documentation in that directory. The tarball must not contain
 `test/`, `node_modules/`, `src/`, or any agent or review artifacts.
@@ -74,6 +74,8 @@ gatefold compare-runs --before run-a-dir --after run-b-dir --format json        
 gatefold evaluate-run --run run-dir --spec task-spec.json --format json                                      # criterion evaluation (v6)
 gatefold evaluate-run --run run-dir --spec task-spec.json --check-report check-report.json --format json    # evaluation with an external check report
 gatefold compare-evaluations --before run-a-dir --after run-b-dir --spec task-spec.json --format json        # evaluation comparison (v7)
+gatefold audit-run --run run-dir --format json                                                              # single-run evidence audit (v8)
+gatefold audit-run --run run-dir --check-report check-report.json --format json                             # audit with an external check report
 pfl report --json | gatefold -            # stdin transport
 pfl export --json | gatefold -            # stdin transport
 pfl diff --json | gatefold -              # stdin transport
@@ -95,7 +97,12 @@ confirm `schemaVersion` is 6, `inputs` records `run`, `spec`, and
 `pass`/`fail`/`unknown` with resolving evidence. For the v7
 evaluation-comparison result, confirm `schemaVersion` is 7, `inputs`
 records `beforeRun`/`afterRun`/`spec`, and every transition carries
-`before`/`after` verdicts with resolving evidence.
+`before`/`after` verdicts with resolving evidence. For the v8 audit result,
+confirm `schemaVersion` is 8, `source.command` is `audit-run`, `inputs`
+records `run` and `checkReports`, and every fact carries a `state` of
+`verified`/`inconsistent`/`unverifiable`/`not-recorded`, a `completeness` of
+`complete`/`partial`/`unknown`, and evidence whose pointer resolves inside
+the named document.
 
 ## 6. Tag and publish
 

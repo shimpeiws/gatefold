@@ -1,3 +1,4 @@
+import type { AuditEvidenceReference, AuditResult } from "../domain/audit.js";
 import type { AnalysisResult } from "../domain/claim.js";
 import type { ComparisonResult } from "../domain/comparison.js";
 import type {
@@ -217,4 +218,53 @@ export function formatRunComparisonHuman(
       ].join("\n");
     })
     .join("\n");
+}
+
+function formatAuditEvidence(
+  evidence: readonly AuditEvidenceReference[],
+): string {
+  return evidence
+    .map((entry) => {
+      const path =
+        entry.path === undefined ? "" : ` '${sanitizeText(entry.path)}'`;
+      const range =
+        entry.lines === undefined
+          ? ""
+          : ` lines ${entry.lines.start}-${entry.lines.end}`;
+      const byteRange =
+        entry.bytes === undefined
+          ? ""
+          : ` bytes ${entry.bytes.start}-${entry.bytes.end}`;
+      const digest =
+        entry.digest === undefined ? "" : ` digest ${entry.digest}`;
+      const detail = entry.elementId ?? entry.note;
+      const suffix = detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+      return `${entry.source}:${entry.pointer}${path}${range}${byteRange}${digest}${suffix}`;
+    })
+    .join(", ");
+}
+
+/**
+ * Human output for `audit-run` (docs/v0.8-scope.md): a factual evidence
+ * report. Deliberately free of Outcome/rubric vocabulary — every row is a
+ * fact state plus a completeness, never a verdict or a score.
+ */
+export function formatAuditHuman(result: AuditResult): string {
+  const lines: string[] = [`Audit of ${sanitizeText(result.inputs.run.label)}`];
+  if (result.inputs.checkReports.length > 0)
+    lines.push(
+      `check reports: ${result.inputs.checkReports
+        .map((r) => `${sanitizeText(r.label)} (${r.state})`)
+        .join(", ")}`,
+    );
+  for (const entry of result.facts) {
+    const subject =
+      entry.subject === undefined ? "" : ` [${sanitizeText(entry.subject)}]`;
+    lines.push(
+      `${entry.id}${subject}: ${entry.state}; ${entry.completeness}`,
+      `   ${entry.reason}`,
+      `   evidence: ${formatAuditEvidence(entry.evidence)}`,
+    );
+  }
+  return lines.join("\n") + "\n";
 }

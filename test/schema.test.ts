@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
+import { AUDIT_SCHEMA_VERSION } from "../src/domain/audit.js";
 import { CLAIM_SCHEMA_VERSION } from "../src/domain/claim.js";
 import type { AnalysisResult } from "../src/domain/claim.js";
 import { assertValidResult } from "../src/domain/validate.js";
@@ -98,6 +99,21 @@ describe("claim schema validation", () => {
       "valid-evaluation-comparison-result.json",
     );
     expect(validateV7(example), JSON.stringify(validateV7.errors)).toBe(true);
+  });
+
+  it("accepts the committed v8 audit example", async () => {
+    const v8Schema = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("schema/claim-result.v8.json", root)),
+        "utf8",
+      ),
+    );
+    expect(ajv.validateSchema(v8Schema)).toBe(true);
+    const validateV8 = ajv.compile(v8Schema);
+    const example = await readExample("valid-audit-result.json");
+    expect(validateV8(example), JSON.stringify(validateV8.errors)).toBe(true);
+    const doc = example as { schemaVersion: number };
+    expect(doc.schemaVersion).toBe(AUDIT_SCHEMA_VERSION);
   });
 
   it("rejects every committed invalid example", async () => {

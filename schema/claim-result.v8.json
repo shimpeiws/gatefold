@@ -1,0 +1,524 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v8.json",
+  "title": "Gatefold run audit result",
+  "description": "Machine-readable evidence audit emitted by gatefold audit-run --format json. Version 8 audits one yuurei run directory's stored records: each fact reports a state (verified, inconsistent, unverifiable, not-recorded) and a completeness (complete, partial, unknown) with evidence references into the run's bounded inputs and any supplied external check reports. This is a factual verification report — no task-quality judgement, no rubric verdicts, no aggregate score, and no claim about runtime behavior.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "inputs",
+    "context",
+    "facts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 8,
+      "description": "Version of this result schema. Additive changes keep the version; structural changes bump it."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "description": "Identifies this result as a single-run audit.",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "audit-run"
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "checkReports"],
+      "description": "Descriptors of the audited run directory and each supplied external check report.",
+      "properties": {
+        "run": { "$ref": "#/$defs/evalRunInput" },
+        "checkReports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/checkReportInput" }
+        }
+      }
+    },
+    "context": {
+      "$ref": "#/$defs/runContext",
+      "description": "Observed run context preserved separately from the facts; descriptive, never a score."
+    },
+    "facts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/auditFact" },
+      "description": "The fixed audit fact list in contract order (docs/v0.8-scope.md), followed by the per-report check-report.* facts for each supplied report in argument order."
+    }
+  },
+  "$defs": {
+    "traceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "document",
+        "schemaVersion",
+        "runId",
+        "startedAt",
+        "finishedAt",
+        "runtimeId",
+        "runtimeVersion",
+        "modelRequested",
+        "modelResolved",
+        "profileName",
+        "profileDigest",
+        "taskSource",
+        "taskDigest",
+        "isolationStrategy",
+        "isolationVerified"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The input argument as supplied, or '<stdin>'."
+        },
+        "document": { "type": "string", "const": "yuurei-trace" },
+        "schemaVersion": {
+          "type": "string",
+          "description": "The trace's schema_version compatibility token, compared for equality (currently '0.3')."
+        },
+        "runId": { "type": "string", "minLength": 1 },
+        "yuureiVersion": {
+          "type": "string",
+          "description": "yuurei_version of the trace; absent when the trace does not carry it."
+        },
+        "startedAt": { "type": "string" },
+        "finishedAt": { "type": "string" },
+        "runtimeId": { "type": "string", "minLength": 1 },
+        "runtimeVersion": {
+          "type": ["string", "null"],
+          "description": "runtime.version of the trace; null is preserved as null."
+        },
+        "modelRequested": { "type": "string", "minLength": 1 },
+        "modelResolved": {
+          "type": ["string", "null"],
+          "description": "model.resolved of the trace; null means the effective model was not observed."
+        },
+        "modelResolvedReason": {
+          "type": "string",
+          "enum": ["observed", "unobserved", "parse_failed"],
+          "description": "model.resolved_reason of the trace; absent when the trace does not carry it."
+        },
+        "profileName": { "type": "string" },
+        "profileDigest": { "type": "string", "minLength": 1 },
+        "taskSource": { "type": "string" },
+        "taskDigest": { "type": "string", "minLength": 1 },
+        "isolationStrategy": { "type": "string", "minLength": 1 },
+        "isolationVerified": { "type": "boolean" },
+        "requestedCellDigest": {
+          "type": "string",
+          "description": "requested_cell.digest of the trace; absent when the trace does not carry it."
+        },
+        "requestedCellInputsVersion": {
+          "type": "integer",
+          "description": "requested_cell.inputs_version of the trace; absent when the trace does not carry it."
+        },
+        "executionOptions": {
+          "type": "object",
+          "description": "The trace's execution_options value recorded verbatim; absent when the trace does not carry it."
+        },
+        "definition": {
+          "type": "object",
+          "description": "The trace's definition value recorded verbatim ({ run: string | null, cli_overrides: string[] }); absent when the trace does not carry it."
+        }
+      }
+    },
+    "artifactEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind", "digest", "state"],
+      "description": "One artifact manifest entry preserved verbatim plus Gatefold's verification outcome.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The manifest-recorded path, relative to the run directory. Treated as data, never as an access instruction."
+        },
+        "kind": { "type": "string" },
+        "digest": {
+          "type": "string",
+          "description": "The manifest-recorded digest of the stored bytes (sha256:<hex> when verifiable)."
+        },
+        "truncated": {
+          "type": "boolean",
+          "const": true,
+          "description": "Present and true only when the manifest marks the stored bytes as cut at yuurei's size cap. The digest covers the stored (cut) bytes."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Stored byte count when the file was examined; absent when the artifact was not read."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "verified-truncated",
+            "digest-mismatch",
+            "missing",
+            "unverified"
+          ],
+          "description": "Verification outcome: the stored bytes hash to the recorded digest (verified, or verified-truncated when also marked truncated), they do not (digest-mismatch), no readable file exists at the path (missing), or the bytes were not read or not verifiable in this milestone (unverified)."
+        }
+      }
+    },
+    "evalRunInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "document",
+        "trace",
+        "seeded",
+        "baseline",
+        "changes",
+        "patchRecord",
+        "patchState",
+        "resultState",
+        "artifacts"
+      ],
+      "description": "Descriptor of the audited yuurei run directory: the supplied label, the trace descriptor, seeded provenance, the patch and final-result summary states, and the manifest facts.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run directory argument as supplied."
+        },
+        "document": { "type": "string", "const": "yuurei-run" },
+        "trace": { "$ref": "#/$defs/traceInput" },
+        "seeded": {
+          "type": "boolean",
+          "description": "Whether the trace records seeded-workspace provenance (a seed field)."
+        },
+        "baseline": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["digest", "materializedDigest"],
+          "description": "The recorded seeded baseline identity (trace.seed.baseline), or null for a legacy empty-workspace run.",
+          "properties": {
+            "digest": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The requested baseline digest."
+            },
+            "materializedDigest": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The materialized baseline digest the pre-runtime verification recomputed; identical to digest on any shipped seeded run."
+            },
+            "source": {
+              "type": "string",
+              "description": "The seed tree's source path; provenance only, never part of identity."
+            },
+            "head": {
+              "type": "string",
+              "description": "The source repository's HEAD commit at seed resolution; provenance only."
+            }
+          }
+        },
+        "changes": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["added", "modified", "deleted"],
+          "description": "The recorded change-set counts (trace.seed.changes), or null when the trace records no change set — absence never means no changes.",
+          "properties": {
+            "added": { "type": "integer", "minimum": 0 },
+            "modified": { "type": "integer", "minimum": 0 },
+            "deleted": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "patchRecord": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["base", "state"],
+          "description": "The trace's patch completeness record (trace.patch), or null on traces that predate it. A verified digest proves stored bytes match the manifest; only state 'complete' certifies the patch covers the full change set.",
+          "properties": {
+            "base": {
+              "type": "string",
+              "enum": ["empty", "seeded"],
+              "description": "Which workspace the patch diffs against."
+            },
+            "state": {
+              "type": "string",
+              "enum": ["complete", "partial", "absent"],
+              "description": "complete = the stored diff describes every recorded change; partial = it may omit files (redaction, truncation, binary/oversized/unrepresentable content, or the total cap); absent = patch generation did not succeed."
+            }
+          }
+        },
+        "patchState": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "verified-truncated",
+            "digest-mismatch",
+            "missing",
+            "unverified",
+            "malformed",
+            "not-recorded"
+          ],
+          "description": "The state of the run's patch.diff: the manifest entry's state when listed, 'malformed' when verified bytes violate the patch grammar, or 'not-recorded' when the manifest lists no patch entry."
+        },
+        "resultState": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "verified-truncated",
+            "digest-mismatch",
+            "missing",
+            "unverified",
+            "not-emitted",
+            "parse-failed",
+            "save-failed",
+            "not-recorded"
+          ],
+          "description": "The state of the run's result.txt: the manifest entry's state when listed, 'not-emitted'/'parse-failed'/'save-failed' from the trace's result diagnostics, or 'not-recorded' when nothing records a result."
+        },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactEntry" }
+        }
+      }
+    },
+    "checkReportInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "document",
+        "evaluatorId",
+        "state",
+        "resultCount"
+      ],
+      "description": "Descriptor of one supplied external check report. The audit reports whether the document parses and whether its declared subject digests match the run's recorded identity; a matching declaration never attests that the evaluator ran on those bytes.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The check-report file argument as supplied."
+        },
+        "document": { "type": "string", "const": "check-report" },
+        "evaluatorId": {
+          "type": ["string", "null"],
+          "description": "Identity of the evaluator/test runner that produced the report; null when the report could not be parsed."
+        },
+        "evaluatorVersion": {
+          "type": "string",
+          "description": "Version of the evaluator when the report records one; absent otherwise."
+        },
+        "state": {
+          "type": "string",
+          "enum": ["parsed", "invalid"],
+          "description": "Whether the supplied document is a conforming v1 check report. Whether its declared digests match the run is reported per-fact, not here."
+        },
+        "error": {
+          "type": "string",
+          "description": "Why the report did not parse; present only when state is 'invalid'."
+        },
+        "resultCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of result rows the report carried (0 for an unparsed report)."
+        }
+      }
+    },
+    "runContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution", "model", "usage", "cost"],
+      "description": "Observed run context: execution status, model identity, usage, and cost — descriptive only, never a score.",
+      "properties": {
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exitCode", "signal", "timedOut"],
+          "properties": {
+            "exitCode": {
+              "type": ["integer", "null"],
+              "description": "execution.exit_code of the trace; describes process termination, not answer quality."
+            },
+            "signal": {
+              "type": ["string", "null"],
+              "description": "execution.signal of the trace."
+            },
+            "timedOut": {
+              "type": "boolean",
+              "description": "execution.timed_out of the trace."
+            }
+          }
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested", "resolved"],
+          "properties": {
+            "requested": {
+              "type": "string",
+              "description": "model.requested of the trace."
+            },
+            "resolved": {
+              "type": ["string", "null"],
+              "description": "model.resolved of the trace; null means the effective model was not observed."
+            },
+            "resolvedReason": {
+              "type": "string",
+              "enum": ["observed", "unobserved", "parse_failed"],
+              "description": "model.resolved_reason of the trace; absent when the trace does not carry it."
+            }
+          }
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["number", "null"]
+          },
+          "description": "The trace's usage record verbatim; a key absent means never attempted, null means attempted but unobserved."
+        },
+        "cost": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["amount", "currency"],
+          "description": "The trace's cost estimate; null means no estimate was produced.",
+          "properties": {
+            "amount": { "type": "number" },
+            "currency": { "type": "string" }
+          }
+        }
+      }
+    },
+    "auditFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "state",
+        "completeness",
+        "reason",
+        "evidence",
+        "provenance"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The stable fact identifier from docs/v0.8-scope.md (e.g. 'patch.stored', 'changes.record', 'check-report.task-binding')."
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Present only on check-report.* facts: the label of the supplied report the fact is about."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "inconsistent",
+            "unverifiable",
+            "not-recorded"
+          ],
+          "description": "verified: the records affirmatively establish the fact. inconsistent: two well-formed records contradict each other, or verified bytes violate their documented shape. unverifiable: the needed record is missing, mismatched, truncated, or uninterpretable. not-recorded: the record the fact audits was never produced."
+        },
+        "completeness": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"],
+          "description": "How complete the evidence behind the fact is — separate from state: a verified stored-byte digest on a truncated or declared-partial record is 'partial', never 'complete'."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the state is what it is — including why a fact is unverifiable or not-recorded."
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceReference" },
+          "description": "References into the run's documents and any supplied reports that support the fact's state. Both agreeing and contradicting records are cited."
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "pointer"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "trace",
+            "manifest",
+            "patch",
+            "result",
+            "baselineManifest",
+            "changes",
+            "checkReport"
+          ],
+          "description": "Which document the reference resolves against: the run's trace.json or artifacts.json, its verified patch.diff/result.txt bytes (cited by manifest pointer), the verified baseline-manifest.json/changes.json documents, or a supplied external check report."
+        },
+        "pointer": {
+          "type": "string",
+          "pattern": "^$|^(?:/(?:[^/~]|~0|~1)*)*$",
+          "description": "JSON Pointer (RFC 6901) into the document named by source. For the patch and result sources it is the manifest pointer of that artifact entry; for baselineManifest and changes it resolves inside the verified record document. The empty string references the whole document."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Artifact and supplemental-record evidence only: the manifest-recorded digest of the verified stored bytes the reference locates into."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Patch evidence only: the workspace-relative file path whose block the range locates inside the stored patch bytes."
+        },
+        "lines": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: an inclusive 1-based line range inside the verified stored bytes."
+        },
+        "bytes": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: a half-open 0-based byte range inside the verified stored bytes."
+        },
+        "elementId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For check-report evidence, the label of the supplying report; otherwise unused."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional human-readable clarification of what the reference shows."
+        }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      },
+      "description": "An inclusive 1-based line range or a half-open 0-based byte range into verified stored bytes."
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transform"],
+      "description": "Per-input metadata (labels, descriptors) lives in the top-level inputs map.",
+      "properties": {
+        "transform": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of the transformations applied between the raw inputs and this fact, in application order."
+        }
+      }
+    }
+  }
+}
