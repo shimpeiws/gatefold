@@ -141,6 +141,23 @@ function recordEv(
   };
 }
 
+/**
+ * Evidence citing one top-level field inside a verified supplemental
+ * record: `/<field>` when the document carries the field, else the record
+ * root — an absent field has no resolvable pointer, so its absence is
+ * cited through the containing document with a note.
+ */
+function fieldEv(
+  source: "baselineManifest" | "changes",
+  record: AuditedArtifactRecord,
+  field: string,
+): AuditEvidenceReference {
+  const doc = record.document;
+  return doc !== null && Object.hasOwn(doc, field)
+    ? recordEv(source, record, `/${field}`)
+    : recordEv(source, record, "", `no '${field}' field`);
+}
+
 function reportEv(
   label: string,
   pointer: string,
@@ -541,7 +558,7 @@ function auditBaselineManifest(run: AuditedRun): AuditFact[] {
           "complete",
           `the verified ${path} field '${field}' does not restate the ` +
             "trace's seed record",
-          [traceEv("/seed"), recordEv("baselineManifest", record, `/${field}`)],
+          [traceEv("/seed"), fieldEv("baselineManifest", record, field)],
         ),
       ];
   }
@@ -555,7 +572,7 @@ function auditBaselineManifest(run: AuditedRun): AuditFact[] {
         "complete",
         `the verified ${path} field 'files' is not the documented ` +
           "file map",
-        [recordEv("baselineManifest", record, "/files")],
+        [fieldEv("baselineManifest", record, "files")],
       ),
     ];
   }
@@ -723,7 +740,7 @@ function auditChanges(run: AuditedRun): AuditFact[] {
         "inconsistent",
         "complete",
         `the verified ${path} field 'version' is not 1`,
-        [recordEv("changes", record, "/version")],
+        [fieldEv("changes", record, "version")],
       ),
     ];
   if (doc.baseline_digest !== seed.baseline.requestedDigest)
@@ -737,7 +754,7 @@ function auditChanges(run: AuditedRun): AuditFact[] {
           "the trace's requested baseline digest",
         [
           traceEv("/seed/baseline/requested_digest"),
-          recordEv("changes", record, "/baseline_digest"),
+          fieldEv("changes", record, "baseline_digest"),
         ],
       ),
     ];
@@ -766,7 +783,7 @@ function auditChanges(run: AuditedRun): AuditFact[] {
           "inconsistent",
           "complete",
           `the verified ${path} field '${kind}' is not a path list`,
-          [recordEv("changes", record, `/${kind}`)],
+          [fieldEv("changes", record, kind)],
         ),
       ];
     }
@@ -801,6 +818,46 @@ function auditChanges(run: AuditedRun): AuditFact[] {
 }
 
 // -- patch facts --------------------------------------------------------------
+
+/**
+ * `patch.stored` shares the stored-byte integrity check, except that a
+ * verified untruncated entry keeps `partial` completeness when the trace
+ * still records omitted patch content — a `partial` state, omission or
+ * generation-failed diagnostics, or an incomplete parse. The digest
+ * attests the stored bytes, never a complete change set.
+ */
+function auditPatchStored(run: AuditedRun): AuditFact {
+  const entry = run.patchEntryIndex;
+  if (entry === null || run.entries[entry].state !== "verified")
+    return storedFact(
+      "patch.stored",
+      run,
+      entry,
+      "patch.diff",
+      "the manifest records no patch.diff entry",
+    );
+  const omissions: string[] = [];
+  if (run.patchRecord?.state === "partial")
+    omissions.push("the trace declares the patch partial");
+  if (run.patchOmissionIndex !== -1)
+    omissions.push("the trace's diagnostics record omitted patch content");
+  if (run.patchFailureIndex !== -1)
+    omissions.push("the trace records a patch generation failure");
+  if (run.patch?.complete === false)
+    omissions.push("the verified bytes parse incompletely");
+  return fact(
+    "patch.stored",
+    "verified",
+    omissions.length === 0 ? "complete" : "partial",
+    "the manifest records patch.diff and the stored bytes match its " +
+      "recorded digest" +
+      (omissions.length === 0
+        ? ""
+        : `, but ${omissions.join(" and ")} — the digest attests the ` +
+          "stored bytes, not a complete change set"),
+    [entryEv(entry)],
+  );
+}
 
 function auditPatchInterpretable(run: AuditedRun): AuditFact {
   const id = "patch.interpretable";
@@ -1263,15 +1320,27 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
     );
 
   const doc = record.document!;
+  const seed = run.trace.seed!;
   const isStringList = (value: unknown): value is string[] =>
     Array.isArray(value) && value.every((item) => typeof item === "string");
-  if (!CHANGE_KINDS.every((kind) => isStringList(doc[kind])))
+  // Agreement can only rest on this run's conforming change record: the
+  // documented version, the run's baseline digest, a trace-recorded
+  // change set, and the per-kind path lists. A document failing those
+  // belongs to another baseline or contradicts the trace — changes.record
+  // reports why — so its path sets attest nothing about the patch.
+  if (
+    doc.version !== 1 ||
+    doc.baseline_digest !== seed.baseline.requestedDigest ||
+    seed.changes === undefined ||
+    !CHANGE_KINDS.every((kind) => isStringList(doc[kind]))
+  )
     return fact(
       id,
       "unverifiable",
       "unknown",
-      "the verified changes.json does not carry the documented " +
-        "per-kind path lists; it cannot be compared against the patch",
+      "the verified changes.json is not the run's conforming change " +
+        "record — changes.record reports the contradiction — so its " +
+        "path sets cannot attest agreement with the patch",
       [recordEv("changes", record, "")],
     );
   const patch = run.patch;
@@ -1739,13 +1808,7 @@ export function auditRun(input: {
     ...auditSeedFacts(run),
     ...auditBaselineManifest(run),
     ...auditChanges(run),
-    storedFact(
-      "patch.stored",
-      run,
-      run.patchEntryIndex,
-      "patch.diff",
-      "the manifest records no patch.diff entry",
-    ),
+    auditPatchStored(run),
     auditPatchInterpretable(run),
     auditPatchRecord(run),
     auditPatchCompleteness(run),

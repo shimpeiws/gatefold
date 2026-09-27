@@ -599,6 +599,39 @@ describe("audit-run", () => {
     }
   });
 
+  it("reports each missing baseline-manifest field as inconsistent, citing the record root", async () => {
+    const base = tmp();
+    try {
+      for (const field of [
+        "version",
+        "policy",
+        "source",
+        "head",
+        "requested_digest",
+        "materialized_digest",
+        "files",
+      ]) {
+        const doc = baselineManifestDoc();
+        delete doc[field];
+        const result = await audit(
+          writeRun(base, `run-${field}`, {
+            baselineManifest: JSON.stringify(doc),
+          }),
+        );
+        const record = factAt(result, "baseline-manifest.record");
+        // An absent field has no resolvable pointer; the record root
+        // carries a note instead of aborting the audit.
+        expect(record.state, field).toBe("inconsistent");
+        expect(
+          record.evidence.find((e) => e.source === "baselineManifest"),
+          field,
+        ).toMatchObject({ pointer: "" });
+      }
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("reports a declared-partial patch as unverifiable completeness with partial evidence", async () => {
     const base = tmp();
     try {
@@ -623,6 +656,71 @@ describe("audit-run", () => {
         state: "verified",
         completeness: "partial",
       });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("marks patch.stored partial when the trace declares the patch partial over untruncated bytes", async () => {
+    const base = tmp();
+    try {
+      // One modified file; untruncated and digest-verified, yet declared
+      // partial — the digest attests the stored bytes, not full coverage.
+      const partial =
+        "--- src/auth.ts\n+++ src/auth.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n";
+      const result = await audit(
+        writeRun(base, "run", {
+          patch: partial,
+          trace: seededTrace({
+            patch: { base: "seeded", state: "partial" },
+          }),
+        }),
+      );
+      expect(factAt(result, "patch.stored")).toMatchObject({
+        state: "verified",
+        completeness: "partial",
+      });
+      // Unrelated stored-byte facts keep their own completeness.
+      expect(factAt(result, "result.stored").completeness).toBe("complete");
+      expect(factAt(result, "changes.stored").completeness).toBe("complete");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("marks patch.stored partial when omission diagnostics on a pre-record trace mark omitted content", async () => {
+    const base = tmp();
+    try {
+      const trace = seededTrace({
+        diagnostics: ["patch: 1 binary file(s) omitted"],
+      });
+      delete trace.patch;
+      const result = await audit(writeRun(base, "run", { trace }));
+      expect(factAt(result, "patch.stored")).toMatchObject({
+        state: "verified",
+        completeness: "partial",
+      });
+      expect(factAt(result, "patch.record").state).toBe("not-recorded");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("marks patch.stored partial when a generation-failed diagnostic contradicts a stored patch", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(
+        writeRun(base, "run", {
+          trace: seededTrace({
+            diagnostics: ["patch: generation failed; patch.diff not recorded"],
+          }),
+        }),
+      );
+      expect(factAt(result, "patch.stored")).toMatchObject({
+        state: "verified",
+        completeness: "partial",
+      });
+      expect(factAt(result, "patch.record").state).toBe("inconsistent");
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -796,6 +894,33 @@ describe("audit-run", () => {
     }
   });
 
+  it("reports each missing changes.json field as inconsistent, citing the record root", async () => {
+    const base = tmp();
+    try {
+      for (const field of [
+        "version",
+        "baseline_digest",
+        "added",
+        "modified",
+        "deleted",
+      ]) {
+        const doc = changesDoc();
+        delete doc[field];
+        const result = await audit(
+          writeRun(base, `run-${field}`, { changes: JSON.stringify(doc) }),
+        );
+        const record = factAt(result, "changes.record");
+        expect(record.state, field).toBe("inconsistent");
+        expect(
+          record.evidence.find((e) => e.source === "changes"),
+          field,
+        ).toMatchObject({ pointer: "" });
+      }
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("reports a baseline-manifest field contradicting the seed as inconsistent", async () => {
     const base = tmp();
     try {
@@ -827,6 +952,68 @@ describe("audit-run", () => {
       expect(factAt(result, "changes.patch-agreement")).toMatchObject({
         state: "inconsistent",
       });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves patch agreement unverifiable when the verified changes.json is not the run's change record", async () => {
+    const base = tmp();
+    try {
+      // A wrong version or a foreign baseline digest makes the document
+      // another run's record; its path sets cannot attest agreement even
+      // when they match the patch.
+      for (const [i, doc] of [
+        changesDoc({ baseline_digest: "sha256:other" }),
+        changesDoc({ version: 2 }),
+      ].entries()) {
+        const result = await audit(
+          writeRun(base, `run-${i}`, { changes: JSON.stringify(doc) }),
+        );
+        expect(factAt(result, "changes.record").state).toBe("inconsistent");
+        expect(
+          factAt(result, "changes.patch-agreement"),
+          JSON.stringify(doc),
+        ).toMatchObject({ state: "unverifiable", completeness: "unknown" });
+      }
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves patch agreement unverifiable when changes.json exists without a recorded change set", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(
+        writeRun(base, "run", {
+          trace: seededTrace({ seed: seedDoc(null) }),
+        }),
+      );
+      expect(factAt(result, "changes.record").state).toBe("inconsistent");
+      expect(factAt(result, "changes.patch-agreement")).toMatchObject({
+        state: "unverifiable",
+        completeness: "unknown",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps reporting patch paths a count-contradicting changes.json does not list as inconsistent", async () => {
+    const base = tmp();
+    try {
+      // The record binds this baseline and is structurally conforming but
+      // its counts disagree with seed.changes; the patch listing a path
+      // outside its sets stays an independent contradiction.
+      const result = await audit(
+        writeRun(base, "run", {
+          changes: JSON.stringify(changesDoc({ added: [] })),
+        }),
+      );
+      expect(factAt(result, "changes.record").state).toBe("inconsistent");
+      expect(factAt(result, "changes.patch-agreement").state).toBe(
+        "inconsistent",
+      );
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
