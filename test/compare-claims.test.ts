@@ -906,6 +906,7 @@ describe("compare review fixes (devin-review PR #49)", () => {
           activationChanged: 0,
           statusChanges: [{ id: "x", from: null, to: "effective" }],
         },
+        facetDeltas: { instructions: 1 },
       }),
     );
     const result = compare(before, after, diff);
@@ -1319,5 +1320,109 @@ describe("compare review fixes (devin-review round 3)", () => {
       after: after.raw,
       diff: diff.raw,
     });
+  });
+});
+
+describe("compare review fixes (devin-review round 4)", () => {
+  function compare(
+    before: { doc: PflExportDocument },
+    after: { doc: PflExportDocument },
+    diff: { doc: PflDiffDocument },
+  ) {
+    return compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+  }
+
+  const contradictions = (result: ComparisonResult) =>
+    result.claims.filter((c) => c.ruleId === "compare-contradiction");
+
+  it("flags an export-only element absent from every diff change set", () => {
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(diffData({ facetDeltas: { instructions: 1 } }));
+    const result = compare(before, after, diff);
+    expect(
+      contradictions(result).some((c) =>
+        c.claim.includes("absent from every diff change set"),
+      ),
+    ).toBe(true);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("counts one-sided elements in the derived facet deltas", () => {
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const consistent = makeDiff(
+      diffData({
+        structural: {
+          added: 1,
+          removed: 0,
+          changed: 0,
+          addedIds: ["x"],
+          removedIds: [],
+          changedIds: [],
+        },
+        facetDeltas: { instructions: 1 },
+      }),
+    );
+    const result = compare(before, after, consistent);
+    expect(
+      contradictions(result).filter((c) => c.claim.includes("facet delta")),
+    ).toHaveLength(0);
+    const wrong = compare(
+      before,
+      after,
+      makeDiff(
+        diffData({
+          structural: {
+            added: 1,
+            removed: 0,
+            changed: 0,
+            addedIds: ["x"],
+            removedIds: [],
+            changedIds: [],
+          },
+          facetDeltas: { instructions: 2 },
+        }),
+      ),
+    );
+    expect(
+      contradictions(wrong).some((c) =>
+        c.claim.includes("facet delta 2 for 'instructions'"),
+      ),
+    ).toBe(true);
+  });
+
+  it("skips the activation aggregate when populations differ", () => {
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        structural: {
+          added: 1,
+          removed: 0,
+          changed: 0,
+          addedIds: ["x"],
+          removedIds: [],
+          changedIds: [],
+        },
+        effective: {
+          newlyEffective: 1,
+          noLongerEffective: 0,
+          activationChanged: 1,
+          statusChanges: [{ id: "x", from: null, to: "effective" }],
+        },
+        facetDeltas: { instructions: 1 },
+      }),
+    );
+    const result = compare(before, after, diff);
+    expect(contradictions(result)).toHaveLength(0);
   });
 });

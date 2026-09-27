@@ -195,10 +195,12 @@ export function reconcileDocuments(
     ...bucketIndexes.changed.keys(),
     ...statusChanges.keys(),
   ]);
-  // Elements present in both exports but absent from every diff list still
-  // carry derived activation/facet changes: the diff records those only as
-  // aggregate counts, so the comparison derives them from export context.
-  for (const id of beforeIndex.keys()) if (afterIndex.has(id)) ids.add(id);
+  // Every export id joins the view: shared ids can carry derived
+  // activation/facet changes (the diff records those only as aggregate
+  // counts), and one-sided ids unlisted by the diff are themselves a
+  // disagreement worth recording.
+  for (const id of beforeIndex.keys()) ids.add(id);
+  for (const id of afterIndex.keys()) ids.add(id);
 
   const elements: ElementReconciliation[] = [...ids].sort().map((id) => {
     // The reader enforces pairwise disjointness of the structural lists, so
@@ -474,6 +476,40 @@ export function reconcileDocuments(
           ],
         });
     }
+    if (structural === "none" && statusChange === null) {
+      // The diff does not mention this id at all. When the opposite
+      // export is complete, its provable absence makes the diff's
+      // silence disagree with the side that carries the element; a
+      // partial opposite side leaves the absence unobserved.
+      if (bi === null && ai !== null && before.completeness === "complete")
+        contradictions.push({
+          detail:
+            "present in the after export and provably absent from the complete before export, but absent from every diff change set",
+          evidence: [
+            { source: "before", pointer: "/data/elements", elementId: id },
+            {
+              source: "after",
+              pointer: `/data/elements/${ai}/id`,
+              elementId: id,
+            },
+            { source: "diff", pointer: "/data/structural" },
+          ],
+        });
+      if (ai === null && bi !== null && after.completeness === "complete")
+        contradictions.push({
+          detail:
+            "present in the before export and provably absent from the complete after export, but absent from every diff change set",
+          evidence: [
+            {
+              source: "before",
+              pointer: `/data/elements/${bi}/id`,
+              elementId: id,
+            },
+            { source: "after", pointer: "/data/elements", elementId: id },
+            { source: "diff", pointer: "/data/structural" },
+          ],
+        });
+    }
 
     return {
       id,
@@ -495,23 +531,29 @@ export function reconcileDocuments(
     };
   });
 
-  // Aggregate disagreements: when both exports are complete and every
-  // shared element carries the layer being derived, the exports' totals
-  // are authoritative — a different diff aggregate is a contradiction.
-  // Missing layers or a non-complete side make the totals inconclusive.
+  // Aggregate disagreements are checked only when the populations are
+  // comparable. activationChanged may count added/removed or transitioned
+  // elements under the diff producer's own semantics, so totals match only
+  // when both complete exports cover the same fully-resolved element set
+  // and the diff records no structural additions/removals or status
+  // changes. facetDeltas are a per-facet count delta over every interpreted
+  // element in each export — including one-sided elements — and are
+  // incomparable when a classifier drift separates an export from its
+  // diff side or when any element lacks an interpretation layer.
   const documentContradictions: ReconciliationContradiction[] = [];
   if (before.completeness === "complete" && after.completeness === "complete") {
-    const shared = elements.filter(
-      (el) => el.beforeIndex !== null && el.afterIndex !== null,
-    );
+    const sameElementIds =
+      before.data.elements.length === after.data.elements.length &&
+      before.data.elements.every((el) => afterIndex.has(el.id));
     if (
-      shared.every(
-        (el) =>
-          before.data.elements[el.beforeIndex!].resolved !== null &&
-          after.data.elements[el.afterIndex!].resolved !== null,
-      )
+      sameElementIds &&
+      diff.data.structural.addedIds.length === 0 &&
+      diff.data.structural.removedIds.length === 0 &&
+      diff.data.effective.statusChanges.length === 0 &&
+      before.data.elements.every((el) => el.resolved !== null) &&
+      after.data.elements.every((el) => el.resolved !== null)
     ) {
-      const derived = shared.filter(
+      const derived = elements.filter(
         (el) => el.activationChange !== null,
       ).length;
       const recorded = diff.data.effective.activationChanged;
@@ -524,27 +566,34 @@ export function reconcileDocuments(
         });
     }
     if (
-      shared.every(
-        (el) =>
-          before.data.elements[el.beforeIndex!].interpretation !== null &&
-          after.data.elements[el.afterIndex!].interpretation !== null,
-      )
+      before.data.interpretation.classifier.version ===
+        diff.data.interpretation.a.classifierVersion &&
+      after.data.interpretation.classifier.version ===
+        diff.data.interpretation.b.classifierVersion &&
+      before.data.elements.every((el) => el.interpretation !== null) &&
+      after.data.elements.every((el) => el.interpretation !== null)
     ) {
-      const derivedDeltas = new Map<string, number>();
-      for (const el of shared) {
-        for (const facet of el.facetChange?.added ?? [])
-          derivedDeltas.set(facet, (derivedDeltas.get(facet) ?? 0) + 1);
-        for (const facet of el.facetChange?.removed ?? [])
-          derivedDeltas.set(facet, (derivedDeltas.get(facet) ?? 0) - 1);
-      }
+      const facetCounts = (
+        document: PflExportDocument,
+      ): Map<string, number> => {
+        const counts = new Map<string, number>();
+        for (const el of document.data.elements)
+          for (const facet of el.interpretation!.facets)
+            counts.set(facet, (counts.get(facet) ?? 0) + 1);
+        return counts;
+      };
+      const beforeCounts = facetCounts(before);
+      const afterCounts = facetCounts(after);
       const facets = [
         ...new Set([
-          ...derivedDeltas.keys(),
+          ...beforeCounts.keys(),
+          ...afterCounts.keys(),
           ...Object.keys(diff.data.facetDeltas),
         ]),
       ].sort();
       for (const facet of facets) {
-        const derived = derivedDeltas.get(facet) ?? 0;
+        const derived =
+          (afterCounts.get(facet) ?? 0) - (beforeCounts.get(facet) ?? 0);
         const hasFacet = Object.hasOwn(diff.data.facetDeltas, facet);
         const recorded = hasFacet ? diff.data.facetDeltas[facet] : 0;
         if (derived !== recorded)
