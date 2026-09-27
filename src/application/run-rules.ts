@@ -396,7 +396,7 @@ export const RUN_RULES: readonly RunRule[] = [
       const truncatedNote = (run: YuureiRun, name: Side) =>
         run.patchState === "verified-truncated"
           ? ` Run ${name}'s patch is truncated: the comparison covers only ` +
-            `its stored prefix.`
+            `its stored prefix; files beyond that prefix are unknown.`
           : "";
       let text: string;
       if (a !== null && b !== null) {
