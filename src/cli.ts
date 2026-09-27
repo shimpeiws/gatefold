@@ -1,8 +1,15 @@
 import { analyze } from "./application/analyze.js";
 import { compareDocuments } from "./application/compare.js";
+import { compareEvaluations } from "./application/compare-evaluations.js";
 import { compareRuns } from "./application/compare-runs.js";
 import { compareTraces } from "./application/compare-traces.js";
+import { loadCheckReports } from "./application/check-report-binding.js";
+import { evaluateRun } from "./application/evaluate-run.js";
 import type { ComparisonResult } from "./domain/comparison.js";
+import type {
+  EvaluationComparisonResult,
+  EvaluationResult,
+} from "./domain/evaluation.js";
 import type { RunComparisonResult } from "./domain/run-comparison.js";
 import { sanitizeText } from "./domain/sanitize.js";
 import type { TraceComparisonResult } from "./domain/trace-comparison.js";
@@ -12,10 +19,14 @@ import {
   readPflExportStdin,
   STDIN_SOURCE,
 } from "./input/pfl-export.js";
+import { readTaskSpec } from "./input/task-spec.js";
+import { readEvaluatedRun } from "./input/yuurei-seeded-run.js";
 import { readYuureiRun } from "./input/yuurei-run.js";
 import { readYuureiTrace, readYuureiTraceStdin } from "./input/yuurei-trace.js";
 import {
   formatComparisonHuman,
+  formatEvaluationComparisonHuman,
+  formatEvaluationHuman,
   formatHuman,
   formatRunComparisonHuman,
   formatTraceComparisonHuman,
@@ -54,6 +65,18 @@ interface CliOptions {
     before?: string;
     after?: string;
   };
+  readonly evaluateRun?: {
+    run?: string;
+    spec?: string;
+    checkReports: string[];
+  };
+  readonly compareEvaluations?: {
+    before?: string;
+    after?: string;
+    spec?: string;
+    beforeCheckReports: string[];
+    afterCheckReports: string[];
+  };
   readonly format: OutputFormat;
   readonly minConfidence: number;
   /** The --min-confidence token exactly as supplied, for display. */
@@ -82,6 +105,8 @@ function parseArgs(args: readonly string[]): CliOptions {
   let compare: CliOptions["compare"];
   let compareTraces: CliOptions["compareTraces"];
   let compareRuns: CliOptions["compareRuns"];
+  let evaluateRun: CliOptions["evaluateRun"];
+  let compareEvaluations: CliOptions["compareEvaluations"];
   let format: OutputFormat = "human";
   let minConfidence = 0;
   let minConfidenceText = "0";
@@ -127,6 +152,71 @@ function parseArgs(args: readonly string[]): CliOptions {
       else if (compareTraces !== undefined)
         compareTraces = { ...compareTraces, [name]: value };
       else compareRuns = { ...compareRuns, [name]: value };
+      continue;
+    }
+    if (
+      !optionsDone &&
+      (evaluateRun !== undefined || compareEvaluations !== undefined) &&
+      argument.startsWith("--") &&
+      ((
+        evaluateRun !== undefined
+          ? ["run", "spec", "check-report"]
+          : [
+              "before",
+              "after",
+              "spec",
+              "before-check-report",
+              "after-check-report",
+            ]
+      ).includes(
+        argument.slice(
+          2,
+          argument.indexOf("=") === -1 ? undefined : argument.indexOf("="),
+        ),
+      ))
+    ) {
+      const name = argument.slice(
+        2,
+        argument.indexOf("=") === -1 ? undefined : argument.indexOf("="),
+      );
+      const [value, consumed] = optionValue(args, index, `--${name}`);
+      index = consumed;
+      if (evaluateRun !== undefined) {
+        if (name === "check-report")
+          evaluateRun = {
+            ...evaluateRun,
+            checkReports: [...evaluateRun.checkReports, value],
+          };
+        else {
+          if ((evaluateRun as Record<string, unknown>)[name] !== undefined)
+            throw new CliError(`--${name} is already set`, EXIT_USAGE);
+          evaluateRun = { ...evaluateRun, [name]: value };
+        }
+      } else if (compareEvaluations !== undefined) {
+        if (name === "before-check-report")
+          compareEvaluations = {
+            ...compareEvaluations,
+            beforeCheckReports: [
+              ...compareEvaluations.beforeCheckReports,
+              value,
+            ],
+          };
+        else if (name === "after-check-report")
+          compareEvaluations = {
+            ...compareEvaluations,
+            afterCheckReports: [
+              ...compareEvaluations.afterCheckReports,
+              value,
+            ],
+          };
+        else {
+          if (
+            (compareEvaluations as Record<string, unknown>)[name] !== undefined
+          )
+            throw new CliError(`--${name} is already set`, EXIT_USAGE);
+          compareEvaluations = { ...compareEvaluations, [name]: value };
+        }
+      }
       continue;
     }
     if (
@@ -181,6 +271,16 @@ function parseArgs(args: readonly string[]): CliOptions {
           "compare-runs inputs must be given with --before/--after; '-' is a flag value, not a positional",
           EXIT_USAGE,
         );
+      if (evaluateRun !== undefined)
+        throw new CliError(
+          "evaluate-run inputs must be given with --run/--spec/--check-report; '-' is a flag value, not a positional",
+          EXIT_USAGE,
+        );
+      if (compareEvaluations !== undefined)
+        throw new CliError(
+          "compare-evaluations inputs must be given with --before/--after/--spec; '-' is a flag value, not a positional",
+          EXIT_USAGE,
+        );
       if (inputPath !== undefined)
         throw new CliError("only one input file is allowed", EXIT_USAGE);
       inputPath = argument;
@@ -197,14 +297,25 @@ function parseArgs(args: readonly string[]): CliOptions {
       compare === undefined &&
       compareTraces === undefined &&
       compareRuns === undefined &&
+      evaluateRun === undefined &&
+      compareEvaluations === undefined &&
       inputPath === undefined &&
       (argument === "compare" ||
         argument === "compare-traces" ||
-        argument === "compare-runs")
+        argument === "compare-runs" ||
+        argument === "evaluate-run" ||
+        argument === "compare-evaluations")
     ) {
       if (argument === "compare") compare = {};
       else if (argument === "compare-traces") compareTraces = {};
-      else compareRuns = {};
+      else if (argument === "compare-runs") compareRuns = {};
+      else if (argument === "evaluate-run")
+        evaluateRun = { checkReports: [] };
+      else
+        compareEvaluations = {
+          beforeCheckReports: [],
+          afterCheckReports: [],
+        };
       continue;
     }
     if (compare !== undefined)
@@ -220,6 +331,16 @@ function parseArgs(args: readonly string[]): CliOptions {
     if (compareRuns !== undefined)
       throw new CliError(
         "compare-runs takes no positional inputs; use --before/--after",
+        EXIT_USAGE,
+      );
+    if (evaluateRun !== undefined)
+      throw new CliError(
+        "evaluate-run takes no positional inputs; use --run/--spec/--check-report",
+        EXIT_USAGE,
+      );
+    if (compareEvaluations !== undefined)
+      throw new CliError(
+        "compare-evaluations takes no positional inputs; use --before/--after/--spec",
         EXIT_USAGE,
       );
     if (inputPath !== undefined)
@@ -277,12 +398,56 @@ function parseArgs(args: readonly string[]): CliOptions {
         EXIT_USAGE,
       );
   }
+  if (evaluateRun !== undefined) {
+    const missing = (["run", "spec"] as const).filter(
+      (flag) => evaluateRun[flag] === undefined,
+    );
+    if (missing.length > 0)
+      throw new CliError(
+        `evaluate-run requires ${missing.map((f) => `--${f}`).join(", ")} (see --help)`,
+        EXIT_USAGE,
+      );
+    if (
+      evaluateRun.run === "-" ||
+      evaluateRun.spec === "-" ||
+      evaluateRun.checkReports.includes("-")
+    )
+      throw new CliError(
+        "evaluate-run reads run directories and spec files; '-' for stdin is not supported",
+        EXIT_USAGE,
+      );
+  }
+  if (compareEvaluations !== undefined) {
+    const missing = (["before", "after", "spec"] as const).filter(
+      (flag) => compareEvaluations[flag] === undefined,
+    );
+    if (missing.length > 0)
+      throw new CliError(
+        `compare-evaluations requires ${missing.map((f) => `--${f}`).join(", ")} (see --help)`,
+        EXIT_USAGE,
+      );
+    if (
+      [
+        compareEvaluations.before,
+        compareEvaluations.after,
+        compareEvaluations.spec,
+        ...compareEvaluations.beforeCheckReports,
+        ...compareEvaluations.afterCheckReports,
+      ].includes("-")
+    )
+      throw new CliError(
+        "compare-evaluations reads run directories and spec files; '-' for stdin is not supported",
+        EXIT_USAGE,
+      );
+  }
   return {
     inputPath,
     stdin,
     compare,
     compareTraces,
     compareRuns,
+    evaluateRun,
+    compareEvaluations,
     format,
     minConfidence,
     minConfidenceText,
@@ -300,6 +465,13 @@ function usage(): string {
     "                              Compare two yuurei runs through their traces",
     "       gatefold compare-runs --before <A-run-dir> --after <B-run-dir>",
     "                              Compare two yuurei run directories, artifacts included",
+    "       gatefold evaluate-run --run <run-dir> --spec <task-spec.json>",
+    "                              [--check-report <report.json>] ...",
+    "                              Evaluate a run against explicit task criteria",
+    "       gatefold compare-evaluations --before <A-run-dir> --after <B-run-dir>",
+    "                              --spec <task-spec.json>",
+    "                              [--before-check-report <f>] [--after-check-report <f>] ...",
+    "                              Compare two evaluated runs criterion by criterion",
     "",
     "Analyze a pfl report, export, or diff and print evidence-backed claims.",
     "The document's top-level 'command' field selects the reader.",
@@ -324,6 +496,17 @@ function usage(): string {
     "digest before its generated-file content is compared. Directories",
     "cannot be read from stdin; '-' is rejected.",
     "",
+    "evaluate-run reads one run directory and a task-evaluation spec:",
+    "the spec's task.digest (and baseline.digest when declared) must match",
+    "the run. Each criterion resolves to pass, fail, or unknown from",
+    "verified artifacts only. --check-report is optional and repeatable;",
+    "each report must declare the run's task/baseline/patch digests.",
+    "",
+    "compare-evaluations evaluates two runs under one shared spec and",
+    "reports per-criterion A → B transitions. The runs must record the",
+    "same task, baseline, and compatible run conditions; the profile may",
+    "differ. No global score is emitted.",
+    "",
     "Options:",
     "  --format <human|json>        Output format (default: human)",
     "  --min-confidence <0..1>      Only print claims at or above this confidence (default: 0)",
@@ -346,6 +529,33 @@ export function filterClaims<
   };
 }
 
+/** Filters evaluation/transitions entries by --min-confidence. */
+function filterVerdicts<
+  T extends {
+    readonly evaluations?: readonly { readonly confidence: number }[];
+    readonly transitions?: readonly { readonly confidence: number }[];
+  },
+>(result: T, minConfidence: number): T {
+  if (minConfidence <= 0) return result;
+  return {
+    ...result,
+    ...(result.evaluations === undefined
+      ? {}
+      : {
+          evaluations: result.evaluations.filter(
+            (entry) => entry.confidence >= minConfidence,
+          ),
+        }),
+    ...(result.transitions === undefined
+      ? {}
+      : {
+          transitions: result.transitions.filter(
+            (entry) => entry.confidence >= minConfidence,
+          ),
+        }),
+  };
+}
+
 export function exitCodeForError(error: unknown): number {
   if (error instanceof CliError) return error.exitCode;
   if (error instanceof PflExportError) return EXIT_INPUT;
@@ -363,6 +573,60 @@ async function readTraceInput(argument: string) {
 export async function runCli(args: readonly string[]): Promise<string> {
   const options = parseArgs(args);
   if (options.help) return usage();
+  if (options.evaluateRun !== undefined) {
+    const evaluateArgs = options.evaluateRun as {
+      run: string;
+      spec: string;
+      checkReports: string[];
+    };
+    const result: EvaluationResult = evaluateRun({
+      run: await readEvaluatedRun(evaluateArgs.run),
+      spec: await readTaskSpec(evaluateArgs.spec),
+      checkReports: await loadCheckReports(evaluateArgs.checkReports),
+      labels: { run: evaluateArgs.run, spec: evaluateArgs.spec },
+    });
+    const filtered = filterVerdicts(result, options.minConfidence);
+    return options.format === "json"
+      ? formatJson(filtered)
+      : formatEvaluationHuman(
+          filtered,
+          options.minConfidence,
+          options.minConfidenceText,
+        );
+  }
+  if (options.compareEvaluations !== undefined) {
+    const compareEvalsArgs = options.compareEvaluations as {
+      before: string;
+      after: string;
+      spec: string;
+      beforeCheckReports: string[];
+      afterCheckReports: string[];
+    };
+    const result: EvaluationComparisonResult = compareEvaluations({
+      before: await readEvaluatedRun(compareEvalsArgs.before),
+      after: await readEvaluatedRun(compareEvalsArgs.after),
+      spec: await readTaskSpec(compareEvalsArgs.spec),
+      beforeCheckReports: await loadCheckReports(
+        compareEvalsArgs.beforeCheckReports,
+      ),
+      afterCheckReports: await loadCheckReports(
+        compareEvalsArgs.afterCheckReports,
+      ),
+      labels: {
+        before: compareEvalsArgs.before,
+        after: compareEvalsArgs.after,
+        spec: compareEvalsArgs.spec,
+      },
+    });
+    const filtered = filterVerdicts(result, options.minConfidence);
+    return options.format === "json"
+      ? formatJson(filtered)
+      : formatEvaluationComparisonHuman(
+          filtered,
+          options.minConfidence,
+          options.minConfidenceText,
+        );
+  }
   if (options.compareRuns !== undefined) {
     const compareRunsArgs = options.compareRuns as {
       before: string;

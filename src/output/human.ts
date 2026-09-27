@@ -1,5 +1,10 @@
 import type { AnalysisResult } from "../domain/claim.js";
 import type { ComparisonResult } from "../domain/comparison.js";
+import type {
+  EvaluationComparisonResult,
+  EvaluationEvidenceReference,
+  EvaluationResult,
+} from "../domain/evaluation.js";
 import type { RunComparisonResult } from "../domain/run-comparison.js";
 import type { TraceComparisonResult } from "../domain/trace-comparison.js";
 import { sanitizeText } from "../domain/sanitize.js";
@@ -97,6 +102,78 @@ export function formatTraceComparisonHuman(
       ].join("\n");
     })
     .join("\n");
+}
+
+function formatEvaluationEvidence(
+  evidence: readonly EvaluationEvidenceReference[],
+): string {
+  return evidence
+    .map((entry) => {
+      const path =
+        entry.path === undefined ? "" : ` '${sanitizeText(entry.path)}'`;
+      const range =
+        entry.lines === undefined
+          ? ""
+          : ` lines ${entry.lines.start}-${entry.lines.end}`;
+      const detail = entry.elementId ?? entry.note;
+      const suffix =
+        detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+      return `${entry.source}:${entry.pointer}${path}${range}${suffix}`;
+    })
+    .join(", ");
+}
+
+export function formatEvaluationHuman(
+  result: EvaluationResult,
+  minConfidence = 0,
+  minConfidenceDisplay = String(minConfidence),
+): string {
+  if (result.evaluations.length === 0)
+    return minConfidence > 0
+      ? `No evaluations found at or above confidence ${minConfidenceDisplay}.`
+      : "No evaluations found.";
+  const labels =
+    `${sanitizeText(result.inputs.run.label)} ` +
+    `(spec: ${sanitizeText(result.inputs.spec.label)})`;
+  return result.evaluations
+    .map((entry, index) => {
+      return [
+        `${index + 1}. [${entry.verdict}] criterion '${sanitizeText(entry.criterionId)}' (${entry.kind}): ${entry.reason}`,
+        `   confidence: ${entry.confidence.toFixed(2)}`,
+        `   evidence: ${formatEvaluationEvidence(entry.evidence)}`,
+        `   provenance: ${labels} · ${entry.provenance.transform.join(" → ")}`,
+      ].join("\n");
+    })
+    .join("\n");
+}
+
+export function formatEvaluationComparisonHuman(
+  result: EvaluationComparisonResult,
+  minConfidence = 0,
+  minConfidenceDisplay = String(minConfidence),
+): string {
+  if (result.transitions.length === 0)
+    return minConfidence > 0
+      ? `No transitions found at or above confidence ${minConfidenceDisplay}.`
+      : "No transitions found.";
+  const labels =
+    `${sanitizeText(result.inputs.beforeRun.label)} → ` +
+    `${sanitizeText(result.inputs.afterRun.label)} ` +
+    `(spec: ${sanitizeText(result.inputs.spec.label)})`;
+  const lines = result.transitions.map((entry, index) => {
+    return [
+      `${index + 1}. criterion '${sanitizeText(entry.criterionId)}' (${entry.kind}): ${entry.before} → ${entry.after}${entry.changed ? "" : " (unchanged)"}`,
+      `   ${entry.reason}`,
+      `   confidence: ${entry.confidence.toFixed(2)}`,
+      `   evidence: ${formatEvaluationEvidence(entry.evidence)}`,
+      `   provenance: ${labels} · ${entry.provenance.transform.join(" → ")}`,
+    ].join("\n");
+  });
+  if (result.caveats.length === 0) return lines.join("\n");
+  const caveatLines = result.caveats.map(
+    (caveat) => `   caveat ${caveat.field}: ${caveat.text}`,
+  );
+  return `${lines.join("\n")}\n\nCaveats (a transition does not establish which harness change caused it):\n${caveatLines.join("\n")}`;
 }
 
 export function formatRunComparisonHuman(

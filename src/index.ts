@@ -1,7 +1,23 @@
 export { analyze } from "./application/analyze.js";
 export { compareDocuments } from "./application/compare.js";
+export { compareEvaluations } from "./application/compare-evaluations.js";
 export { compareRuns } from "./application/compare-runs.js";
 export { compareTraces } from "./application/compare-traces.js";
+export {
+  bindCheckReport,
+  loadCheckReports,
+  type BoundCheckReport,
+  type BoundVerdict,
+  type LoadedCheckReport,
+} from "./application/check-report-binding.js";
+export {
+  AFTER_SOURCES,
+  BEFORE_SOURCES,
+  evaluateCriterion,
+  evaluateRun,
+  SINGLE_SOURCES,
+  type SideSources,
+} from "./application/evaluate-run.js";
 export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
 export {
   COMPARISON_SCHEMA_VERSION,
@@ -12,6 +28,26 @@ export {
   type ComparisonExportInput,
   type ComparisonResult,
 } from "./domain/comparison.js";
+export {
+  EVALUATION_COMPARISON_SCHEMA_VERSION,
+  EVALUATION_SCHEMA_VERSION,
+  type CheckReportDescriptor,
+  type CheckReportState,
+  type CriterionEvaluation,
+  type CriterionTransition,
+  type EvaluationArtifactDescriptor,
+  type EvaluationCaveat,
+  type EvaluationComparisonResult,
+  type EvaluationEvidenceRange,
+  type EvaluationEvidenceReference,
+  type EvaluationEvidenceSource,
+  type EvaluationProvenance,
+  type EvaluationResult,
+  type EvaluationRunDescriptor,
+  type RunContextDescriptor,
+  type SpecDescriptor,
+  type Verdict,
+} from "./domain/evaluation.js";
 export {
   RUN_COMPARISON_SCHEMA_VERSION,
   type RunArtifactDescriptor,
@@ -84,6 +120,40 @@ export {
   type YuureiRun,
 } from "./input/yuurei-run.js";
 export {
+  parseSeededPatchDiff,
+  type ParsedSeededPatch,
+  type SeededChangeKind,
+  type SeededPatchContentLine,
+  type SeededPatchFile,
+} from "./input/yuurei-seeded-patch.js";
+export {
+  normalizeResultText,
+  readEvaluatedRun,
+  RESULT_ARTIFACT_PATH,
+  type EvaluatedRun,
+  type FinalResultState,
+  type OutputFile,
+  type OutputPatch,
+  type OutputPatchState,
+} from "./input/yuurei-seeded-run.js";
+export {
+  CHECK_REPORT_VERSION,
+  parseCheckReport,
+  readCheckReport,
+  type CheckReport,
+  type CheckResultRow,
+  type CheckVerdict,
+} from "./input/check-report.js";
+export {
+  EXTERNAL_CHECK_KIND,
+  parseTaskSpec,
+  readTaskSpec,
+  TASK_SPEC_VERSION,
+  type CriterionKind,
+  type TaskCriterion,
+  type TaskSpec,
+} from "./input/task-spec.js";
+export {
   parseYuureiTrace,
   readYuureiTrace,
   readYuureiTraceStdin,
@@ -92,10 +162,13 @@ export {
 export type {
   YuureiTrace,
   YuureiTraceArtifact,
+  YuureiTraceBaseline,
   YuureiTraceCost,
   YuureiTraceDefinition,
   YuureiTraceExecution,
   YuureiTraceExecutionOptions,
+  YuureiTraceFinalResult,
+  YuureiFinalResultStatus,
   YuureiTraceIsolation,
   YuureiTraceModel,
   YuureiTraceProfile,
@@ -106,6 +179,8 @@ export type {
 } from "./input/yuurei-trace.js";
 export {
   formatComparisonHuman,
+  formatEvaluationComparisonHuman,
+  formatEvaluationHuman,
   formatHuman,
   formatRunComparisonHuman,
   formatTraceComparisonHuman,
