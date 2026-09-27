@@ -1247,12 +1247,18 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
     run.patchRecord?.state === "partial" ||
     run.patchEntryTruncated ||
     run.patch.complete === false;
-  // Equality can only be enforced on bytes that are verified, untruncated,
-  // fully parsed, and free of omission diagnostics: a cut prefix that covers
-  // fewer files than the declared change set is missing evidence, not a
-  // contradiction. Blocks the stored prefix does show are still checked.
-  const covered = !partial && run.patchOmissionIndex === -1;
-  const completeness: AuditCompleteness = partial ? "partial" : "complete";
+  // As in changes.patch-agreement: equality needs an affirmative completeness
+  // declaration over verified, untruncated, fully parsed bytes without
+  // omission diagnostics. A stored patch that omits a declared change is
+  // missing evidence, not a contradiction, whenever the run does not declare
+  // the patch complete.
+  const declaredComplete = run.patchRecord?.state === "complete";
+  const covered = declaredComplete && !partial && run.patchOmissionIndex === -1;
+  const completeness: AuditCompleteness = partial
+    ? "partial"
+    : declaredComplete
+      ? "complete"
+      : "unknown";
   for (const kind of CHANGE_KINDS) {
     const count = run.patch.files.filter((f) => f.change === kind).length;
     if (count > changes[kind])
@@ -1277,10 +1283,11 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
   return fact(
     id,
     "verified",
-    partial ? "partial" : "complete",
-    partial
+    completeness,
+    !covered
       ? "the parsed patch's per-kind counts stay within the declared " +
-          "change set; a partial record may cover only a subset"
+          "change set; a partial record may cover only a subset" +
+          (declaredComplete ? "" : ", and the trace certifies no coverage")
       : "the parsed patch's per-kind counts agree with the declared " +
           "change set",
     countsEvidence(),
@@ -1372,14 +1379,22 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
     recordEv("changes", record, ""),
     artifactEv("patch", run, run.patchEntryIndex!),
   ];
+  // The patch's own partial-ness: an explicit `partial` record, a truncated
+  // manifest entry, or a cut tail the parser saw. A missing record is not
+  // partial-ness — it is undeclared completeness.
+  const declaredPartial = run.patchRecord?.state === "partial";
   const partial =
-    run.patchRecord?.state !== "complete" ||
-    run.patchEntryTruncated ||
-    patch.complete === false;
-  // As in seed.changes-patch: only fully covered stored bytes can attest that
-  // a path changes.json lists is missing from the patch.
-  const covered = !partial && run.patchOmissionIndex === -1;
-  const completeness: AuditCompleteness = partial ? "partial" : "complete";
+    declaredPartial || run.patchEntryTruncated || patch.complete === false;
+  // As in seed.changes-patch: only an affirmative completeness declaration
+  // over fully covered stored bytes can attest that a path changes.json lists
+  // is missing from the patch, and only such a declaration certifies coverage.
+  const declaredComplete = run.patchRecord?.state === "complete";
+  const covered = declaredComplete && !partial && run.patchOmissionIndex === -1;
+  const completeness: AuditCompleteness = covered
+    ? "complete"
+    : partial
+      ? "partial"
+      : "unknown";
   for (const kind of CHANGE_KINDS) {
     const patched = patch.files.filter((f) => f.change === kind);
     const missing = patched.find((f) => !sets[kind].has(f.path));
@@ -1406,10 +1421,11 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
     id,
     "verified",
     completeness,
-    partial
+    !covered
       ? "every parsed patch block names a path the verified " +
           "changes.json lists under its kind; a partial patch may " +
-          "cover a subset"
+          "cover a subset" +
+          (declaredComplete ? "" : ", and the trace certifies no coverage")
       : "the parsed patch and the verified changes.json record the " +
           "same per-kind change sets",
     evidence(),

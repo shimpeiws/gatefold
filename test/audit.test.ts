@@ -588,6 +588,36 @@ describe("audit-run", () => {
     }
   });
 
+  it("does not infer missing changes when the trace declares no completeness", async () => {
+    const base = tmp();
+    try {
+      // A pre-record trace stores an untruncated patch that covers only one of
+      // the declared changes. Without a completeness declaration the stored
+      // patch may be a subset, so the counts stay within the declared set and
+      // the fact certifies no coverage instead of contradicting the trace.
+      const trace = seededTrace();
+      delete trace.patch;
+      const onlyModified = seededPatch.slice(
+        0,
+        seededPatch.indexOf("--- /dev/null"),
+      );
+      const result = await audit(
+        writeRun(base, "run", { trace, patch: onlyModified }),
+      );
+      expect(factAt(result, "seed.changes-patch")).toMatchObject({
+        state: "verified",
+        completeness: "unknown",
+      });
+      expect(factAt(result, "changes.patch-agreement")).toMatchObject({
+        state: "verified",
+        completeness: "unknown",
+      });
+      expect(factAt(result, "patch.record").state).toBe("not-recorded");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("reports an omission diagnostic with an absent patch as a contradiction", async () => {
     const base = tmp();
     try {
