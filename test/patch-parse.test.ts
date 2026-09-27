@@ -123,6 +123,30 @@ describe("parsePatchDiff", () => {
     expect(parsed.files.map((file) => file.path)).toEqual(["a.txt"]);
   });
 
+  it("preserves complete files when a truncated tail ends inside UTF-8", () => {
+    const prefix = Buffer.from(block("a.txt", ["ok"]));
+    const header = Buffer.from(
+      "--- /dev/null\n+++ b.txt\n@@ -0,0 +1,1 @@\n+",
+    );
+    const partialCodePoint = Buffer.from([0xc3]);
+    const parsed = parsePatchDiff(
+      Buffer.concat([prefix, header, partialCodePoint]),
+      { allowTruncatedTail: true },
+    );
+    expect(parsed.complete).toBe(false);
+    expect(parsed.files.map((file) => file.path)).toEqual(["a.txt"]);
+  });
+
+  it("rejects malformed complete lines before a truncated tail", () => {
+    const malformed =
+      block("a.txt", ["ok"]) +
+      "garbage\n" +
+      block("b.txt", ["hidden"]);
+    expect(() =>
+      parsePatchDiff(Buffer.from(malformed), { allowTruncatedTail: true }),
+    ).toThrowError(PatchParseError);
+  });
+
   it("keeps a boundary block whose no-newline marker was read", () => {
     const withLf = block("a.txt", ["one"]) + block("b.txt", ["x"], true);
     const parsed = parsePatchDiff(Buffer.from(withLf), {
