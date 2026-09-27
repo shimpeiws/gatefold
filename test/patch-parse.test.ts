@@ -125,9 +125,7 @@ describe("parsePatchDiff", () => {
 
   it("preserves files before a truncated UTF-8 tail", () => {
     const prefix = Buffer.from(block("a.txt", ["ok"]));
-    const header = Buffer.from(
-      "--- /dev/null\n+++ b.txt\n@@ -0,0 +1,1 @@\n+",
-    );
+    const header = Buffer.from("--- /dev/null\n+++ b.txt\n@@ -0,0 +1,1 @@\n+");
     const partialCodePoint = Buffer.from([0xc3]);
     const parsed = parsePatchDiff(
       Buffer.concat([prefix, header, partialCodePoint]),
@@ -139,9 +137,7 @@ describe("parsePatchDiff", () => {
 
   it("rejects malformed complete lines before a truncated tail", () => {
     const malformed =
-      block("a.txt", ["ok"]) +
-      "garbage\n" +
-      block("b.txt", ["hidden"]);
+      block("a.txt", ["ok"]) + "garbage\n" + block("b.txt", ["hidden"]);
     expect(() =>
       parsePatchDiff(Buffer.from(malformed), { allowTruncatedTail: true }),
     ).toThrowError(PatchParseError);
