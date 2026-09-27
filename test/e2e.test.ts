@@ -1,5 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -342,13 +349,17 @@ describe("gatefold e2e (real process)", () => {
       "docs/v0.3-scope.md",
       "docs/v0.4-scope.md",
       "docs/v0.5-scope.md",
+      "docs/v0.6-scope.md",
       "docs/yuurei-trace-contract.md",
+      "docs/yuurei-run-contract.md",
       "schema/claim-result.v1.json",
       "schema/claim-result.v2.json",
       "schema/claim-result.v3.json",
       "schema/claim-result.v4.json",
+      "schema/claim-result.v5.json",
       "schema/examples/valid-comparison-result.json",
       "schema/examples/valid-trace-comparison-result.json",
+      "schema/examples/valid-run-comparison-result.json",
       "README.md",
       "package.json",
     ]) {
@@ -894,6 +905,23 @@ describe("gatefold e2e (real process)", () => {
         ).toBe(true);
         expect(traceResult.schemaVersion).toBe(4);
         expect(traceResult.claims.length).toBeGreaterThan(0);
+        const compareRunsResult = await installed([
+          "compare-runs",
+          "--before",
+          runFixture("run-a"),
+          "--after",
+          runFixture("run-b"),
+          "--format",
+          "json",
+        ]);
+        expect(compareRunsResult.code, compareRunsResult.stderr).toBe(0);
+        const runResult = JSON.parse(compareRunsResult.stdout);
+        expect(
+          validateRunComparison(runResult),
+          JSON.stringify(validateRunComparison.errors),
+        ).toBe(true);
+        expect(runResult.schemaVersion).toBe(5);
+        expect(runResult.claims.length).toBeGreaterThan(0);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -928,6 +956,13 @@ const traceSchema = JSON.parse(
 const validateTraceComparison = new Ajv2020().compile(traceSchema);
 const traceFixture = (name: string): string =>
   `${root}test/fixtures/compare-traces/${name}`;
+
+const runSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v5.json`, "utf8"),
+);
+const validateRunComparison = new Ajv2020().compile(runSchema);
+const runFixture = (name: string): string =>
+  `${root}test/fixtures/yuurei-run/${name}`;
 
 describe("gatefold compare e2e (real process)", () => {
   const before = compareFixture("before.json");
@@ -1372,6 +1407,264 @@ describe("gatefold compare-traces e2e (real process)", () => {
         a,
         "--after",
         path,
+        "--format",
+        "json",
+      ]);
+      const result = JSON.parse(json.stdout);
+      for (const claim of result.claims)
+        expect(claim.claim).not.toMatch(unsafe);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("gatefold compare-runs e2e (real process)", () => {
+  const a = runFixture("run-a");
+  const b = runFixture("run-b");
+
+  it("accepts a comparable pair and emits schema v5 JSON", async () => {
+    const run = await gatefold([
+      "compare-runs",
+      "--before",
+      a,
+      "--after",
+      b,
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stderr).toBe("");
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateRunComparison(result),
+      JSON.stringify(validateRunComparison.errors),
+    ).toBe(true);
+    expect(result.schemaVersion).toBe(5);
+    expect(result.source.command).toBe("compare-runs");
+    expect(result.inputs.beforeRun.label).toBe(a);
+    expect(result.inputs.afterRun.label).toBe(b);
+    expect(result.inputs.beforeRun.document).toBe("yuurei-run");
+    expect(result.inputs.beforeRun.trace.document).toBe("yuurei-trace");
+    const rules = result.claims.map(
+      (claim: { ruleId: string }) => claim.ruleId,
+    );
+    for (const ruleId of [
+      "run-manifest",
+      "run-generated-files",
+      "run-file-added",
+      "run-file-removed",
+      "run-file-changed",
+    ])
+      expect(rules).toContain(ruleId);
+  });
+
+  it("emits human output with per-document evidence sources", async () => {
+    const run = await gatefold(["compare-runs", "--before", a, "--after", b]);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toContain("beforeManifest:/artifacts/");
+    expect(run.stdout).toContain("afterPatch:/artifacts/");
+    expect(run.stdout).toContain("docs/guide.md");
+  });
+
+  it("identifies A → B through the supplied labels", async () => {
+    const run = await gatefold([
+      "compare-runs",
+      "--before",
+      a,
+      "--after",
+      b,
+      "--format",
+      "json",
+    ]);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.beforeRun.label).toBe(a);
+    expect(result.inputs.afterRun.label).toBe(b);
+    const added = result.claims.find(
+      (claim: { ruleId: string }) => claim.ruleId === "run-file-added",
+    );
+    expect(added.claim).toContain("docs/guide.md");
+    expect(added.claim).toContain("Run B");
+  });
+
+  it("keeps a truncated patch as a caveat, not a failure", async () => {
+    const run = await gatefold([
+      "compare-runs",
+      "--before",
+      runFixture("run-truncated"),
+      "--after",
+      a,
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.beforeRun.patchState).toBe("verified-truncated");
+    const caveat = result.claims.find(
+      (claim: { ruleId: string }) => claim.ruleId === "run-patch-state",
+    );
+    expect(caveat.claim).toContain("truncated");
+  });
+
+  it("never claims an unrecorded patch means no output", async () => {
+    const run = await gatefold([
+      "compare-runs",
+      "--before",
+      runFixture("run-nopatch"),
+      "--after",
+      a,
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.beforeRun.patchState).toBe("not-recorded");
+    const caveat = result.claims.find(
+      (claim: { ruleId: string }) => claim.ruleId === "run-patch-state",
+    );
+    expect(caveat.claim).toContain("does not mean");
+  });
+
+  it("rejects a manifest with a traversal path with exit 3", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-run-e2e-"));
+    try {
+      const runDir = join(dir, "run");
+      mkdirSync(runDir);
+      writeFileSync(
+        join(runDir, "trace.json"),
+        readFileSync(`${a}/trace.json`),
+      );
+      writeFileSync(
+        join(runDir, "artifacts.json"),
+        JSON.stringify({
+          artifacts: [
+            {
+              path: "../escape.diff",
+              kind: "patch",
+              digest:
+                "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            },
+          ],
+        }),
+      );
+      const run = await gatefold([
+        "compare-runs",
+        "--before",
+        runDir,
+        "--after",
+        b,
+      ]);
+      expect(run.code).toBe(3);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("run directory");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a missing run directory and a missing manifest with exit 3", async () => {
+    const missingDir = await gatefold([
+      "compare-runs",
+      "--before",
+      `${root}test/fixtures/yuurei-run/no-such-run`,
+      "--after",
+      b,
+    ]);
+    expect(missingDir.code).toBe(3);
+    expect(missingDir.stderr).toContain("cannot read run directory");
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-run-e2e-"));
+    try {
+      const runDir = join(dir, "run");
+      mkdirSync(runDir);
+      writeFileSync(
+        join(runDir, "trace.json"),
+        readFileSync(`${a}/trace.json`),
+      );
+      const noManifest = await gatefold([
+        "compare-runs",
+        "--before",
+        runDir,
+        "--after",
+        b,
+      ]);
+      expect(noManifest.code).toBe(3);
+      expect(noManifest.stderr).toContain("artifact manifest");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects compare-runs usage errors with exit 2", async () => {
+    for (const args of [
+      ["compare-runs"],
+      ["compare-runs", "--before", a],
+      ["compare-runs", "--before", "-", "--after", b],
+      ["compare-runs", "--before", a, "--after", "-"],
+      ["compare-runs", "--before", a, "--after", b, "extra"],
+      ["compare-runs", "--before", a, "--after", b, "--diff", a],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+    }
+  });
+
+  it("produces byte-identical output across runs for the same pair", async () => {
+    const args = [
+      "compare-runs",
+      "--before",
+      a,
+      "--after",
+      b,
+      "--format",
+      "json",
+    ];
+    const first = await gatefold(args);
+    const second = await gatefold(args);
+    expect(first.code).toBe(0);
+    expect(first.stdout).toBe(second.stdout);
+  });
+
+  it("never emits raw control characters for hostile generated paths", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-run-e2e-"));
+    try {
+      const runDir = join(dir, "run");
+      mkdirSync(runDir);
+      writeFileSync(
+        join(runDir, "trace.json"),
+        readFileSync(`${a}/trace.json`),
+      );
+      const patch =
+        "--- /dev/null\n" +
+        "+++ bad\u001b[31m/path.md\n" +
+        "@@ -0,0 +1,1 @@\n" +
+        "+body\n";
+      writeFileSync(join(runDir, "patch.diff"), patch);
+      const digest = `sha256:${createHash("sha256").update(patch).digest("hex")}`;
+      writeFileSync(
+        join(runDir, "artifacts.json"),
+        JSON.stringify({
+          artifacts: [{ path: "patch.diff", kind: "patch", digest }],
+        }),
+      );
+      const unsafe =
+        /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+      const human = await gatefold([
+        "compare-runs",
+        "--before",
+        runDir,
+        "--after",
+        b,
+      ]);
+      expect(human.code, human.stderr).toBe(0);
+      expect(human.stdout).not.toMatch(unsafe);
+      const json = await gatefold([
+        "compare-runs",
+        "--before",
+        runDir,
+        "--after",
+        b,
         "--format",
         "json",
       ]);

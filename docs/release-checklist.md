@@ -1,6 +1,6 @@
 # Release checklist
 
-Reproducible steps to cut the current release (v0.5). Every step must pass in
+Reproducible steps to cut the current release (v0.6). Every step must pass in
 order.
 
 ## 1. Clean install
@@ -21,7 +21,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.5 scope](v0.5-scope.md).
+release gate in [v0.6 scope](v0.6-scope.md).
 
 ## 3. Package validation
 
@@ -33,8 +33,8 @@ npm pack --dry-run --json
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
 `.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
-`claim-result.v4.json`, including `schema/examples/` and the v4
-trace-comparison example), `README.md`,
+`claim-result.v5.json`, including `schema/examples/` and the v4
+trace-comparison and v5 run-comparison examples), `README.md`,
 and `package.json`. All of `docs/` is shipped intentionally — keep only
 public-facing documentation in that directory. The tarball must not contain
 `test/`, `node_modules/`, `src/`, or any agent or review artifacts.
@@ -69,6 +69,7 @@ gatefold pfl-export.json --format json    # export document
 gatefold pfl-diff.json --format json      # diff document
 gatefold compare   --before export-a.json   --after export-b.json   --diff diff.json --format json          # three-document comparison (v3)
 gatefold compare-traces --before trace-a.json --after trace-b.json --format json                          # two-trace comparison (v4)
+gatefold compare-runs --before run-a-dir --after run-b-dir --format json                                     # two-run-directory comparison (v5)
 pfl report --json | gatefold -            # stdin transport
 pfl export --json | gatefold -            # stdin transport
 pfl diff --json | gatefold -              # stdin transport
@@ -81,7 +82,10 @@ and provenance. For the v3 comparison result, confirm `schemaVersion` is 3,
 `source` (`before`/`after`/`diff`). For the v4 trace-comparison result,
 confirm `schemaVersion` is 4, `inputs` records `beforeTrace`/`afterTrace`,
 and every evidence entry names a `source` (`beforeTrace`/`afterTrace`)
-whose pointer resolves inside that trace.
+whose pointer resolves inside that trace. For the v5 run-comparison result,
+confirm `schemaVersion` is 5, `inputs` records `beforeRun`/`afterRun`, and
+every evidence entry names a `source` that resolves inside the named run's
+trace, manifest, or verified patch bytes.
 
 ## 6. Tag and publish
 

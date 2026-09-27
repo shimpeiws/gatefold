@@ -14,7 +14,7 @@ so results written before `ruleId` existed stay valid. A typed
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schemaVersion` | integer | Version of this result schema. Currently `2`. |
+| `schemaVersion` | integer | Version of this result schema. `2` for single-document results; the comparison commands emit their own versions (`compare` → 3, `compare-traces` → 4, `compare-runs` → 5). |
 | `source` | object | `{ pflVersion: string, command: "report" \| "export" \| "diff" }` — which pfl document produced these claims. Added in v2; v1 results predate it and remain valid v1 documents. |
 | `claims` | array | The emitted claims. May be empty. |
 

@@ -1,0 +1,590 @@
+{
+  "schemaVersion": 5,
+  "source": {
+    "command": "compare-runs"
+  },
+  "inputs": {
+    "beforeRun": {
+      "label": "test/fixtures/yuurei-run/run-empty",
+      "document": "yuurei-run",
+      "trace": {
+        "label": "test/fixtures/yuurei-run/run-empty/trace.json",
+        "document": "yuurei-trace",
+        "schemaVersion": "0.3",
+        "runId": "run-e1",
+        "yuureiVersion": "0.3.0",
+        "startedAt": "2026-09-20T10:00:00Z",
+        "finishedAt": "2026-09-20T10:00:12Z",
+        "runtimeId": "claude-code",
+        "runtimeVersion": "2.1.272",
+        "modelRequested": "claude-sonnet-4-5",
+        "modelResolved": "claude-sonnet-4-5-20250929",
+        "modelResolvedReason": "observed",
+        "profileName": "baseline",
+        "profileDigest": "sha256:aaa",
+        "taskSource": ".yuurei/tasks/rename.md",
+        "taskDigest": "sha256:task1",
+        "isolationStrategy": "cell",
+        "isolationVerified": true,
+        "requestedCellDigest": "sha256:cell-a",
+        "requestedCellInputsVersion": 1,
+        "executionOptions": {
+          "timeout_ms": 600000,
+          "runtime": {
+            "max_turns": 40
+          }
+        },
+        "definition": {
+          "run": "nightly",
+          "cli_overrides": [
+            "model"
+          ]
+        }
+      },
+      "patchState": "verified",
+      "artifacts": [
+        {
+          "path": "stdout.log",
+          "kind": "log",
+          "digest": "sha256:7ec9f5631e6055978c8521d55763ff4dc85aba11ec6d5135904dca955ed16018",
+          "state": "unverified"
+        },
+        {
+          "path": "stderr.log",
+          "kind": "log",
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "state": "unverified"
+        },
+        {
+          "path": "patch.diff",
+          "kind": "patch",
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "state": "verified"
+        }
+      ]
+    },
+    "afterRun": {
+      "label": "test/fixtures/yuurei-run/run-nopatch",
+      "document": "yuurei-run",
+      "trace": {
+        "label": "test/fixtures/yuurei-run/run-nopatch/trace.json",
+        "document": "yuurei-trace",
+        "schemaVersion": "0.3",
+        "runId": "run-n1",
+        "yuureiVersion": "0.3.0",
+        "startedAt": "2026-09-20T10:00:00Z",
+        "finishedAt": "2026-09-20T10:00:12Z",
+        "runtimeId": "claude-code",
+        "runtimeVersion": "2.1.272",
+        "modelRequested": "claude-sonnet-4-5",
+        "modelResolved": "claude-sonnet-4-5-20250929",
+        "modelResolvedReason": "observed",
+        "profileName": "baseline",
+        "profileDigest": "sha256:aaa",
+        "taskSource": ".yuurei/tasks/rename.md",
+        "taskDigest": "sha256:task1",
+        "isolationStrategy": "cell",
+        "isolationVerified": true,
+        "requestedCellDigest": "sha256:cell-a",
+        "requestedCellInputsVersion": 1,
+        "executionOptions": {
+          "timeout_ms": 600000,
+          "runtime": {
+            "max_turns": 40
+          }
+        },
+        "definition": {
+          "run": "nightly",
+          "cli_overrides": [
+            "model"
+          ]
+        }
+      },
+      "patchState": "not-recorded",
+      "artifacts": [
+        {
+          "path": "stdout.log",
+          "kind": "log",
+          "digest": "sha256:7ec9f5631e6055978c8521d55763ff4dc85aba11ec6d5135904dca955ed16018",
+          "state": "unverified"
+        },
+        {
+          "path": "stderr.log",
+          "kind": "log",
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "state": "unverified"
+        }
+      ]
+    }
+  },
+  "claims": [
+    {
+      "claim": "Runs 'run-e1' (A) and 'run-n1' (B) requested the same task content (task.digest 'sha256:task1'), runtime 'claude-code', model 'claude-sonnet-4-5', and isolation strategy 'cell'.",
+      "ruleId": "trace-inputs",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/isolation/strategy"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/isolation/verified"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/model/requested"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/run_id"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/runtime/id"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/task/digest"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/isolation/strategy"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/isolation/verified"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/model/requested"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/run_id"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/runtime/id"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/task/digest"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-inputs"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Both runs used profile 'baseline' (content digest 'sha256:aaa').",
+      "ruleId": "trace-profiles",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/profile/digest"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/profile/name"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/profile/digest"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/profile/name"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-profiles"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Both runs recorded runtime 'claude-code': run A recorded runtime version '2.1.272'; run B recorded runtime version '2.1.272'.",
+      "ruleId": "trace-runtime",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/runtime/id"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/runtime/version"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/runtime/id"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/runtime/version"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-runtime"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Both runs requested model 'claude-sonnet-4-5': run A resolved to 'claude-sonnet-4-5-20250929'; run B resolved to 'claude-sonnet-4-5-20250929'.",
+      "ruleId": "trace-model",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/model/requested"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/model/resolved"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/model/resolved_reason"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/model/requested"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/model/resolved"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/model/resolved_reason"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-model"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "run A was not timed out, exited 0, recorded no signal (unobserved); run B was not timed out, exited 0, recorded no signal (unobserved). Exit status describes process termination, not answer quality.",
+      "ruleId": "trace-execution",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/execution/exit_code"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/execution/signal"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/execution/timed_out"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/execution/exit_code"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/execution/signal"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/execution/timed_out"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-execution"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A recorded a duration of 12,400 ms and run B 12,400 ms, a recorded difference of 0 ms.",
+      "ruleId": "trace-duration",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/execution/duration_ms"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/execution/duration_ms"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-duration"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A recorded 12,000 for usage key 'input_tokens'; run B recorded 12,000 (a recorded difference of 0).",
+      "ruleId": "trace-usage",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/usage/input_tokens"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/usage/input_tokens"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-usage"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A recorded 980 for usage key 'output_tokens'; run B recorded 980 (a recorded difference of 0).",
+      "ruleId": "trace-usage",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/usage/output_tokens"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/usage/output_tokens"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-usage"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A recorded an estimated cost of 0.42 USD and run B an estimated 0.42 USD (a recorded difference of 0 USD). Both amounts are estimates.",
+      "ruleId": "trace-cost",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/cost/amount"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/cost/currency"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/cost/amount"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/cost/currency"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-cost"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run B recorded a diagnostic: 'patch: generation failed; patch.diff not recorded'.",
+      "ruleId": "trace-diagnostic",
+      "evidence": [
+        {
+          "source": "afterTrace",
+          "pointer": "/diagnostics/0"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-traces",
+          "rule:trace-diagnostic"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A's manifest records artifact 'patch.diff' (kind 'patch', digest 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 0 bytes): the stored bytes verify against the recorded digest.",
+      "ruleId": "run-manifest",
+      "evidence": [
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/2"
+        },
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/2/digest"
+        },
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/2/path"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-runs",
+          "rule:run-manifest"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A's manifest records artifact 'stderr.log' (kind 'log', digest 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'): the artifact is recorded but unverified: its bytes are not read in this milestone.",
+      "ruleId": "run-manifest",
+      "evidence": [
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/1"
+        },
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/1/digest"
+        },
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/1/path"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-runs",
+          "rule:run-manifest"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A's manifest records artifact 'stdout.log' (kind 'log', digest 'sha256:7ec9f5631e6055978c8521d55763ff4dc85aba11ec6d5135904dca955ed16018'): the artifact is recorded but unverified: its bytes are not read in this milestone.",
+      "ruleId": "run-manifest",
+      "evidence": [
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/0"
+        },
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/0/digest"
+        },
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/0/path"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-runs",
+          "rule:run-manifest"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run B's manifest records artifact 'stderr.log' (kind 'log', digest 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'): the artifact is recorded but unverified: its bytes are not read in this milestone.",
+      "ruleId": "run-manifest",
+      "evidence": [
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/1"
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/1/digest"
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/1/path"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-runs",
+          "rule:run-manifest"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run B's manifest records artifact 'stdout.log' (kind 'log', digest 'sha256:7ec9f5631e6055978c8521d55763ff4dc85aba11ec6d5135904dca955ed16018'): the artifact is recorded but unverified: its bytes are not read in this milestone.",
+      "ruleId": "run-manifest",
+      "evidence": [
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/0"
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/0/digest"
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/0/path"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-runs",
+          "rule:run-manifest"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run B's manifest records no patch.diff entry; yuurei records the artifact only when patch generation succeeded, so the generated-file record is unavailable — this does not mean the run produced no workspace output.",
+      "ruleId": "run-patch-state",
+      "evidence": [
+        {
+          "source": "afterManifest",
+          "pointer": "",
+          "note": "no patch.diff entry"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-runs",
+          "rule:run-patch-state"
+        ]
+      },
+      "confidence": 1
+    },
+    {
+      "claim": "Run A's patch records 0 generated files; run B's patch is not recorded in its manifest, so the file-level comparison covers only run A's record. A patch records only representable text files — binary, oversized, over-cap, and unrepresentably named files are omitted — so a file absent from a patch is not evidence the run did not write it.",
+      "ruleId": "run-generated-files",
+      "evidence": [
+        {
+          "source": "beforeManifest",
+          "pointer": "/artifacts/2"
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "",
+          "note": "no patch.diff entry"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-runs",
+          "rule:run-generated-files"
+        ]
+      },
+      "confidence": 1
+    }
+  ]
+}

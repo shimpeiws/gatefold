@@ -5,8 +5,11 @@ It reads a [`pfl`](docs/pfl-export-contract.md) JSON document — a
 `pfl report --json` aggregate, a `pfl export --json` full snapshot, or a
 `pfl diff --json` A → B comparison — and, since v0.5, a pair of
 [`yuurei`](docs/yuurei-trace-contract.md) `trace.json` run records, and
-emits descriptive claims, each with evidence, provenance, and confidence. It
-does not score or rank harnesses.
+since v0.6 a pair of whole
+[`yuurei` run directories](docs/yuurei-run-contract.md) including their
+artifact manifests and `patch.diff` records. It emits descriptive claims,
+each with evidence, provenance, and confidence. It does not score or rank
+harnesses.
 
 ## CLI usage
 
@@ -23,6 +26,10 @@ gatefold compare --before a.json --after b.json --diff d.json
 gatefold compare-traces --before a.trace.json --after b.trace.json
                                                # observed A → B comparison of
                                                # two yuurei runs (schema v4)
+gatefold compare-runs --before a-run-dir --after b-run-dir
+                                               # A → B comparison of two
+                                               # yuurei run directories,
+                                               # artifacts included (schema v5)
 ```
 
 `compare-traces` compares two yuurei `trace.json` runs only when they
@@ -33,6 +40,17 @@ input trace (`beforeTrace`/`afterTrace`). Missing optional fields are
 reported as unknown, `null` as unobserved; neither becomes a zero, a score,
 or a verdict. See [v0.5 scope](docs/v0.5-scope.md) for the comparability and
 result contract.
+
+`compare-runs` takes two yuurei run directories. Each must contain
+`trace.json` and `artifacts.json`; a `patch.diff` listed in the manifest is
+read only after its stored bytes verify against the manifest's recorded
+digest. The v0.5 comparability checks apply unchanged, then the generated
+files each patch records are compared — files only on one side and files
+whose content differs — with each claim citing the manifest JSON Pointer,
+the artifact digest, and a bounded line/byte range into the stored patch.
+Missing, truncated, digest-mismatched, and unverifiable artifacts are
+reported as such, never as absent output. See
+[v0.6 scope](docs/v0.6-scope.md) for the full contract.
 
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
 confidence score — see [the claim model](docs/claim-model.md).
