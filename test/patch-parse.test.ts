@@ -123,7 +123,9 @@ describe("parsePatchDiff", () => {
     expect(parsed.files.map((file) => file.path)).toEqual(["a.txt"]);
   });
 
-  it("preserves complete files when a truncated tail ends inside UTF-8", () => {
+  it(
+    "preserves complete files when a truncated tail ends inside UTF-8",
+    () => {
     const prefix = Buffer.from(block("a.txt", ["ok"]));
     const header = Buffer.from(
       "--- /dev/null\n+++ b.txt\n@@ -0,0 +1,1 @@\n+",
@@ -135,7 +137,8 @@ describe("parsePatchDiff", () => {
     );
     expect(parsed.complete).toBe(false);
     expect(parsed.files.map((file) => file.path)).toEqual(["a.txt"]);
-  });
+    },
+  );
 
   it("rejects malformed complete lines before a truncated tail", () => {
     const malformed =
