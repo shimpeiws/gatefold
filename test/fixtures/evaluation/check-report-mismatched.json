@@ -1,0 +1,15 @@
+{
+  "reportVersion": 1,
+  "evaluator": {
+    "id": "vitest"
+  },
+  "subject": {
+    "taskDigest": "sha256:task-other"
+  },
+  "results": [
+    {
+      "criterionId": "unit-tests",
+      "verdict": "pass"
+    }
+  ]
+}

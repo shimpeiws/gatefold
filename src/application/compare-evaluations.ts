@@ -110,10 +110,18 @@ export function compareEvaluations(input: {
         AFTER_SOURCES,
       );
       const changed = beforeEval.verdict !== afterEval.verdict;
+      // Each side's evaluation cites the shared spec identically; drop exact
+      // duplicates so every emitted reference is distinct.
+      const seen = new Set<string>();
       const evidence: EvaluationEvidenceReference[] = [
         ...beforeEval.evidence,
         ...afterEval.evidence,
-      ];
+      ].filter((entry) => {
+        const key = JSON.stringify(entry);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
       return {
         criterionId: criterion.id,
         kind: criterion.kind,

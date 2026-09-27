@@ -1,8 +1,4 @@
-import {
-  InputTooLargeError,
-  MAX_INPUT_BYTES,
-  readBounded,
-} from "./bounded.js";
+import { InputTooLargeError, MAX_INPUT_BYTES, readBounded } from "./bounded.js";
 import { PflExportError } from "./pfl-export.js";
 
 /**
@@ -124,10 +120,7 @@ export function parseCheckReport(
   const results = value.results;
   if (!Array.isArray(results)) throw shapeError("results", "an array");
   if (results.length > MAX_RESULTS)
-    throw shapeError(
-      "results",
-      `an array with at most ${MAX_RESULTS} items`,
-    );
+    throw shapeError("results", `an array with at most ${MAX_RESULTS} items`);
   const rows = results.map((item, index): CheckResultRow => {
     const at = `results[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");

@@ -1,8 +1,4 @@
-import {
-  InputTooLargeError,
-  MAX_INPUT_BYTES,
-  readBounded,
-} from "./bounded.js";
+import { InputTooLargeError, MAX_INPUT_BYTES, readBounded } from "./bounded.js";
 import { PflExportError } from "./pfl-export.js";
 
 /**
@@ -139,17 +135,13 @@ export function parseTaskSpec(value: unknown, sourcePath: string): TaskSpec {
   if (!Array.isArray(criteria) || criteria.length === 0)
     throw shapeError("criteria", "a non-empty array");
   if (criteria.length > MAX_CRITERIA)
-    throw shapeError(
-      "criteria",
-      `an array with at most ${MAX_CRITERIA} items`,
-    );
+    throw shapeError("criteria", `an array with at most ${MAX_CRITERIA} items`);
   const seenIds = new Set<string>();
   const parsed = criteria.map((item, index): TaskCriterion => {
     const at = `criteria[${index}]`;
     if (!isRecord(item)) throw shapeError(at, "an object");
     const id = requiredString(item, "id", `${at}.id`);
-    if (seenIds.has(id))
-      throw shapeError(`${at}.id`, "unique within the spec");
+    if (seenIds.has(id)) throw shapeError(`${at}.id`, "unique within the spec");
     seenIds.add(id);
     const kind = requiredString(item, "kind", `${at}.kind`);
     if (!CRITERION_KINDS.includes(kind))

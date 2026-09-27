@@ -157,7 +157,9 @@ export function parseSeededPatchDiff(
           `expected '+++ b/<path>' or '/dev/null' at patch line ${pos + 1}, got '${lines[pos].text}'`,
         );
       if (added && deleted)
-        fail(`a file block cannot have /dev/null on both sides at patch line ${pos + 1}`);
+        fail(
+          `a file block cannot have /dev/null on both sides at patch line ${pos + 1}`,
+        );
       const path = deleted ? oldSide.slice(2) : newSide.slice(2);
       if (path.length === 0)
         fail(`empty path in a file header at patch line ${pos + 1}`);
@@ -241,8 +243,7 @@ export function parseSeededPatchDiff(
       // that reaches the end of the stored bytes mid-structure — or whose
       // final line could be the start of a cut marker — belongs to the
       // unknown tail.
-      if (pos >= lines.length && partialTail)
-        sealedContent = false;
+      if (pos >= lines.length && partialTail) sealedContent = false;
       if (!sealedContent && options.allowTruncatedTail)
         return { files, complete: false };
       // A well-formed yuurei patch records each workspace path exactly once;

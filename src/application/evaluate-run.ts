@@ -1,7 +1,6 @@
 import { compareBytes } from "../domain/byte-order.js";
 import {
   EVALUATION_SCHEMA_VERSION,
-  type CheckReportDescriptor,
   type CriterionEvaluation,
   type EvaluationEvidenceReference,
   type EvaluationEvidenceSource,
@@ -18,10 +17,7 @@ import {
 } from "../domain/validate-evaluation.js";
 import { PflExportError } from "../input/pfl-export.js";
 import type { TaskCriterion, TaskSpec } from "../input/task-spec.js";
-import type {
-  EvaluatedRun,
-  OutputFile,
-} from "../input/yuurei-seeded-run.js";
+import type { EvaluatedRun, OutputFile } from "../input/yuurei-seeded-run.js";
 import { sanitizeText } from "../domain/sanitize.js";
 import {
   bindCheckReport,
@@ -166,7 +162,11 @@ function patchEntryEvidence(
   const pointer = patchPointer(run);
   return pointer === null
     ? { source: src.manifest, pointer: "", note: note ?? "no patch.diff entry" }
-    : { source: src.manifest, pointer, ...(note === undefined ? {} : { note }) };
+    : {
+        source: src.manifest,
+        pointer,
+        ...(note === undefined ? {} : { note }),
+      };
 }
 
 function resultPointer(run: EvaluatedRun): string | null {
@@ -187,12 +187,14 @@ function resultEvidence(
   src: SideSources,
   note?: string,
 ): EvaluationEvidenceReference {
-  const lines = run.resultBytes === null ? 1 : lineCount(run.resultBytes);
+  const lines = run.resultBytes === null ? 0 : lineCount(run.resultBytes);
   return {
     source: src.result,
     pointer: resultPointer(run) ?? "",
     digest: resultDigest(run),
-    lines: { start: 1, end: lines },
+    // An empty stored file has no line 1 to cite; the byte range {0, 0}
+    // still bounds the (empty) record.
+    ...(lines === 0 ? {} : { lines: { start: 1, end: lines } }),
     bytes: {
       start: 0,
       end: run.resultBytes === null ? 0 : run.resultBytes.length,
@@ -292,10 +294,7 @@ function evaluateFileCriterion(
       criterion,
       "fail",
       `the complete patch does not record '${criterion.path}'`,
-      [
-        spec,
-        patchEntryEvidence(run, src, `no block for ${criterion.path}`),
-      ],
+      [spec, patchEntryEvidence(run, src, `no block for ${criterion.path}`)],
     );
   }
   return evaluation(
@@ -320,7 +319,9 @@ function resultUnavailable(
   src: SideSources,
   reason: string,
 ): CriterionEvaluation {
-  const evidence: EvaluationEvidenceReference[] = [specEvidence(criterion, src)];
+  const evidence: EvaluationEvidenceReference[] = [
+    specEvidence(criterion, src),
+  ];
   if (run.resultEntryIndex !== null)
     evidence.push(
       resultEntryEvidence(run, src, `result.txt is ${run.resultState}`),
@@ -456,8 +457,11 @@ function evaluateExternalCriterion(
   src: SideSources,
 ): CriterionEvaluation {
   const spec = specEvidence(criterion, src);
-  const hits: { report: BoundCheckReport; verdict: Verdict; rowIndex: number }[] =
-    [];
+  const hits: {
+    report: BoundCheckReport;
+    verdict: Verdict;
+    rowIndex: number;
+  }[] = [];
   let conflict = false;
   for (const report of reports) {
     const bound = report.verdicts.get(criterion.id);
@@ -472,10 +476,12 @@ function evaluateExternalCriterion(
   if (conflict || new Set(hits.map((h) => h.verdict)).size > 1) {
     const first = hits[0];
     const evidence: EvaluationEvidenceReference[] = [spec];
+    // Cite the results array, not one row: a conflict verdict must not
+    // depend on the order rows appear in the report.
     if (first !== undefined)
       evidence.push({
         source: src.checkReport,
-        pointer: `/results/${first.rowIndex}`,
+        pointer: "/results",
         elementId: first.report.descriptor.label,
         note: "conflicting verdicts recorded",
       });
@@ -487,9 +493,7 @@ function evaluateExternalCriterion(
     );
   }
   if (hits.length === 0) {
-    const anyAccepted = reports.some(
-      (r) => r.descriptor.state === "accepted",
-    );
+    const anyAccepted = reports.some((r) => r.descriptor.state === "accepted");
     return evaluation(
       criterion,
       "unknown",
@@ -524,6 +528,12 @@ function checkReportStateEvidence(
   reports: readonly BoundCheckReport[],
   src: SideSources,
 ): EvaluationEvidenceReference {
+  if (reports.length === 0)
+    return {
+      source: src.manifest,
+      pointer: "",
+      note: "no check report was supplied",
+    };
   const rejected = reports.find((r) => r.descriptor.state !== "accepted");
   if (rejected !== undefined)
     return {
@@ -532,10 +542,12 @@ function checkReportStateEvidence(
       elementId: rejected.descriptor.label,
       note: `report ${rejected.descriptor.state}: ${rejected.descriptor.error}`,
     };
+  const first = reports[0];
   return {
     source: src.checkReport,
-    pointer: "",
-    note: "no check report supplied",
+    pointer: "/results",
+    elementId: first.descriptor.label,
+    note: "no result row names this criterion",
   };
 }
 
@@ -696,11 +708,7 @@ export function evaluateRun(input: {
 }): EvaluationResult {
   const src = input.sources ?? SINGLE_SOURCES;
   assertSpecBinding(input.run, input.spec);
-  const bound = bindReports(
-    input.run,
-    input.spec,
-    input.checkReports ?? [],
-  );
+  const bound = bindReports(input.run, input.spec, input.checkReports ?? []);
   const evaluations = input.spec.criteria.map((criterion) =>
     evaluateCriterion(input.run, criterion, bound, src),
   );

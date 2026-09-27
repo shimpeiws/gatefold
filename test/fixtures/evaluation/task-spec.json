@@ -1,0 +1,42 @@
+{
+  "specVersion": 1,
+  "rubricId": "auth-repair-v1",
+  "task": {
+    "digest": "sha256:task-seeded-1"
+  },
+  "baseline": {
+    "digest": "sha256:baseline-seeded-1"
+  },
+  "criteria": [
+    {
+      "id": "auth-fixed",
+      "kind": "file-modified",
+      "path": "src/auth.ts"
+    },
+    {
+      "id": "tests-added",
+      "kind": "file-added",
+      "path": "test/auth.test.ts"
+    },
+    {
+      "id": "legacy-removed",
+      "kind": "file-deleted",
+      "path": "legacy/util.ts"
+    },
+    {
+      "id": "answer-status",
+      "kind": "final-result-json-field",
+      "pointer": "/status",
+      "equals": "fixed"
+    },
+    {
+      "id": "answer-mentions-expiry",
+      "kind": "final-result-contains",
+      "text": "expiry"
+    },
+    {
+      "id": "unit-tests",
+      "kind": "external-check"
+    }
+  ]
+}

@@ -473,9 +473,7 @@ function parseBaseline(value: unknown): YuureiTraceBaseline | undefined {
   };
 }
 
-function parseFinalResult(
-  value: unknown,
-): YuureiTraceFinalResult | undefined {
+function parseFinalResult(value: unknown): YuureiTraceFinalResult | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value)) throw shapeError("final_result", "an object");
   const status = value.status;

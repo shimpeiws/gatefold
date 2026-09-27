@@ -1,0 +1,585 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v7.json",
+  "title": "Gatefold evaluation-comparison result",
+  "description": "Machine-readable criterion-level comparison emitted by gatefold compare-evaluations --format json. Version 7 compares two yuurei runs evaluated against the same task-evaluation spec: each criterion's verdict transition is reported individually (including transitions into or out of unknown), with observed context kept separate. No aggregate score and no causal claim exists.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "inputs",
+    "context",
+    "transitions",
+    "caveats"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 7,
+      "description": "Version of this result schema. Additive changes keep the version; structural changes bump it."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "description": "Identifies this result as a two-run evaluation comparison.",
+      "properties": {
+        "command": {
+          "type": "string",
+          "const": "compare-evaluations"
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "beforeRun",
+        "afterRun",
+        "spec",
+        "beforeCheckReports",
+        "afterCheckReports"
+      ],
+      "description": "Descriptors of both evaluated run directories, the shared task spec, and each side's supplied external check reports.",
+      "properties": {
+        "beforeRun": { "$ref": "#/$defs/evalRunInput" },
+        "afterRun": { "$ref": "#/$defs/evalRunInput" },
+        "spec": { "$ref": "#/$defs/specInput" },
+        "beforeCheckReports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/checkReportInput" }
+        },
+        "afterCheckReports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/checkReportInput" }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after"],
+      "description": "Observed run context for each side, preserved separately from verdict transitions.",
+      "properties": {
+        "before": { "$ref": "#/$defs/runContext" },
+        "after": { "$ref": "#/$defs/runContext" }
+      }
+    },
+    "transitions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/criterionTransition" },
+      "description": "One transition per spec criterion, in spec order. Transitions into or out of unknown are reported like any other."
+    },
+    "caveats": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/caveat" },
+      "description": "Structured warnings about what the comparison can and cannot establish."
+    }
+  },
+  "$defs": {
+    "traceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "document",
+        "schemaVersion",
+        "runId",
+        "startedAt",
+        "finishedAt",
+        "runtimeId",
+        "runtimeVersion",
+        "modelRequested",
+        "modelResolved",
+        "profileName",
+        "profileDigest",
+        "taskSource",
+        "taskDigest",
+        "isolationStrategy",
+        "isolationVerified"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The input argument as supplied, or '<stdin>'."
+        },
+        "document": { "type": "string", "const": "yuurei-trace" },
+        "schemaVersion": {
+          "type": "string",
+          "description": "The trace's schema_version compatibility token, compared for equality (currently '0.3')."
+        },
+        "runId": { "type": "string", "minLength": 1 },
+        "yuureiVersion": {
+          "type": "string",
+          "description": "yuurei_version of the trace; absent when the trace does not carry it."
+        },
+        "startedAt": { "type": "string" },
+        "finishedAt": { "type": "string" },
+        "runtimeId": { "type": "string", "minLength": 1 },
+        "runtimeVersion": {
+          "type": ["string", "null"],
+          "description": "runtime.version of the trace; null is preserved as null."
+        },
+        "modelRequested": { "type": "string", "minLength": 1 },
+        "modelResolved": {
+          "type": ["string", "null"],
+          "description": "model.resolved of the trace; null means the effective model was not observed."
+        },
+        "modelResolvedReason": {
+          "type": "string",
+          "enum": ["observed", "unobserved", "parse_failed"],
+          "description": "model.resolved_reason of the trace; absent when the trace does not carry it."
+        },
+        "profileName": { "type": "string" },
+        "profileDigest": { "type": "string", "minLength": 1 },
+        "taskSource": { "type": "string" },
+        "taskDigest": { "type": "string", "minLength": 1 },
+        "isolationStrategy": { "type": "string", "minLength": 1 },
+        "isolationVerified": { "type": "boolean" },
+        "requestedCellDigest": {
+          "type": "string",
+          "description": "requested_cell.digest of the trace; absent when the trace does not carry it."
+        },
+        "requestedCellInputsVersion": {
+          "type": "integer",
+          "description": "requested_cell.inputs_version of the trace; absent when the trace does not carry it."
+        },
+        "executionOptions": {
+          "type": "object",
+          "description": "The trace's execution_options value recorded verbatim; absent when the trace does not carry it."
+        },
+        "definition": {
+          "type": "object",
+          "description": "The trace's definition value recorded verbatim ({ run: string | null, cli_overrides: string[] }); absent when the trace does not carry it."
+        }
+      }
+    },
+    "artifactEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind", "digest", "state"],
+      "description": "One artifact manifest entry preserved verbatim plus Gatefold's verification outcome.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The manifest-recorded path, relative to the run directory. Treated as data, never as an access instruction."
+        },
+        "kind": { "type": "string" },
+        "digest": {
+          "type": "string",
+          "description": "The manifest-recorded digest of the stored bytes (sha256:<hex> when verifiable)."
+        },
+        "truncated": {
+          "type": "boolean",
+          "const": true,
+          "description": "Present and true only when the manifest marks the stored bytes as cut at yuurei's size cap. The digest covers the stored (cut) bytes."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Stored byte count when the file was examined; absent when the artifact was not read."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "verified-truncated",
+            "digest-mismatch",
+            "missing",
+            "unverified"
+          ],
+          "description": "Verification outcome: the stored bytes hash to the recorded digest (verified, or verified-truncated when also marked truncated), they do not (digest-mismatch), no readable file exists at the path (missing), or the bytes were not read or not verifiable in this milestone (unverified)."
+        }
+      }
+    },
+    "evalRunInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "document",
+        "trace",
+        "seeded",
+        "baseline",
+        "patchState",
+        "resultState",
+        "artifacts"
+      ],
+      "description": "Descriptor of one loaded yuurei run directory: the supplied label, the trace descriptor, seeded provenance, the patch and final-result summary states, and the manifest facts.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run directory argument as supplied."
+        },
+        "document": { "type": "string", "const": "yuurei-run" },
+        "trace": { "$ref": "#/$defs/traceInput" },
+        "seeded": {
+          "type": "boolean",
+          "description": "Whether the trace records seeded-workspace provenance (a baseline field)."
+        },
+        "baseline": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["digest"],
+          "description": "The recorded seeded baseline identity, or null for a legacy empty-workspace run.",
+          "properties": {
+            "digest": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Stable identity of the seeded tree's content and paths."
+            },
+            "source": {
+              "type": "string",
+              "description": "Provenance of the seed tree; display only, never part of identity."
+            }
+          }
+        },
+        "patchState": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "verified-truncated",
+            "digest-mismatch",
+            "missing",
+            "unverified",
+            "malformed",
+            "not-recorded"
+          ],
+          "description": "The state of the run's patch.diff: the manifest entry's state when listed, 'malformed' when verified bytes violate the patch grammar, or 'not-recorded' when the manifest lists no patch entry."
+        },
+        "resultState": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "verified-truncated",
+            "digest-mismatch",
+            "missing",
+            "unverified",
+            "not-emitted",
+            "parse-failed",
+            "not-recorded"
+          ],
+          "description": "The state of the run's result.txt: the manifest entry's state when listed, 'not-emitted'/'parse-failed' from the trace's final_result marker, or 'not-recorded' when nothing records a result."
+        },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactEntry" }
+        }
+      }
+    },
+    "specInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "document",
+        "specVersion",
+        "rubricId",
+        "taskDigest",
+        "baselineDigest",
+        "criterionCount"
+      ],
+      "description": "Descriptor of the task-evaluation spec both runs were evaluated against.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The spec file argument as supplied."
+        },
+        "document": { "type": "string", "const": "task-spec" },
+        "specVersion": { "type": "integer", "const": 1 },
+        "rubricId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable rubric identifier carried by the spec."
+        },
+        "taskDigest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The task content digest both runs were required to record."
+        },
+        "baselineDigest": {
+          "type": ["string", "null"],
+          "description": "The seeded baseline digest both runs were required to record, or null when the spec declares no baseline."
+        },
+        "criterionCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of criteria declared by the spec."
+        }
+      }
+    },
+    "checkReportInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "document",
+        "evaluatorId",
+        "state",
+        "resultCount"
+      ],
+      "description": "Descriptor of one supplied external check report and its binding outcome. A report that is not 'accepted' can never imply a pass.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The check-report file argument as supplied."
+        },
+        "document": { "type": "string", "const": "check-report" },
+        "evaluatorId": {
+          "type": ["string", "null"],
+          "description": "Identity of the evaluator/test runner that produced the report; null when the report could not be parsed."
+        },
+        "evaluatorVersion": {
+          "type": "string",
+          "description": "Version of the evaluator when the report records one; absent otherwise."
+        },
+        "state": {
+          "type": "string",
+          "enum": ["accepted", "invalid", "mismatched"],
+          "description": "Binding outcome: 'accepted' when the report parsed and its declared subject matched the run, 'invalid' when it did not validate, 'mismatched' when its declared task/baseline/patch digest did not match."
+        },
+        "error": {
+          "type": "string",
+          "description": "Why the report was rejected; present only when state is not 'accepted'."
+        },
+        "resultCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of result rows the report carried (0 for an unparsed report)."
+        }
+      }
+    },
+    "runContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution", "model", "usage", "cost"],
+      "description": "Observed run context: execution status, model identity, usage, and cost — distinct from verdicts, never a score.",
+      "properties": {
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exitCode", "signal", "timedOut"],
+          "properties": {
+            "exitCode": {
+              "type": ["integer", "null"],
+              "description": "execution.exit_code of the trace; describes process termination, not answer quality."
+            },
+            "signal": {
+              "type": ["string", "null"],
+              "description": "execution.signal of the trace."
+            },
+            "timedOut": {
+              "type": "boolean",
+              "description": "execution.timed_out of the trace."
+            }
+          }
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested", "resolved"],
+          "properties": {
+            "requested": {
+              "type": "string",
+              "description": "model.requested of the trace."
+            },
+            "resolved": {
+              "type": ["string", "null"],
+              "description": "model.resolved of the trace; null means the effective model was not observed."
+            },
+            "resolvedReason": {
+              "type": "string",
+              "enum": ["observed", "unobserved", "parse_failed"],
+              "description": "model.resolved_reason of the trace; absent when the trace does not carry it."
+            }
+          }
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["number", "null"]
+          },
+          "description": "The trace's usage record verbatim; a key absent means never attempted, null means attempted but unobserved."
+        },
+        "cost": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["amount", "currency"],
+          "description": "The trace's cost estimate; null means no estimate was produced.",
+          "properties": {
+            "amount": { "type": "number" },
+            "currency": { "type": "string" }
+          }
+        }
+      }
+    },
+    "criterionTransition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criterionId",
+        "kind",
+        "before",
+        "after",
+        "changed",
+        "reason",
+        "confidence",
+        "evidence",
+        "provenance"
+      ],
+      "properties": {
+        "criterionId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The spec-declared criterion identifier this transition answers."
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The criterion's declarative kind."
+        },
+        "before": {
+          "type": "string",
+          "enum": ["pass", "fail", "unknown"],
+          "description": "The criterion's verdict in the before run."
+        },
+        "after": {
+          "type": "string",
+          "enum": ["pass", "fail", "unknown"],
+          "description": "The criterion's verdict in the after run."
+        },
+        "changed": {
+          "type": "boolean",
+          "description": "Whether the two verdicts differ. Transitions into or out of unknown count like any other."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What each side's verdict was and why — never a causal attribution."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Certainty that the evidence supports the transition. Distinct from the verdicts themselves; not a quality score."
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceReference" },
+          "description": "References into both runs' documents and the supplied spec/reports that support the transition."
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "caveat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "text", "evidence"],
+      "description": "A comparability caveat: an allowed but meaningful A/B difference or verification gap a reader must see before attributing a transition to the compared variable.",
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The dotted trace field the caveat is about."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The caveat statement. Never a judgement of quality."
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceReference" },
+          "description": "References supporting the caveat. A caveat without evidence is invalid."
+        }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "pointer"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "beforeTrace",
+            "afterTrace",
+            "beforeManifest",
+            "afterManifest",
+            "beforePatch",
+            "afterPatch",
+            "beforeResult",
+            "afterResult",
+            "spec",
+            "beforeCheckReport",
+            "afterCheckReport"
+          ],
+          "description": "Which document of which side the reference resolves against: a run's trace.json or artifacts.json, its verified patch.diff/result.txt bytes, the task spec, or one side's external check report."
+        },
+        "pointer": {
+          "type": "string",
+          "pattern": "^$|^(?:/(?:[^/~]|~0|~1)*)*$",
+          "description": "JSON Pointer (RFC 6901) into the document named by source. For the *Patch and *Result sources it is the manifest pointer of that side's artifact entry. The empty string references the whole document."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Artifact evidence only: the manifest-recorded digest of the verified stored bytes the range locates into."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Patch evidence only: the workspace-relative file path whose block the range locates inside the stored patch bytes."
+        },
+        "lines": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: an inclusive 1-based line range inside the verified stored bytes."
+        },
+        "bytes": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: a half-open 0-based byte range inside the verified stored bytes."
+        },
+        "elementId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For check-report evidence, the label of the supplying report; otherwise unused."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional human-readable clarification of what the reference shows."
+        }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      },
+      "description": "An inclusive 1-based line range or a half-open 0-based byte range into verified stored bytes."
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transform"],
+      "description": "Per-input metadata (labels, descriptors) lives in the top-level inputs map.",
+      "properties": {
+        "transform": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of the transformations applied between the raw inputs and this transition or caveat, in application order."
+        }
+      }
+    }
+  }
+}

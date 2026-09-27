@@ -72,6 +72,34 @@ describe("claim schema validation", () => {
     expect(validateV5(example), JSON.stringify(validateV5.errors)).toBe(true);
   });
 
+  it("accepts the committed v6 evaluation example", async () => {
+    const v6Schema = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("schema/claim-result.v6.json", root)),
+        "utf8",
+      ),
+    );
+    expect(ajv.validateSchema(v6Schema)).toBe(true);
+    const validateV6 = ajv.compile(v6Schema);
+    const example = await readExample("valid-evaluation-result.json");
+    expect(validateV6(example), JSON.stringify(validateV6.errors)).toBe(true);
+  });
+
+  it("accepts the committed v7 evaluation-comparison example", async () => {
+    const v7Schema = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("schema/claim-result.v7.json", root)),
+        "utf8",
+      ),
+    );
+    expect(ajv.validateSchema(v7Schema)).toBe(true);
+    const validateV7 = ajv.compile(v7Schema);
+    const example = await readExample(
+      "valid-evaluation-comparison-result.json",
+    );
+    expect(validateV7(example), JSON.stringify(validateV7.errors)).toBe(true);
+  });
+
   it("rejects every committed invalid example", async () => {
     const files = await readdir(examplesDir);
     const invalid = files.filter((f) => f.startsWith("invalid-"));

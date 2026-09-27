@@ -1,0 +1,19 @@
+{
+  "reportVersion": 1,
+  "evaluator": {
+    "id": "vitest",
+    "version": "3.0.0"
+  },
+  "subject": {
+    "taskDigest": "sha256:task-seeded-1",
+    "baselineDigest": "sha256:baseline-seeded-1",
+    "patchDigest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b"
+  },
+  "results": [
+    {
+      "criterionId": "unit-tests",
+      "verdict": "pass",
+      "suite": "test/auth.test.ts"
+    }
+  ]
+}

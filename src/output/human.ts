@@ -116,8 +116,7 @@ function formatEvaluationEvidence(
           ? ""
           : ` lines ${entry.lines.start}-${entry.lines.end}`;
       const detail = entry.elementId ?? entry.note;
-      const suffix =
-        detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+      const suffix = detail === undefined ? "" : ` (${sanitizeText(detail)})`;
       return `${entry.source}:${entry.pointer}${path}${range}${suffix}`;
     })
     .join(", ");

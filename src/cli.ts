@@ -158,22 +158,21 @@ function parseArgs(args: readonly string[]): CliOptions {
       !optionsDone &&
       (evaluateRun !== undefined || compareEvaluations !== undefined) &&
       argument.startsWith("--") &&
-      ((
-        evaluateRun !== undefined
-          ? ["run", "spec", "check-report"]
-          : [
-              "before",
-              "after",
-              "spec",
-              "before-check-report",
-              "after-check-report",
-            ]
+      (evaluateRun !== undefined
+        ? ["run", "spec", "check-report"]
+        : [
+            "before",
+            "after",
+            "spec",
+            "before-check-report",
+            "after-check-report",
+          ]
       ).includes(
         argument.slice(
           2,
           argument.indexOf("=") === -1 ? undefined : argument.indexOf("="),
         ),
-      ))
+      )
     ) {
       const name = argument.slice(
         2,
@@ -204,10 +203,7 @@ function parseArgs(args: readonly string[]): CliOptions {
         else if (name === "after-check-report")
           compareEvaluations = {
             ...compareEvaluations,
-            afterCheckReports: [
-              ...compareEvaluations.afterCheckReports,
-              value,
-            ],
+            afterCheckReports: [...compareEvaluations.afterCheckReports, value],
           };
         else {
           if (
@@ -309,8 +305,7 @@ function parseArgs(args: readonly string[]): CliOptions {
       if (argument === "compare") compare = {};
       else if (argument === "compare-traces") compareTraces = {};
       else if (argument === "compare-runs") compareRuns = {};
-      else if (argument === "evaluate-run")
-        evaluateRun = { checkReports: [] };
+      else if (argument === "evaluate-run") evaluateRun = { checkReports: [] };
       else
         compareEvaluations = {
           beforeCheckReports: [],

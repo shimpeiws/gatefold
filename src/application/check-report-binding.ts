@@ -1,8 +1,4 @@
-import type {
-  CheckReport,
-  CheckResultRow,
-  CheckVerdict,
-} from "../input/check-report.js";
+import type { CheckReport, CheckVerdict } from "../input/check-report.js";
 import { PflExportError } from "../input/pfl-export.js";
 import { readCheckReport } from "../input/check-report.js";
 import type { EvaluatedRun } from "../input/yuurei-seeded-run.js";
@@ -47,7 +43,12 @@ export async function loadCheckReports(
           error.code === "invalid-shape" ||
           error.code === "unsupported-version")
       ) {
-        loaded.push({ label: path, report: null, document: null, error: error.message });
+        loaded.push({
+          label: path,
+          report: null,
+          document: null,
+          error: error.message,
+        });
         continue;
       }
       throw error;

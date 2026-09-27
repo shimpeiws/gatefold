@@ -176,11 +176,7 @@ export async function readEvaluatedRun(dirPath: string): Promise<EvaluatedRun> {
       entries.push({ ...entry, state: "unverified" });
       continue;
     }
-    const verified = await verifyArtifactEntry(
-      entry,
-      dirPath,
-      realRunDir,
-    );
+    const verified = await verifyArtifactEntry(entry, dirPath, realRunDir);
     let stateRecord: OutputPatchState = verified.state;
     if (
       entry.path === PATCH_ARTIFACT_PATH &&

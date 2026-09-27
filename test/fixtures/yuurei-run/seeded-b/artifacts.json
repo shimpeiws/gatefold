@@ -1,0 +1,24 @@
+{
+  "artifacts": [
+    {
+      "path": "stdout.log",
+      "kind": "log",
+      "digest": "sha256:3240dc098bc9623c810ff93889211e2d073f8c5434ae7d9f1b90e859f903606e"
+    },
+    {
+      "path": "stderr.log",
+      "kind": "log",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "patch.diff",
+      "kind": "patch",
+      "digest": "sha256:610e1bee6f2ae285f760d3876bb41a10e5b724e83117ea8dfab38d82a73e58a4"
+    },
+    {
+      "path": "result.txt",
+      "kind": "result",
+      "digest": "sha256:e06984ec27c9dba7a8bfbedff5fd223d0343bd70b695e12f53183f0f7414f446"
+    }
+  ]
+}

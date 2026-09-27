@@ -142,16 +142,11 @@ function checkRunDescriptor(input: unknown, at: string): void {
   if (typeof run.seeded !== "boolean") fail(`${at}.seeded must be a boolean`);
   if (run.baseline !== null && typeof run.baseline !== "object")
     fail(`${at}.baseline must be an object or null`);
-  if (
-    !(PATCH_STATES as readonly string[]).includes(run.patchState as string)
-  )
+  if (!(PATCH_STATES as readonly string[]).includes(run.patchState as string))
     fail(`${at}.patchState must be a known patch state`);
-  if (
-    !(RESULT_STATES as readonly string[]).includes(run.resultState as string)
-  )
+  if (!(RESULT_STATES as readonly string[]).includes(run.resultState as string))
     fail(`${at}.resultState must be a known result state`);
-  if (!Array.isArray(run.artifacts))
-    fail(`${at}.artifacts must be an array`);
+  if (!Array.isArray(run.artifacts)) fail(`${at}.artifacts must be an array`);
   for (const [ai, entry] of (
     run.artifacts as Record<string, unknown>[]
   ).entries()) {
@@ -192,10 +187,7 @@ function checkSpecDescriptor(input: unknown, at: string): void {
     fail(`${at}.criterionCount must be a positive integer`);
 }
 
-function checkReportDescriptors(
-  reports: unknown,
-  at: string,
-): void {
+function checkReportDescriptors(reports: unknown, at: string): void {
   if (!Array.isArray(reports)) fail(`${at} must be an array`);
   for (const [ri, entry] of (reports as Record<string, unknown>[]).entries()) {
     const eat = `${at}[${ri}]`;
@@ -203,9 +195,7 @@ function checkReportDescriptors(
       fail(`${eat} must bind a check report`);
     if (entry.evaluatorId !== null && typeof entry.evaluatorId !== "string")
       fail(`${eat}.evaluatorId must be a string or null`);
-    if (
-      !(REPORT_STATES as readonly string[]).includes(entry.state as string)
-    )
+    if (!(REPORT_STATES as readonly string[]).includes(entry.state as string))
       fail(`${eat}.state must be a known report state`);
     if (
       !Number.isSafeInteger(entry.resultCount) ||
@@ -250,13 +240,10 @@ export function assertValidEvaluationResult(result: EvaluationResult): void {
   checkSpecDescriptor(inputs.spec, "inputs.spec");
   checkReportDescriptors(inputs.checkReports, "inputs.checkReports");
   checkRunContext(result.context, "context");
-  if (!Array.isArray(result.evaluations))
-    fail("evaluations must be an array");
+  if (!Array.isArray(result.evaluations)) fail("evaluations must be an array");
   for (const [index, entry] of result.evaluations.entries()) {
     const at = `evaluations[${index}]`;
-    if (
-      !(VERDICTS as readonly string[]).includes(entry.verdict as string)
-    )
+    if (!(VERDICTS as readonly string[]).includes(entry.verdict as string))
       fail(`${at}.verdict must be pass, fail, or unknown`);
     checkVerdictEntry(entry, at, SINGLE_SOURCES);
   }
@@ -288,10 +275,7 @@ export function assertValidEvaluationComparisonResult(
     inputs.beforeCheckReports,
     "inputs.beforeCheckReports",
   );
-  checkReportDescriptors(
-    inputs.afterCheckReports,
-    "inputs.afterCheckReports",
-  );
+  checkReportDescriptors(inputs.afterCheckReports, "inputs.afterCheckReports");
   checkRunContext(result.context.before, "context.before");
   checkRunContext(result.context.after, "context.after");
   if (!Array.isArray(result.transitions)) fail("transitions must be an array");
@@ -330,7 +314,8 @@ function checkArtifactEvidence(
   parsedFiles: readonly { path: string }[] | null,
   at: string,
 ): void {
-  if (entryIndex === null) fail(`${at} cites an artifact the run does not record`);
+  if (entryIndex === null)
+    fail(`${at} cites an artifact the run does not record`);
   const pointer = `/artifacts/${entryIndex}`;
   if (evidence.pointer !== pointer)
     fail(
@@ -371,15 +356,17 @@ function checkReportResolution(
   at: string,
 ): void {
   // `elementId` names the supplying report by label; without it, the
-  // pointer must resolve in at least one bound report document.
+  // pointer must resolve in at least one bound report document. A rejected
+  // report carries no parsed document, so it may only be cited as a whole
+  // (the empty pointer) by its label.
   const candidates =
     evidence.elementId === undefined
       ? reports
       : reports.filter((r) => r.descriptor.label === evidence.elementId);
-  const found = candidates.some(
-    (r) =>
-      r.report !== null &&
-      resolvePointer(r.report.document, evidence.pointer).found,
+  const found = candidates.some((r) =>
+    r.report === null
+      ? evidence.pointer === ""
+      : resolvePointer(r.report.document, evidence.pointer).found,
   );
   if (!found)
     fail(
@@ -430,9 +417,7 @@ export function assertEvaluationEvidenceResolves(
           );
           break;
         case "trace":
-          if (
-            !resolvePointer(docs.run.trace.document, evidence.pointer).found
-          )
+          if (!resolvePointer(docs.run.trace.document, evidence.pointer).found)
             fail(`${at} pointer does not resolve in the trace document`);
           break;
         case "manifest":
@@ -534,7 +519,9 @@ export function assertEvaluationComparisonEvidenceResolves(
             checkReportResolution(evidence, docs.afterCheckReports, at);
             continue;
           default:
-            if (!resolvePointer(docFor(evidence.source), evidence.pointer).found)
+            if (
+              !resolvePointer(docFor(evidence.source), evidence.pointer).found
+            )
               fail(
                 `${at} pointer '${evidence.pointer}' does not resolve in the ` +
                   `${evidence.source} document`,
