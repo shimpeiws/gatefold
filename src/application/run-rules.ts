@@ -359,10 +359,10 @@ export const RUN_RULES: readonly RunRule[] = [
           text =
             `Run ${side.name}'s patch.diff verifies against the manifest ` +
             `but is marked truncated at yuurei's size cap; ` +
-            (run.patchState === "verified-truncated"
-              ? `${plural(run.patch.files.length, "file")} are recorded in ` +
-                `the stored prefix and anything past the cut is unknown.`
-              : `the stored bytes nonetheless form a complete patch.`);
+            (run.patch === null
+              ? `the stored patch is malformed, so no generated-file blocks are interpreted.`
+              : `${plural(run.patch.files.length, "file")} are recorded in ` +
+                `the stored prefix and anything past the cut is unknown.`);
         else
           text =
             `Run ${side.name}'s patch.diff is ${patchStatePhrase(state)}; ` +
