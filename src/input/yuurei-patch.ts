@@ -133,8 +133,7 @@ export function parsePatchDiff(
 
   const fail = (message: string): never => {
     const errorAtTruncatedBoundary =
-      pos >= lines.length ||
-      (partialTail && pos === lines.length - 1);
+      pos >= lines.length || (partialTail && pos === lines.length - 1);
     if (options.allowTruncatedTail && errorAtTruncatedBoundary)
       throw new CutTail();
     throw new PatchParseError(message);
