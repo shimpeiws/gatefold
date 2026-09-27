@@ -18,11 +18,19 @@ export type PflExportErrorCode =
 export class PflExportError extends Error {
   readonly code: PflExportErrorCode;
 
+  /**
+   * The parsed document the failure was detected in, when one exists. A
+   * document that parsed but failed validation keeps it, so a consumer can
+   * still cite the document it rejected; an unparseable input carries null.
+   */
+  readonly document: unknown;
+
   /** The message is sanitized: it may interpolate untrusted export text. */
-  constructor(code: PflExportErrorCode, message: string) {
+  constructor(code: PflExportErrorCode, message: string, document?: unknown) {
     super(sanitizeText(message));
     this.name = "PflExportError";
     this.code = code;
+    this.document = document ?? null;
   }
 }
 

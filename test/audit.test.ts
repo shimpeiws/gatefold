@@ -426,10 +426,12 @@ describe("audit-run", () => {
         state: "unverifiable",
         completeness: "partial",
       });
-      // 'complete' declares full coverage; the cut prefix covers only a
-      // subset, so the records contradict — on partial evidence.
+      // 'complete' declares full coverage and the manifest marks the record
+      // truncated, so the two records contradict (patch.record reports it).
+      // The cut prefix cannot show that the declared additions are missing:
+      // it stays verified on partial evidence.
       expect(factAt(result, "seed.changes-patch")).toMatchObject({
-        state: "inconsistent",
+        state: "verified",
         completeness: "partial",
       });
     } finally {
@@ -494,7 +496,7 @@ describe("audit-run", () => {
     }
   });
 
-  it("reports a diagnostically published patch with no seed.changes record as inconsistent", async () => {
+  it("reports an omission diagnostic with no patch record as a contradiction", async () => {
     const base = tmp();
     try {
       const trace = seededTrace({
@@ -505,7 +507,10 @@ describe("audit-run", () => {
       const result = await audit(
         writeRun(base, "run", { trace, patch: null, changes: null }),
       );
-      expect(factAt(result, "patch.record").state).toBe("not-recorded");
+      // The diagnostic describes content omitted from a published patch; the
+      // run records neither a patch record nor an entry, so the records
+      // contradict each other rather than the fact being merely unrecorded.
+      expect(factAt(result, "patch.record").state).toBe("inconsistent");
       expect(factAt(result, "seed.changes-patch")).toMatchObject({
         state: "inconsistent",
       });
@@ -528,11 +533,14 @@ describe("audit-run", () => {
     }
   });
 
-  it("marks count and path contradictions on a truncated patch as inconsistent with partial completeness", async () => {
+  it("does not infer missing changes from a truncated patch prefix", async () => {
     const base = tmp();
     try {
-      // Two sealed added-file blocks in a truncated patch while
-      // seed.changes.added is 1 and changes.json lists neither path.
+      // A truncated patch whose parsed prefix carries one sealed added-file
+      // block (a.ts) while changes.json lists only test/auth.test.ts. The
+      // declared modified/deleted files are absent from the prefix, but a cut
+      // prefix cannot show they are missing, so the count fact stays verified;
+      // the path the prefix does show is still a contradiction.
       const extra =
         "--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+x\n" +
         "--- /dev/null\n+++ b.ts\n@@ -0,0 +1,1 @@\n+y\n";
@@ -540,12 +548,60 @@ describe("audit-run", () => {
         writeRun(base, "run", { patch: extra, patchTruncated: true }),
       );
       expect(factAt(result, "seed.changes-patch")).toMatchObject({
-        state: "inconsistent",
+        state: "verified",
         completeness: "partial",
       });
       expect(factAt(result, "changes.patch-agreement")).toMatchObject({
         state: "inconsistent",
         completeness: "partial",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("still enforces equality on an untruncated patch that covers fewer changes", async () => {
+    const base = tmp();
+    try {
+      // The full patch is stored untruncated with no omission diagnostics, so
+      // its silence about the declared additions is evidence: the counts
+      // contradict seed.changes and the declared paths changes.json lists.
+      // The fixture patch's modified block, stored untruncated: the declared
+      // additions and deletion are absent from complete bytes.
+      const onlyModified = seededPatch.slice(
+        0,
+        seededPatch.indexOf("--- /dev/null"),
+      );
+      const result = await audit(
+        writeRun(base, "run", { patch: onlyModified }),
+      );
+      expect(factAt(result, "seed.changes-patch")).toMatchObject({
+        state: "inconsistent",
+        completeness: "complete",
+      });
+      expect(factAt(result, "changes.patch-agreement")).toMatchObject({
+        state: "inconsistent",
+        completeness: "complete",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports an omission diagnostic with an absent patch as a contradiction", async () => {
+    const base = tmp();
+    try {
+      const result = await audit(
+        writeRun(base, "run", {
+          trace: seededTrace({
+            patch: { base: "seeded", state: "absent" },
+            diagnostics: ["patch: 1 binary file(s) omitted"],
+          }),
+          patch: null,
+        }),
+      );
+      expect(factAt(result, "patch.record")).toMatchObject({
+        state: "inconsistent",
       });
     } finally {
       rmSync(base, { recursive: true, force: true });
@@ -1279,6 +1335,31 @@ describe("audit-run check reports", () => {
       );
       expect(result.inputs.checkReports[0].state).toBe("invalid");
       expect(result.inputs.checkReports[0].error).toBeTruthy();
+      // The document parsed, so it is kept: the whole-report citation of the
+      // rejected report resolves and needs no unavailability note.
+      const evidence = factAt(result, "check-report.shape", report).evidence;
+      expect(evidence[0]).toMatchObject({ source: "checkReport", pointer: "" });
+      expect(evidence[0].note).toBeUndefined();
+      const loaded = await loadCheckReports([report]);
+      expect(loaded[0].report).toBeNull();
+      expect(loaded[0].document).toEqual({ bogus: true });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("marks an unparseable report's citation as having no resolvable document", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeRun(base, "run");
+      const report = writeReport(base, "report.json", "{not json");
+      const result = await audit(runDir, [report]);
+      expect(factAt(result, "check-report.shape", report).state).toBe(
+        "inconsistent",
+      );
+      const evidence = factAt(result, "check-report.shape", report).evidence;
+      expect(evidence[0]).toMatchObject({ source: "checkReport", pointer: "" });
+      expect(evidence[0].note).toContain("did not parse");
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

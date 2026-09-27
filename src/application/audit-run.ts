@@ -939,19 +939,26 @@ function auditPatchRecord(run: AuditedRun): AuditFact {
             evidence,
           );
     }
-    const evidence = [traceEv("", "no patch field")];
-    if (run.patchOmissionIndex !== -1)
-      evidence.push(diagnosticEv(run.patchOmissionIndex));
+    // An omission diagnostic describes content omitted from a patch the run
+    // published (docs/yuurei-seeded-run-contract.md); with no patch record and
+    // no stored entry, the run's records contradict each other.
+    if (run.patchOmissionIndex !== -1 && entry === null)
+      return inconsistent(
+        "the trace's patch omission diagnostics record omitted content " +
+          "from a published patch, but neither the trace nor the manifest " +
+          "records a patch",
+        [
+          traceEv("", "no patch field"),
+          diagnosticEv(run.patchOmissionIndex),
+          manifestEv("", "no patch.diff entry"),
+        ],
+      );
     return fact(
       id,
       "not-recorded",
       "complete",
-      "the trace records no patch completeness record" +
-        (run.patchOmissionIndex === -1
-          ? ""
-          : "; omission diagnostics may still mark the stored patch " +
-            "partial"),
-      evidence,
+      "the trace records no patch completeness record",
+      [traceEv("", "no patch field")],
     );
   }
 
@@ -966,6 +973,13 @@ function auditPatchRecord(run: AuditedRun): AuditFact {
       `patch.state '${rec.state}' contradicts the manifest's absent ` +
         "patch.diff record",
       patchEvRefs(),
+    );
+  if (run.patchOmissionIndex !== -1 && entry === null)
+    return inconsistent(
+      `patch.state '${rec.state}' records no patch.diff entry while the ` +
+        "trace's patch omission diagnostics record omitted content from a " +
+        "published patch",
+      [traceEv("/patch/state"), diagnosticEv(run.patchOmissionIndex)],
     );
   if (rec.state === "complete" && run.patchEntryTruncated)
     return inconsistent(
@@ -1233,6 +1247,11 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
     run.patchRecord?.state === "partial" ||
     run.patchEntryTruncated ||
     run.patch.complete === false;
+  // Equality can only be enforced on bytes that are verified, untruncated,
+  // fully parsed, and free of omission diagnostics: a cut prefix that covers
+  // fewer files than the declared change set is missing evidence, not a
+  // contradiction. Blocks the stored prefix does show are still checked.
+  const covered = !partial && run.patchOmissionIndex === -1;
   const completeness: AuditCompleteness = partial ? "partial" : "complete";
   for (const kind of CHANGE_KINDS) {
     const count = run.patch.files.filter((f) => f.change === kind).length;
@@ -1245,7 +1264,7 @@ function auditSeedChangesPatch(run: AuditedRun): AuditFact {
           `seed.changes.${kind} is ${changes[kind]}`,
         [traceEv(`/seed/changes/${kind}`), ...countsEvidence()],
       );
-    if (run.patchRecord?.state === "complete" && count !== changes[kind])
+    if (covered && count !== changes[kind])
       return fact(
         id,
         "inconsistent",
@@ -1357,6 +1376,9 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
     run.patchRecord?.state !== "complete" ||
     run.patchEntryTruncated ||
     patch.complete === false;
+  // As in seed.changes-patch: only fully covered stored bytes can attest that
+  // a path changes.json lists is missing from the patch.
+  const covered = !partial && run.patchOmissionIndex === -1;
   const completeness: AuditCompleteness = partial ? "partial" : "complete";
   for (const kind of CHANGE_KINDS) {
     const patched = patch.files.filter((f) => f.change === kind);
@@ -1370,10 +1392,7 @@ function auditChangesPatchAgreement(run: AuditedRun): AuditFact {
           "the verified changes.json does not list",
         evidence(),
       );
-    if (
-      run.patchRecord?.state === "complete" &&
-      patched.length !== sets[kind].size
-    )
+    if (covered && patched.length !== sets[kind].size)
       return fact(
         id,
         "inconsistent",
@@ -1547,6 +1566,19 @@ function auditCheckReportFacts(
 
   const facts: AuditFact[] = [];
   if (report === null) {
+    // A document that parsed but failed validation is kept by the loader and
+    // cited as a whole, so the reference still resolves. A document that did
+    // not parse has nothing to resolve against: the citation says so rather
+    // than implying a readable pointer into it.
+    const rejectedEvidence = (): AuditEvidenceReference[] => [
+      reportEv(
+        label,
+        "",
+        loaded.document === null
+          ? "the report document did not parse, so no pointer into it can resolve"
+          : undefined,
+      ),
+    ];
     facts.push(
       f(
         "shape",
@@ -1554,7 +1586,7 @@ function auditCheckReportFacts(
         "unknown",
         `the supplied document is not a conforming check report: ` +
           (loaded.error ?? "could not be parsed"),
-        [reportEv(label, "")],
+        rejectedEvidence(),
       ),
     );
     for (const suffix of [
@@ -1570,7 +1602,7 @@ function auditCheckReportFacts(
           "unknown",
           "the report is not a conforming check report; its " +
             "declarations cannot be checked",
-          [reportEv(label, "")],
+          rejectedEvidence(),
         ),
       );
     return facts;

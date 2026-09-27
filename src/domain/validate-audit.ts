@@ -230,17 +230,18 @@ function checkReportEvidence(
   at: string,
 ): void {
   // `elementId` names the supplying report by label; without it, the
-  // pointer must resolve in at least one report document. A rejected
-  // report carries no parsed document, so it may only be cited as a whole
-  // (the empty pointer) by its label.
+  // pointer must resolve in at least one report document. A report whose
+  // document did not parse has nothing to resolve against, so it may only be
+  // cited as a whole (the empty pointer) by its label; a document that parsed
+  // but failed validation is resolved like any other.
   const candidates =
     evidence.elementId === undefined
       ? reports
       : reports.filter((r) => r.label === evidence.elementId);
   const found = candidates.some((r) =>
-    r.report === null
+    r.document === null
       ? evidence.pointer === ""
-      : resolvePointer(r.report.document, evidence.pointer).found,
+      : resolvePointer(r.document, evidence.pointer).found,
   );
   if (!found)
     fail(

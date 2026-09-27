@@ -195,5 +195,14 @@ export async function readCheckReport(path: string): Promise<CheckReport> {
       `check report is not valid JSON: ${path}`,
     );
   }
-  return parseCheckReport(value, path);
+  try {
+    return parseCheckReport(value, path);
+  } catch (error) {
+    // The document parsed, so its evidence citations still resolve: keep it on
+    // the rejection rather than discarding the only parsed copy
+    // (docs/v0.8-scope.md — a rejected report is cited as a whole).
+    if (error instanceof PflExportError)
+      throw new PflExportError(error.code, error.message, value);
+    throw error;
+  }
 }
