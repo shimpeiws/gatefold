@@ -28,8 +28,8 @@ function tmp(): string {
 }
 
 const seededPatch =
-  "--- a/src/auth.ts\n" +
-  "+++ b/src/auth.ts\n" +
+  "--- src/auth.ts\n" +
+  "+++ src/auth.ts\n" +
   "@@ -1,3 +1,4 @@\n" +
   " export function check(token) {\n" +
   "-  return token.exp > now();\n" +
@@ -37,10 +37,10 @@ const seededPatch =
   " }\n" +
   "+export const VERSION = 2;\n" +
   "--- /dev/null\n" +
-  "+++ b/test/auth.test.ts\n" +
+  "+++ test/auth.test.ts\n" +
   "@@ -0,0 +1,1 @@\n" +
   "+import { check };\n" +
-  "--- a/legacy/util.ts\n" +
+  "--- legacy/util.ts\n" +
   "+++ /dev/null\n" +
   "@@ -1,1 +0,0 @@\n" +
   "-export const OLD = true;\n";
@@ -57,6 +57,30 @@ interface RunOptions {
   result?: string | null;
 }
 
+/** The seed record the default seededPatch is consistent with. */
+function seedDoc(
+  changes: { added: number; modified: number; deleted: number } | null = {
+    added: 1,
+    modified: 1,
+    deleted: 1,
+  },
+  baselineDigest = "sha256:base-1",
+): Record<string, unknown> {
+  return {
+    policy: "git-tracked-files",
+    source: "/seed/x",
+    head: "0123456789abcdef0123456789abcdef01234567",
+    baseline: {
+      requested_digest: baselineDigest,
+      materialized_digest: baselineDigest,
+      files: 3,
+      bytes: 42,
+    },
+    ...(changes === null ? {} : { changes }),
+  };
+}
+
+/** A shipped-contract seeded trace (yuurei #202, inputs_version 2). */
 function seededTrace(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
@@ -69,9 +93,9 @@ function seededTrace(
     model: { requested: "m", resolved: "m-1", resolved_reason: "observed" },
     profile: { name: "p", digest: "sha256:p" },
     task: { source: "t", digest: "sha256:task-x" },
-    requested_cell: { digest: "sha256:cell", inputs_version: 1 },
-    baseline: { digest: "sha256:base-1", source: "seed://x" },
-    final_result: { status: "recorded" },
+    requested_cell: { digest: "sha256:cell", inputs_version: 2 },
+    seed: seedDoc(),
+    patch: { base: "seeded", state: "complete" },
     isolation: { strategy: "cell", verified: true },
     execution: {
       exit_code: 0,
@@ -82,6 +106,20 @@ function seededTrace(
     usage: {},
     cost: null,
     artifacts: [],
+    ...overrides,
+  };
+}
+
+/** A shipped-contract empty-workspace trace (inputs_version 1). */
+function legacyTrace(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const t = seededTrace();
+  delete t.seed;
+  return {
+    ...t,
+    requested_cell: { digest: "sha256:cell", inputs_version: 1 },
+    patch: { base: "empty", state: "complete" },
     ...overrides,
   };
 }
@@ -194,7 +232,7 @@ describe("parseSeededPatchDiff", () => {
     const bytes = Buffer.from(seededPatch);
     for (const file of parsed.files)
       expect(bytes.subarray(file.byteStart, file.byteEnd).toString()).toContain(
-        file.change === "deleted" ? `--- a/${file.path}` : `+++ b/${file.path}`,
+        file.change === "deleted" ? `--- ${file.path}` : `+++ ${file.path}`,
       );
   });
 
@@ -207,22 +245,16 @@ describe("parseSeededPatchDiff", () => {
 
   it.each([
     [
-      "a non-prefixed old header",
-      "--- src/a.ts\n+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
-    ],
-    [
-      "a non-prefixed new header",
-      "--- a/src/a.ts\n+++ src/a.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
+      "a git-format modified block with differing a//b/ paths",
+      "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
     ],
     ["dev/null on both sides", "--- /dev/null\n+++ /dev/null\n"],
-    [
-      "a hunk count mismatch",
-      "--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n-x\n+y\n",
-    ],
-    ["a modified block with no hunk", "--- a/a.ts\n+++ b/a.ts\n"],
+    ["a hunk count mismatch", "--- a.ts\n+++ a.ts\n@@ -1,2 +1,2 @@\n-x\n+y\n"],
+    ["a modified block with no hunk", "--- a.ts\n+++ a.ts\n"],
+    ["an empty header path", "--- \n+++ /dev/null\n"],
     [
       "a duplicate path",
-      "--- /dev/null\n+++ b/a.ts\n@@ -0,0 +1,1 @@\n+x\n--- /dev/null\n+++ b/a.ts\n@@ -0,0 +1,1 @@\n+y\n",
+      "--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+x\n--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+y\n",
     ],
   ])("rejects %s as malformed", (_name, patch) => {
     expect(() =>
@@ -234,7 +266,7 @@ describe("parseSeededPatchDiff", () => {
 
   it("keeps only the sealed prefix of a truncated patch", () => {
     const cut =
-      "--- /dev/null\n+++ b/a.ts\n@@ -0,0 +1,1 @@\n+x\n--- a/b.ts\n+++ b/b.ts\n";
+      "--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+x\n--- b.ts\n+++ b.ts\n";
     const parsed = parseSeededPatchDiff(Buffer.from(cut), {
       allowTruncatedTail: true,
     });
@@ -244,7 +276,7 @@ describe("parseSeededPatchDiff", () => {
 
   it("fails a duplicate path even under a truncation allowance", () => {
     const patch =
-      "--- /dev/null\n+++ b/a.ts\n@@ -0,0 +1,1 @@\n+x\n--- /dev/null\n+++ b/a.ts\n@@ -0,0 +1,1 @@\n+y\n";
+      "--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+x\n--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+y\n";
     expect(() =>
       parseSeededPatchDiff(Buffer.from(patch), { allowTruncatedTail: true }),
     ).toThrow(PatchParseError);
@@ -252,10 +284,18 @@ describe("parseSeededPatchDiff", () => {
 });
 
 describe("readEvaluatedRun", () => {
-  it("loads a seeded run: baseline, seeded patch, verified result", async () => {
+  it("loads a seeded run: seed, patch record, verified result and manifests", async () => {
     const run = await readEvaluatedRun(fixture("yuurei-run/seeded-a"));
     expect(run.seeded).toBe(true);
-    expect(run.trace.baseline?.digest).toBe("sha256:baseline-seeded-1");
+    expect(run.trace.seed?.baseline.requestedDigest).toBe(
+      "sha256:baseline-seeded-1",
+    );
+    expect(run.trace.seed?.changes).toEqual({
+      added: 1,
+      modified: 1,
+      deleted: 1,
+    });
+    expect(run.patchRecord).toEqual({ base: "seeded", state: "complete" });
     expect(run.patchState).toBe("verified");
     expect(run.patch!.files.map((f) => [f.path, f.change])).toEqual([
       ["src/auth.ts", "modified"],
@@ -264,6 +304,15 @@ describe("readEvaluatedRun", () => {
     ]);
     expect(run.resultState).toBe("verified");
     expect(run.resultText).toContain('"status": "fixed"');
+    const verifiedPaths = run.entries
+      .filter((e) => e.state === "verified")
+      .map((e) => e.path);
+    expect(verifiedPaths).toEqual([
+      "patch.diff",
+      "result.txt",
+      "baseline-manifest.json",
+      "changes.json",
+    ]);
   });
 
   it("reads a legacy empty-workspace run with the legacy grammar", async () => {
@@ -274,35 +323,48 @@ describe("readEvaluatedRun", () => {
     expect(run.resultText).toBeNull();
   });
 
-  it("distinguishes not_emitted and parse_failed from a missing record", async () => {
+  it("reads result availability from shipped diagnostics", async () => {
     const base = tmp();
     try {
-      for (const [status, expected] of [
-        ["not_emitted", "not-emitted"],
-        ["parse_failed", "parse-failed"],
+      for (const [diagnostic, expected] of [
+        ["result: no final message emitted", "not-emitted"],
+        ["result: final message could not be parsed", "parse-failed"],
+        ["result: save failed; result.txt not recorded", "save-failed"],
       ] as const) {
-        const runDir = writeRun(base, `r-${status}`, {
-          trace: seededTrace({ final_result: { status } }),
+        const runDir = writeRun(base, `r-${expected}`, {
+          trace: seededTrace({ diagnostics: [diagnostic] }),
           result: null,
         });
         const run = await readEvaluatedRun(runDir);
         expect(run.resultState).toBe(expected);
+        expect(run.trace.diagnostics[run.resultDiagnosticIndex]).toBe(
+          diagnostic,
+        );
       }
-      const noMarker = writeRun(base, "r-legacy", {
-        trace: (() => {
-          const t = seededTrace();
-          delete t.final_result;
-          return t;
-        })(),
-        result: null,
-      });
+      const noMarker = writeRun(base, "r-none", { result: null });
       expect((await readEvaluatedRun(noMarker)).resultState).toBe(
         "not-recorded",
       );
-      const recordedNoEntry = writeRun(base, "r-missing", { result: null });
-      expect((await readEvaluatedRun(recordedNoEntry)).resultState).toBe(
-        "missing",
+      // A listed result entry with no file behind it is 'missing'.
+      const missingDir = writeRun(base, "r-missing", { result: null });
+      writeFileSync(
+        join(missingDir, "artifacts.json"),
+        JSON.stringify({
+          artifacts: [
+            {
+              path: "patch.diff",
+              kind: "patch",
+              digest: sha256(seededPatch),
+            },
+            {
+              path: "result.txt",
+              kind: "result",
+              digest: sha256("ghost"),
+            },
+          ],
+        }),
       );
+      expect((await readEvaluatedRun(missingDir)).resultState).toBe("missing");
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -316,6 +378,11 @@ describe("readEvaluatedRun", () => {
         join(runDir, "artifacts.json"),
         JSON.stringify({
           artifacts: [
+            {
+              path: "patch.diff",
+              kind: "patch",
+              digest: sha256(seededPatch),
+            },
             {
               path: "result.txt",
               kind: "result",
@@ -332,17 +399,233 @@ describe("readEvaluatedRun", () => {
     }
   });
 
-  it("marks a seeded run's non-prefixed patch as malformed", async () => {
+  it("marks a seeded run's git-format (a//b/) patch as malformed", async () => {
     const base = tmp();
     try {
       const run = await readEvaluatedRun(
-        writeRun(base, "r", { patch: legacyPatch }),
+        writeRun(base, "r", {
+          patch: "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n",
+        }),
       );
       expect(run.patchState).toBe("malformed");
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    [
+      "a patch.base of 'empty' on a seeded run",
+      seededTrace({ patch: { base: "empty", state: "complete" } }),
+      null,
+      "contradicts",
+    ],
+    [
+      "a patch.base of 'seeded' without a seed",
+      legacyTrace({ patch: { base: "seeded", state: "complete" } }),
+      null,
+      "contradicts",
+    ],
+    [
+      "requested-cell inputs_version 1 on a seeded run",
+      seededTrace({
+        requested_cell: { digest: "sha256:cell", inputs_version: 1 },
+      }),
+      null,
+      "inputs_version",
+    ],
+    [
+      "requested-cell inputs_version 2 without a seed",
+      legacyTrace({
+        requested_cell: { digest: "sha256:cell", inputs_version: 2 },
+      }),
+      null,
+      "inputs_version",
+    ],
+    [
+      "a seed whose requested and materialized digests differ",
+      seededTrace({
+        seed: {
+          ...seedDoc(),
+          baseline: {
+            requested_digest: "sha256:base-1",
+            materialized_digest: "sha256:base-2",
+            files: 3,
+            bytes: 42,
+          },
+        },
+      }),
+      null,
+      "requested_digest",
+    ],
+    [
+      "a 'complete' patch record over a truncated manifest entry",
+      seededTrace(),
+      { truncatedPatch: true },
+      "complete",
+    ],
+    [
+      "an 'absent' patch record with a patch.diff entry",
+      seededTrace({ patch: { base: "seeded", state: "absent" } }),
+      null,
+      "absent",
+    ],
+    [
+      "a non-absent patch record with no patch.diff entry",
+      seededTrace({ patch: { base: "seeded", state: "partial" } }),
+      { patch: null },
+      "partial",
+    ],
+    [
+      "a generation-failed diagnostic with a patch.diff entry",
+      seededTrace({
+        diagnostics: ["patch: generation failed; patch.diff not recorded"],
+      }),
+      null,
+      "generation",
+    ],
+    [
+      "a published patch over an absent seed.changes record",
+      seededTrace({ seed: seedDoc(null) }),
+      null,
+      "seed.changes",
+    ],
+    [
+      "a 'complete' patch record alongside counted omissions",
+      seededTrace({
+        diagnostics: ["patch: 1 binary file(s) omitted"],
+      }),
+      null,
+      "complete",
+    ],
+    [
+      "a 'partial' patch record alongside generation-failed",
+      seededTrace({
+        patch: { base: "seeded", state: "partial" },
+        diagnostics: ["patch: generation failed; patch.diff not recorded"],
+      }),
+      null,
+      "generation",
+    ],
+  ])(
+    "rejects contradictory records: %s",
+    async (_name, traceDoc, opts, message) => {
+      const base = tmp();
+      try {
+        const runDir = writeRun(base, "r", {
+          trace: traceDoc,
+          ...(opts?.patch === null ? { patch: null } : {}),
+        });
+        if (opts?.truncatedPatch) {
+          writeFileSync(
+            join(runDir, "artifacts.json"),
+            JSON.stringify({
+              artifacts: [
+                {
+                  path: "patch.diff",
+                  kind: "patch",
+                  digest: sha256(seededPatch),
+                  truncated: true,
+                },
+              ],
+            }),
+          );
+        }
+        await expect(readEvaluatedRun(runDir)).rejects.toMatchObject({
+          code: "invalid-shape",
+          message: expect.stringContaining(message),
+        });
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([
+    [
+      "a verified baseline-manifest.json whose digests differ",
+      {
+        "baseline-manifest.json": JSON.stringify({
+          version: 1,
+          policy: "git-tracked-files",
+          source: "/seed/x",
+          head: "0123456789abcdef0123456789abcdef01234567",
+          requested_digest: "sha256:base-2",
+          materialized_digest: "sha256:base-2",
+          files: {},
+        }),
+      },
+      "seed record",
+    ],
+    [
+      "a verified changes.json whose counts differ from seed.changes",
+      {
+        "changes.json": JSON.stringify({
+          version: 1,
+          baseline_digest: "sha256:base-1",
+          added: [],
+          modified: ["src/auth.ts"],
+          deleted: [],
+        }),
+      },
+      "seed.changes",
+    ],
+    [
+      "a verified changes.json the trace does not record",
+      {
+        "changes.json": JSON.stringify({
+          version: 1,
+          baseline_digest: "sha256:base-1",
+          added: ["test/auth.test.ts"],
+          modified: ["src/auth.ts"],
+          deleted: ["legacy/util.ts"],
+        }),
+        trace: seededTrace({ seed: seedDoc(null) }),
+      },
+      "seed.changes",
+    ],
+  ])(
+    "rejects contradictory seeded artifacts: %s",
+    async (_name, extra, message) => {
+      const base = tmp();
+      try {
+        const files: Record<string, unknown> = { ...extra };
+        const traceDoc = files.trace as Record<string, unknown> | undefined;
+        delete files.trace;
+        const runDir = writeRun(
+          base,
+          "r",
+          traceDoc === undefined ? {} : { trace: traceDoc },
+        );
+        const artifacts = [
+          { path: "patch.diff", kind: "patch", digest: sha256(seededPatch) },
+          {
+            path: "result.txt",
+            kind: "result",
+            digest: sha256(RESULT_TEXT),
+          },
+        ];
+        for (const [path, content] of Object.entries(files)) {
+          writeFileSync(join(runDir, path), content as string);
+          artifacts.push({
+            path,
+            kind: "file",
+            digest: sha256(content as string),
+          });
+        }
+        writeFileSync(
+          join(runDir, "artifacts.json"),
+          JSON.stringify({ artifacts }),
+        );
+        await expect(readEvaluatedRun(runDir)).rejects.toMatchObject({
+          code: "invalid-shape",
+          message: expect.stringContaining(message),
+        });
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("task spec parsing", () => {
@@ -462,12 +745,92 @@ describe("evaluateRun", () => {
     }
   });
 
+  it.each([
+    [
+      "seeded-nochange",
+      {
+        "auth-fixed": "fail",
+        "tests-added": "fail",
+        "legacy-removed": "fail",
+        "answer-status": "fail",
+        "answer-mentions-expiry": "fail",
+        "unit-tests": "unknown",
+      },
+    ],
+    [
+      "seeded-partial",
+      {
+        "auth-fixed": "pass",
+        "tests-added": "unknown",
+        "legacy-removed": "unknown",
+        "answer-status": "pass",
+        "answer-mentions-expiry": "pass",
+        "unit-tests": "unknown",
+      },
+    ],
+    [
+      "seeded-nopatch",
+      {
+        "auth-fixed": "unknown",
+        "tests-added": "unknown",
+        "legacy-removed": "unknown",
+        "answer-status": "pass",
+        "answer-mentions-expiry": "pass",
+        "unit-tests": "unknown",
+      },
+    ],
+    [
+      "seeded-noresult",
+      {
+        "auth-fixed": "pass",
+        "tests-added": "pass",
+        "legacy-removed": "pass",
+        "answer-status": "unknown",
+        "answer-mentions-expiry": "unknown",
+        "unit-tests": "unknown",
+      },
+    ],
+  ])(
+    "evaluates the committed %s fixture under the shipped contract",
+    async (name, expected) => {
+      const result = await evaluate(
+        fixture(`yuurei-run/${name}`),
+        fixture("evaluation/task-spec.json"),
+      );
+      expect(validateV6(result), JSON.stringify(validateV6.errors)).toBe(true);
+      expect(
+        Object.fromEntries(
+          result.evaluations.map((e) => [e.criterionId, e.verdict]),
+        ),
+      ).toEqual(expected);
+    },
+  );
+
+  it("cites patch.state for criteria a partial patch does not record", async () => {
+    const result = await evaluate(
+      fixture("yuurei-run/seeded-partial"),
+      fixture("evaluation/task-spec.json"),
+    );
+    const added = result.evaluations.find(
+      (e) => e.criterionId === "tests-added",
+    )!;
+    expect(added.verdict).toBe("unknown");
+    expect(
+      added.evidence.some(
+        (e) => e.source === "trace" && e.pointer === "/patch/state",
+      ),
+    ).toBe(true);
+  });
+
   it("fails file criteria a complete patch does not record", async () => {
     const base = tmp();
     try {
       const specPath = writeSpec(base, specDoc());
       const runDir = writeRun(base, "run", {
-        patch: "--- a/a.ts\n+++ b/a.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
+        trace: seededTrace({
+          seed: seedDoc({ added: 0, modified: 1, deleted: 0 }),
+        }),
+        patch: "--- a.ts\n+++ a.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
       });
       const result = await evaluate(runDir, specPath);
       for (const id of ["mod", "added", "deleted"])
@@ -480,7 +843,16 @@ describe("evaluateRun", () => {
   });
 
   it.each([
-    ["not-recorded", { patch: null }],
+    [
+      "absent",
+      {
+        patch: null,
+        trace: seededTrace({
+          patch: { base: "seeded", state: "absent" },
+          seed: seedDoc(null),
+        }),
+      },
+    ],
     ["malformed", { patch: "not a diff\n" }],
     ["digest-mismatch", { patch: seededPatch, result: RESULT_TEXT }],
   ])(
@@ -524,10 +896,18 @@ describe("evaluateRun", () => {
         specDoc([{ id: "mod", kind: "file-modified", path: "src/auth.ts" }]),
       );
       const cut =
-        "--- a/other.ts\n+++ b/other.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n--- a/src/auth.ts\n";
+        "--- other.ts\n+++ other.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n--- src/auth.ts\n";
       const runDir = join(base, "run");
       mkdirSync(runDir);
-      writeFileSync(join(runDir, "trace.json"), JSON.stringify(seededTrace()));
+      writeFileSync(
+        join(runDir, "trace.json"),
+        JSON.stringify(
+          seededTrace({
+            seed: seedDoc({ added: 0, modified: 2, deleted: 0 }),
+            patch: { base: "seeded", state: "partial" },
+          }),
+        ),
+      );
       writeFileSync(join(runDir, "patch.diff"), cut);
       writeFileSync(
         join(runDir, "artifacts.json"),
@@ -545,7 +925,12 @@ describe("evaluateRun", () => {
       const result = await evaluate(runDir, specPath);
       const entry = result.evaluations[0];
       expect(entry.verdict).toBe("unknown");
-      expect(entry.reason).toContain("truncated");
+      expect(entry.reason).toContain("partial");
+      expect(
+        entry.evidence.some(
+          (e) => e.source === "trace" && e.pointer === "/patch/state",
+        ),
+      ).toBe(true);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -559,10 +944,18 @@ describe("evaluateRun", () => {
         specDoc([{ id: "mod", kind: "file-modified", path: "other.ts" }]),
       );
       const cut =
-        "--- a/other.ts\n+++ b/other.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n--- a/src/auth.ts\n";
+        "--- other.ts\n+++ other.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n--- src/auth.ts\n";
       const runDir = join(base, "run");
       mkdirSync(runDir);
-      writeFileSync(join(runDir, "trace.json"), JSON.stringify(seededTrace()));
+      writeFileSync(
+        join(runDir, "trace.json"),
+        JSON.stringify(
+          seededTrace({
+            seed: seedDoc({ added: 0, modified: 2, deleted: 0 }),
+            patch: { base: "seeded", state: "partial" },
+          }),
+        ),
+      );
       writeFileSync(join(runDir, "patch.diff"), cut);
       writeFileSync(
         join(runDir, "artifacts.json"),
@@ -597,12 +990,7 @@ describe("evaluateRun", () => {
         ],
       });
       const runDir = writeRun(base, "run", {
-        trace: (() => {
-          const t = seededTrace();
-          delete t.baseline;
-          delete t.final_result;
-          return t;
-        })(),
+        trace: legacyTrace(),
         patch: legacyPatch,
         result: null,
       });
@@ -612,17 +1000,56 @@ describe("evaluateRun", () => {
       );
       expect(verdicts).toEqual({ added: "pass", mod: "unknown" });
       expect(result.inputs.run.seeded).toBe(false);
+      expect(result.inputs.run.patchRecord).toEqual({
+        base: "empty",
+        state: "complete",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves an omitted file unknown on a trace predating the patch record", async () => {
+    const base = tmp();
+    try {
+      const specPath = writeSpec(
+        base,
+        specDoc([
+          { id: "added", kind: "file-added", path: "test/auth.test.ts" },
+          { id: "mod", kind: "file-modified", path: "src/auth.ts" },
+        ]),
+      );
+      const noPatchRecord = seededTrace({
+        diagnostics: ["patch: 1 binary file(s) omitted"],
+      });
+      delete noPatchRecord.patch;
+      const runDir = writeRun(base, "run", {
+        trace: noPatchRecord,
+        patch: "--- src/auth.ts\n+++ src/auth.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
+      });
+      const result = await evaluate(runDir, specPath);
+      const verdicts = Object.fromEntries(
+        result.evaluations.map((e) => [e.criterionId, e.verdict]),
+      );
+      expect(verdicts).toEqual({ added: "unknown", mod: "pass" });
+      const added = result.evaluations.find((e) => e.criterionId === "added")!;
+      expect(
+        added.evidence.some(
+          (e) => e.source === "trace" && e.pointer === "/diagnostics/0",
+        ),
+      ).toBe(true);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
   });
 
   it.each([
-    ["not_emitted", "not-emitted"],
-    ["parse_failed", "parse-failed"],
+    ["result: no final message emitted", "not-emitted"],
+    ["result: final message could not be parsed", "parse-failed"],
+    ["result: save failed; result.txt not recorded", "save-failed"],
   ])(
-    "reports final-result criteria unknown when the result is %s",
-    async (status, expected) => {
+    "reports final-result criteria unknown when %s",
+    async (diagnostic, expected) => {
       const base = tmp();
       try {
         const specPath = writeSpec(
@@ -636,7 +1063,7 @@ describe("evaluateRun", () => {
           ]),
         );
         const runDir = writeRun(base, "run", {
-          trace: seededTrace({ final_result: { status } }),
+          trace: seededTrace({ diagnostics: [diagnostic] }),
           result: null,
         });
         const result = await evaluate(runDir, specPath);
@@ -645,7 +1072,7 @@ describe("evaluateRun", () => {
         expect(entry.reason).toContain(expected);
         expect(
           entry.evidence.some(
-            (e) => e.source === "trace" && e.pointer === "/final_result/status",
+            (e) => e.source === "trace" && e.pointer === "/diagnostics/0",
           ),
         ).toBe(true);
       } finally {
@@ -755,11 +1182,8 @@ describe("evaluateRun", () => {
     try {
       const specPath = writeSpec(base, specDoc());
       const runDir = writeRun(base, "run", {
-        trace: (() => {
-          const t = seededTrace();
-          delete t.baseline;
-          return t;
-        })(),
+        trace: legacyTrace(),
+        patch: legacyPatch,
       });
       await expect(evaluate(runDir, specPath)).rejects.toMatchObject({
         code: "mismatched-inputs",
@@ -773,7 +1197,14 @@ describe("evaluateRun", () => {
     const base = tmp();
     try {
       const specPath = writeSpec(base, specDoc());
-      const runDir = writeRun(base, "run", { patch: null, result: null });
+      const runDir = writeRun(base, "run", {
+        trace: seededTrace({
+          patch: { base: "seeded", state: "absent" },
+          seed: seedDoc(null),
+        }),
+        patch: null,
+        result: null,
+      });
       const result = await evaluate(runDir, specPath);
       for (const entry of result.evaluations)
         expect(entry.verdict).toBe("unknown");
@@ -1013,9 +1444,12 @@ describe("compareEvaluations", () => {
         ]),
       );
       const beforeDir = writeRun(base, "before", {
-        patch: "--- a/other.ts\n+++ b/other.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n",
+        patch: "--- other.ts\n+++ other.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n",
         result: null,
-        trace: seededTrace({ final_result: { status: "not_emitted" } }),
+        trace: seededTrace({
+          seed: seedDoc({ added: 0, modified: 1, deleted: 0 }),
+          diagnostics: ["result: no final message emitted"],
+        }),
       });
       const afterDir = writeRun(base, "after", {});
       const report = writeReport(base, "r.json", {
@@ -1039,19 +1473,15 @@ describe("compareEvaluations", () => {
   it.each([
     [
       "different baseline digests",
-      seededTrace({ baseline: { digest: "sha256:base-other" } }),
+      seededTrace({
+        seed: seedDoc(
+          { added: 1, modified: 1, deleted: 1 },
+          "sha256:base-other",
+        ),
+      }),
       "baseline",
     ],
-    [
-      "a legacy after run",
-      (() => {
-        const t = seededTrace();
-        delete t.baseline;
-        delete t.final_result;
-        return t;
-      })(),
-      "baseline",
-    ],
+    ["a legacy after run", legacyTrace(), "baseline"],
     [
       "a different task digest",
       seededTrace({ task: { source: "t", digest: "sha256:task-other" } }),
@@ -1094,14 +1524,7 @@ describe("compareEvaluations", () => {
         criteria: [{ id: "a", kind: "file-added", path: "x" }],
       });
       const beforeDir = writeRun(base, "before", {});
-      const afterDir = writeRun(base, "after", {
-        trace: (() => {
-          const t = seededTrace();
-          delete t.baseline;
-          delete t.final_result;
-          return t;
-        })(),
-      });
+      const afterDir = writeRun(base, "after", { trace: legacyTrace() });
       await expect(
         compare(beforeDir, afterDir, specPath),
       ).rejects.toMatchObject({
@@ -1244,7 +1667,10 @@ describe("evaluate-run / compare-evaluations CLI", () => {
       const hostile = "ok \x1b[31mRED\x1b[0m $ {\u2028} end\n";
       const runDir = writeRun(base, "run", {
         result: hostile,
-        patch: "--- a/a.ts\n+++ b/a.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
+        patch: "--- a.ts\n+++ a.ts\n@@ -1,1 +1,1 @@\n-x\n+y\n",
+        trace: seededTrace({
+          seed: seedDoc({ added: 0, modified: 1, deleted: 0 }),
+        }),
       });
       const specPath = writeSpec(base, {
         specVersion: 1,

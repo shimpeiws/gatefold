@@ -76,8 +76,9 @@ export interface BoundCheckReport {
 /**
  * Binds one loaded report to a run and spec (docs/v0.7-scope.md): the
  * declared subject must match the run's task digest, its optional baseline
- * digest, and its optional patch digest against the verified `patch.diff`
- * manifest record. Only `external-check` criterion rows are admitted —
+ * digest against the seed's requested baseline identity, and its optional
+ * patch digest against the verified `patch.diff` manifest record. Only
+ * `external-check` criterion rows are admitted —
  * rows naming any other criterion id are ignored. Duplicate rows with
  * identical verdicts collapse; conflicting duplicates keep the criterion
  * `unknown` with a conflict reason.
@@ -119,13 +120,14 @@ export function bindCheckReport(
     return mismatch(
       `subject.taskDigest '${report.taskDigest}' does not match the run's task.digest '${run.trace.task.digest}'`,
     );
+  const requestedDigest = run.trace.seed?.baseline.requestedDigest;
   if (
     report.baselineDigest !== undefined &&
-    report.baselineDigest !== run.trace.baseline?.digest
+    report.baselineDigest !== requestedDigest
   )
     return mismatch(
-      `subject.baselineDigest '${report.baselineDigest}' does not match the run's baseline digest ` +
-        `'${run.trace.baseline?.digest ?? "none"}'`,
+      `subject.baselineDigest '${report.baselineDigest}' does not match the run's requested baseline digest ` +
+        `'${requestedDigest ?? "none"}'`,
     );
   if (report.patchDigest !== undefined) {
     const patchEntry =

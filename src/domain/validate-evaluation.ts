@@ -48,6 +48,7 @@ const RESULT_STATES = [
   ...ARTIFACT_STATES,
   "not-emitted",
   "parse-failed",
+  "save-failed",
   "not-recorded",
 ] as const;
 const REPORT_STATES = ["accepted", "invalid", "mismatched"] as const;
@@ -142,6 +143,10 @@ function checkRunDescriptor(input: unknown, at: string): void {
   if (typeof run.seeded !== "boolean") fail(`${at}.seeded must be a boolean`);
   if (run.baseline !== null && typeof run.baseline !== "object")
     fail(`${at}.baseline must be an object or null`);
+  if (run.changes !== null && typeof run.changes !== "object")
+    fail(`${at}.changes must be an object or null`);
+  if (run.patchRecord !== null && typeof run.patchRecord !== "object")
+    fail(`${at}.patchRecord must be an object or null`);
   if (!(PATCH_STATES as readonly string[]).includes(run.patchState as string))
     fail(`${at}.patchState must be a known patch state`);
   if (!(RESULT_STATES as readonly string[]).includes(run.resultState as string))

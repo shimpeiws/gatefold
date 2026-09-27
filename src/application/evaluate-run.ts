@@ -236,6 +236,26 @@ const FILE_KIND_CHANGES: Record<string, "added" | "modified" | "deleted"> = {
   "file-deleted": "deleted",
 };
 
+/** Evidence citing the trace's `patch` completeness record. */
+function patchRecordEvidence(
+  src: SideSources,
+  note?: string,
+): EvaluationEvidenceReference {
+  return {
+    source: src.trace,
+    pointer: "/patch/state",
+    ...(note === undefined ? {} : { note }),
+  };
+}
+
+/** Evidence citing one trace diagnostic by its array index. */
+function diagnosticEvidence(
+  src: SideSources,
+  index: number,
+): EvaluationEvidenceReference {
+  return { source: src.trace, pointer: `/diagnostics/${index}` };
+}
+
 /** Evaluates one `file-*` criterion against the unified patch record. */
 function evaluateFileCriterion(
   run: EvaluatedRun,
@@ -246,14 +266,34 @@ function evaluateFileCriterion(
   const expected = FILE_KIND_CHANGES[criterion.kind];
   const kindName = expected;
 
-  if (run.patch === null) {
-    return evaluation(
-      criterion,
-      "unknown",
-      `the patch is ${run.patchState}; no file record can establish whether ` +
-        `'${criterion.path}' was ${kindName}`,
-      [spec, patchEntryEvidence(run, src, `patch.diff is ${run.patchState}`)],
-    );
+  // The trace's records decide whether stored patch bytes can carry a
+  // verdict at all. `patch.state: "absent"` or a generation-failed
+  // diagnostic asserts no patch was published; stored bytes that
+  // contradict that record are unusable evidence either way.
+  const patchDisavowed =
+    run.patchRecord?.state === "absent" || run.patchFailureIndex !== -1;
+  if (patchDisavowed || run.patch === null) {
+    const evidence: EvaluationEvidenceReference[] = [
+      spec,
+      patchEntryEvidence(run, src, `patch.diff is ${run.patchState}`),
+    ];
+    let reason: string;
+    if (run.patchRecord?.state === "absent") {
+      reason =
+        `the trace records the patch as absent; it cannot establish ` +
+        `whether '${criterion.path}' was ${kindName}`;
+      evidence.push(patchRecordEvidence(src));
+    } else if (run.patchFailureIndex !== -1) {
+      reason =
+        `the trace records that patch generation failed; it cannot ` +
+        `establish whether '${criterion.path}' was ${kindName}`;
+      evidence.push(diagnosticEvidence(src, run.patchFailureIndex));
+    } else {
+      reason =
+        `the patch is ${run.patchState}; no file record can establish ` +
+        `whether '${criterion.path}' was ${kindName}`;
+    }
+    return evaluation(criterion, "unknown", reason, evidence);
   }
 
   // A legacy empty-workspace patch is additions only: it can never express
@@ -266,7 +306,7 @@ function evaluateFileCriterion(
         `express a ${kindName} file`,
       [
         spec,
-        { source: src.trace, pointer: "", note: "no baseline field" },
+        { source: src.trace, pointer: "", note: "no seed field" },
         patchEntryEvidence(run, src),
       ],
     );
@@ -289,26 +329,58 @@ function evaluateFileCriterion(
       [spec, fileEvidence(run, src, file, `recorded as ${file.change}`)],
     );
   }
-  if (run.patch.complete) {
+
+  // Absence of a block is a negative verdict only when the patch is a
+  // complete record of the run's changes: an untruncated stored patch that
+  // the trace marks `complete` — or, on traces predating the `patch`
+  // record, one whose diagnostics report no omissions. A `partial` patch,
+  // a cut tail, or recorded omissions leave the path's change unknown.
+  if (run.patchRecord?.state === "partial") {
     return evaluation(
       criterion,
-      "fail",
-      `the complete patch does not record '${criterion.path}'`,
-      [spec, patchEntryEvidence(run, src, `no block for ${criterion.path}`)],
+      "unknown",
+      `the trace records the patch as partial; '${criterion.path}' may ` +
+        `be an omitted change`,
+      [
+        spec,
+        patchRecordEvidence(src),
+        patchEntryEvidence(run, src, `no block for ${criterion.path}`),
+      ],
+    );
+  }
+  if (!run.patch.complete) {
+    return evaluation(
+      criterion,
+      "unknown",
+      `the patch is truncated; '${criterion.path}' may be in the cut tail`,
+      [
+        spec,
+        patchEntryEvidence(
+          run,
+          src,
+          `no block for ${criterion.path} in the stored prefix`,
+        ),
+      ],
+    );
+  }
+  if (run.patchRecord === undefined && run.patchOmissionIndex !== -1) {
+    return evaluation(
+      criterion,
+      "unknown",
+      `the trace records omitted patch content; '${criterion.path}' may ` +
+        `be an omitted change`,
+      [
+        spec,
+        diagnosticEvidence(src, run.patchOmissionIndex),
+        patchEntryEvidence(run, src, `no block for ${criterion.path}`),
+      ],
     );
   }
   return evaluation(
     criterion,
-    "unknown",
-    `the patch is truncated; '${criterion.path}' may be in the cut tail`,
-    [
-      spec,
-      patchEntryEvidence(
-        run,
-        src,
-        `no block for ${criterion.path} in the stored prefix`,
-      ),
-    ],
+    "fail",
+    `the complete patch does not record '${criterion.path}'`,
+    [spec, patchEntryEvidence(run, src, `no block for ${criterion.path}`)],
   );
 }
 
@@ -326,8 +398,8 @@ function resultUnavailable(
     evidence.push(
       resultEntryEvidence(run, src, `result.txt is ${run.resultState}`),
     );
-  else if (run.trace.finalResult !== undefined)
-    evidence.push({ source: src.trace, pointer: "/final_result/status" });
+  else if (run.resultDiagnosticIndex !== -1)
+    evidence.push(diagnosticEvidence(src, run.resultDiagnosticIndex));
   else
     evidence.push(
       resultEntryEvidence(run, src, `result.txt is ${run.resultState}`),
@@ -568,8 +640,9 @@ export function evaluateCriterion(
 /**
  * Enforces the spec-to-run binding (docs/v0.7-scope.md): the spec's
  * `task.digest` must equal the run's recorded task digest, and a declared
- * `baseline.digest` must equal the seeded baseline identity — a criterion is
- * never evaluated against the wrong task or baseline.
+ * `baseline.digest` must equal the seeded run's requested baseline
+ * identity — a criterion is never evaluated against the wrong task or
+ * baseline.
  */
 export function assertSpecBinding(run: EvaluatedRun, spec: TaskSpec): void {
   if (spec.taskDigest !== run.trace.task.digest)
@@ -578,15 +651,16 @@ export function assertSpecBinding(run: EvaluatedRun, spec: TaskSpec): void {
       `the spec's task.digest '${spec.taskDigest}' does not match the run's ` +
         `task.digest '${run.trace.task.digest}'`,
     );
+  const requestedDigest = run.trace.seed?.baseline.requestedDigest;
   if (
     spec.baselineDigest !== undefined &&
-    spec.baselineDigest !== run.trace.baseline?.digest
+    spec.baselineDigest !== requestedDigest
   )
     throw new PflExportError(
       "mismatched-inputs",
       `the spec's baseline.digest '${spec.baselineDigest}' does not match ` +
-        `the run's baseline digest ` +
-        `'${run.trace.baseline?.digest ?? "none recorded"}'`,
+        `the run's requested baseline digest ` +
+        `'${requestedDigest ?? "none recorded"}'`,
     );
 }
 
@@ -601,14 +675,26 @@ export function evaluationRunInput(
     trace: traceInput(run.trace),
     seeded: run.seeded,
     baseline:
-      run.trace.baseline === undefined
+      run.trace.seed === undefined
         ? null
         : {
-            digest: run.trace.baseline.digest,
-            ...(run.trace.baseline.source === undefined
-              ? {}
-              : { source: run.trace.baseline.source }),
+            digest: run.trace.seed.baseline.requestedDigest,
+            materializedDigest: run.trace.seed.baseline.materializedDigest,
+            source: run.trace.seed.source,
+            head: run.trace.seed.head,
           },
+    changes:
+      run.trace.seed?.changes === undefined
+        ? null
+        : {
+            added: run.trace.seed.changes.added,
+            modified: run.trace.seed.changes.modified,
+            deleted: run.trace.seed.changes.deleted,
+          },
+    patchRecord:
+      run.patchRecord === undefined
+        ? null
+        : { base: run.patchRecord.base, state: run.patchRecord.state },
     patchState: run.patchState,
     resultState: run.resultState,
     artifacts: run.entries.map((entry) => ({

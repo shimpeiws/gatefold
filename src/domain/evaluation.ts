@@ -113,8 +113,23 @@ export interface EvaluationRunDescriptor {
   readonly seeded: boolean;
   /** The recorded baseline identity, or null for a legacy run. */
   readonly baseline: {
+    /** The requested baseline digest — the spec's `baseline.digest` binds here. */
     readonly digest: string;
+    /** The materialized baseline digest; identical on any seeded run. */
+    readonly materializedDigest: string;
     readonly source?: string;
+    readonly head?: string;
+  } | null;
+  /** The recorded change-set counts, or null when the trace records none. */
+  readonly changes: {
+    readonly added: number;
+    readonly modified: number;
+    readonly deleted: number;
+  } | null;
+  /** The trace's patch completeness record, or null on older traces. */
+  readonly patchRecord: {
+    readonly base: "empty" | "seeded";
+    readonly state: "complete" | "partial" | "absent";
   } | null;
   readonly patchState: OutputPatchState;
   readonly resultState: FinalResultState;

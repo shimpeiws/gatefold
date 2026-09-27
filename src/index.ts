@@ -127,6 +127,8 @@ export {
   type SeededPatchFile,
 } from "./input/yuurei-seeded-patch.js";
 export {
+  BASELINE_MANIFEST_ARTIFACT_PATH,
+  CHANGES_ARTIFACT_PATH,
   normalizeResultText,
   readEvaluatedRun,
   RESULT_ARTIFACT_PATH,
@@ -160,21 +162,24 @@ export {
   TRACE_SCHEMA_VERSION,
 } from "./input/yuurei-trace.js";
 export type {
+  YuureiPatchBase,
+  YuureiPatchState,
+  YuureiSeedBaseline,
+  YuureiSeedChanges,
   YuureiTrace,
   YuureiTraceArtifact,
-  YuureiTraceBaseline,
   YuureiTraceCost,
   YuureiTraceDefinition,
   YuureiTraceExecution,
   YuureiTraceExecutionOptions,
-  YuureiTraceFinalResult,
-  YuureiFinalResultStatus,
   YuureiTraceIsolation,
   YuureiTraceModel,
+  YuureiTracePatch,
   YuureiTraceProfile,
   YuureiTraceRequestedCell,
   YuureiTraceResolvedReason,
   YuureiTraceRuntime,
+  YuureiTraceSeed,
   YuureiTraceTask,
 } from "./input/yuurei-trace.js";
 export {

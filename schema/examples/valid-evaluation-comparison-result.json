@@ -27,7 +27,7 @@
         "isolationStrategy": "cell",
         "isolationVerified": true,
         "requestedCellDigest": "sha256:cell-seeded",
-        "requestedCellInputsVersion": 1,
+        "requestedCellInputsVersion": 2,
         "executionOptions": {
           "timeout_ms": 600000,
           "runtime": {
@@ -38,7 +38,18 @@
       "seeded": true,
       "baseline": {
         "digest": "sha256:baseline-seeded-1",
-        "source": "seed://fixtures/auth-base"
+        "materializedDigest": "sha256:baseline-seeded-1",
+        "source": "/seed/fixtures/auth-base",
+        "head": "0123456789abcdef0123456789abcdef01234567"
+      },
+      "changes": {
+        "added": 1,
+        "modified": 1,
+        "deleted": 1
+      },
+      "patchRecord": {
+        "base": "seeded",
+        "state": "complete"
       },
       "patchState": "verified",
       "resultState": "verified",
@@ -46,7 +57,7 @@
         {
           "path": "stdout.log",
           "kind": "log",
-          "digest": "sha256:1f67ef347f223a3444db73fd39bdf781312c6bc1f6bd197b6480daf21ca3b888",
+          "digest": "sha256:0ff50b9f0d90e2623e1f27def5c7c553ccafe8023dd208296957bc774f6863cf",
           "state": "unverified"
         },
         {
@@ -58,8 +69,8 @@
         {
           "path": "patch.diff",
           "kind": "patch",
-          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
-          "bytes": 406,
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb",
+          "bytes": 398,
           "state": "verified"
         },
         {
@@ -67,6 +78,20 @@
           "kind": "result",
           "digest": "sha256:b3b2241a2ae8db2bbde000510c4e67d5a8c1516d8b4ee1344c8e1830c9c412d4",
           "bytes": 62,
+          "state": "verified"
+        },
+        {
+          "path": "baseline-manifest.json",
+          "kind": "file",
+          "digest": "sha256:24e3f9a2759727b5adbc5bee94e59daa678b2b22f62cf9b334d42fe0d4f9f66b",
+          "bytes": 897,
+          "state": "verified"
+        },
+        {
+          "path": "changes.json",
+          "kind": "file",
+          "digest": "sha256:7af41c0bfa787a978e0f5e825e77d21b69193594f71bdf11eaa43eb8d0648930",
+          "bytes": 190,
           "state": "verified"
         }
       ]
@@ -94,7 +119,7 @@
         "isolationStrategy": "cell",
         "isolationVerified": true,
         "requestedCellDigest": "sha256:cell-seeded",
-        "requestedCellInputsVersion": 1,
+        "requestedCellInputsVersion": 2,
         "executionOptions": {
           "timeout_ms": 600000,
           "runtime": {
@@ -105,7 +130,18 @@
       "seeded": true,
       "baseline": {
         "digest": "sha256:baseline-seeded-1",
-        "source": "seed://fixtures/auth-base"
+        "materializedDigest": "sha256:baseline-seeded-1",
+        "source": "/seed/fixtures/auth-base",
+        "head": "0123456789abcdef0123456789abcdef01234567"
+      },
+      "changes": {
+        "added": 0,
+        "modified": 1,
+        "deleted": 0
+      },
+      "patchRecord": {
+        "base": "seeded",
+        "state": "complete"
       },
       "patchState": "verified",
       "resultState": "verified",
@@ -113,7 +149,7 @@
         {
           "path": "stdout.log",
           "kind": "log",
-          "digest": "sha256:3240dc098bc9623c810ff93889211e2d073f8c5434ae7d9f1b90e859f903606e",
+          "digest": "sha256:0ff50b9f0d90e2623e1f27def5c7c553ccafe8023dd208296957bc774f6863cf",
           "state": "unverified"
         },
         {
@@ -125,8 +161,8 @@
         {
           "path": "patch.diff",
           "kind": "patch",
-          "digest": "sha256:610e1bee6f2ae285f760d3876bb41a10e5b724e83117ea8dfab38d82a73e58a4",
-          "bytes": 86,
+          "digest": "sha256:1490471d0638072c1ac743b8e42b24b7992bb389c4e26b2b0a9b508b9edfd18e",
+          "bytes": 82,
           "state": "verified"
         },
         {
@@ -134,6 +170,20 @@
           "kind": "result",
           "digest": "sha256:e06984ec27c9dba7a8bfbedff5fd223d0343bd70b695e12f53183f0f7414f446",
           "bytes": 70,
+          "state": "verified"
+        },
+        {
+          "path": "baseline-manifest.json",
+          "kind": "file",
+          "digest": "sha256:24e3f9a2759727b5adbc5bee94e59daa678b2b22f62cf9b334d42fe0d4f9f66b",
+          "bytes": 897,
+          "state": "verified"
+        },
+        {
+          "path": "changes.json",
+          "kind": "file",
+          "digest": "sha256:c33b9a6d8d17e4411f5b9eefdd4437f4913dbca533470795f0626d6021b545a7",
+          "bytes": 142,
           "state": "verified"
         }
       ]
@@ -227,7 +277,7 @@
         {
           "source": "beforePatch",
           "pointer": "/artifacts/2",
-          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb",
           "path": "src/auth.ts",
           "lines": {
             "start": 1,
@@ -235,7 +285,7 @@
           },
           "bytes": {
             "start": 0,
-            "end": 190
+            "end": 186
           }
         },
         {
@@ -267,15 +317,15 @@
         {
           "source": "beforePatch",
           "pointer": "/artifacts/2",
-          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb",
           "path": "test/auth.test.ts",
           "lines": {
             "start": 9,
             "end": 13
           },
           "bytes": {
-            "start": 190,
-            "end": 329
+            "start": 186,
+            "end": 323
           }
         },
         {
@@ -307,15 +357,15 @@
         {
           "source": "beforePatch",
           "pointer": "/artifacts/2",
-          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
+          "digest": "sha256:45b5250a75d7999020267277e5ae76389400857c671eb06e7a444ab48ea035bb",
           "path": "legacy/util.ts",
           "lines": {
             "start": 14,
             "end": 17
           },
           "bytes": {
-            "start": 329,
-            "end": 406
+            "start": 323,
+            "end": 398
           }
         },
         {

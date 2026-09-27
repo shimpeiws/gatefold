@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "policy": "git-tracked-files",
+  "source": "/seed/fixtures/auth-base",
+  "head": "0123456789abcdef0123456789abcdef01234567",
+  "requested_digest": "sha256:baseline-seeded-1",
+  "materialized_digest": "sha256:baseline-seeded-1",
+  "files": {
+    "docs/readme.md": {
+      "digest": "sha256:2b47940d428b0f1fa10a0b479372db1515affd2a17fdf92bac169bc9e94b164a",
+      "mode": 420,
+      "bytes": 16
+    },
+    "legacy/util.ts": {
+      "digest": "sha256:f7d590798a236516434cc8eb97b8e9f956794af48c74a9b699fb5c5d0ee1e9ab",
+      "mode": 420,
+      "bytes": 25
+    },
+    "src/auth.ts": {
+      "digest": "sha256:8d5aa0b669544156da03c2eef043844a08c95c783bb250d1869f84d76b0a4bb0",
+      "mode": 420,
+      "bytes": 64
+    },
+    "src/index.ts": {
+      "digest": "sha256:a3db3a124852e48cc29e33baf2fc517ca38249257b2a4db8df7e4b93d7dccf76",
+      "mode": 420,
+      "bytes": 36
+    }
+  }
+}
