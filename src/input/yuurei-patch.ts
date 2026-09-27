@@ -76,7 +76,10 @@ const NO_NEWLINE = "\\ No newline at end of file";
 function splitLines(
   bytes: Buffer,
   allowTruncatedTail: boolean,
-): { lines: RawLine[]; partialTail: boolean } {
+): {
+  lines: RawLine[];
+  partialTail: boolean;
+} {
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const lines: RawLine[] = [];
   let start = 0;
