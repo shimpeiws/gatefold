@@ -152,6 +152,11 @@ describe("compareRuns", () => {
     expect(summary.claim).toContain("1 changed");
     expect(summary.claim).toContain("recorded only by A");
     expect(summary.claim).toContain("recorded only by B");
+    const rendered = formatRunComparisonHuman(result);
+    expect(rendered).toContain(`digest ${addedPatch.digest}`);
+    expect(rendered).toContain(
+      `bytes ${addedPatch.bytes!.start}-${addedPatch.bytes!.end}`,
+    );
     expectSchemaValid(result);
   });
 
