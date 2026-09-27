@@ -3,7 +3,8 @@
 Gatefold is an evidence-backed judgement layer for coding-agent harnesses.
 It reads a [`pfl`](docs/pfl-export-contract.md) JSON document — a
 `pfl report --json` aggregate, a `pfl export --json` full snapshot, or a
-`pfl diff --json` A → B comparison — and
+`pfl diff --json` A → B comparison — and, since v0.5, a pair of
+[`yuurei`](docs/yuurei-trace-contract.md) `trace.json` run records, and
 emits descriptive claims, each with evidence, provenance, and confidence. It
 does not score or rank harnesses.
 
@@ -19,7 +20,19 @@ pfl diff --json   | gatefold -                 # A → B comparison
 gatefold compare --before a.json --after b.json --diff d.json
                                                # contextual A → B comparison
                                                # across the three documents
+gatefold compare-traces --before a.trace.json --after b.trace.json
+                                               # observed A → B comparison of
+                                               # two yuurei runs (schema v4)
 ```
+
+`compare-traces` compares two yuurei `trace.json` runs only when they
+recorded the same task content and compatible execution conditions; the
+profile/harness variant is allowed to differ — that difference is the
+subject of the comparison. Every claim cites JSON Pointers into the named
+input trace (`beforeTrace`/`afterTrace`). Missing optional fields are
+reported as unknown, `null` as unobserved; neither becomes a zero, a score,
+or a verdict. See [v0.5 scope](docs/v0.5-scope.md) for the comparability and
+result contract.
 
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
 confidence score — see [the claim model](docs/claim-model.md).

@@ -1,5 +1,6 @@
 export { analyze } from "./application/analyze.js";
 export { compareDocuments } from "./application/compare.js";
+export { compareTraces } from "./application/compare-traces.js";
 export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
 export {
   COMPARISON_SCHEMA_VERSION,
@@ -10,6 +11,15 @@ export {
   type ComparisonExportInput,
   type ComparisonResult,
 } from "./domain/comparison.js";
+export {
+  TRACE_COMPARISON_SCHEMA_VERSION,
+  type TraceClaim,
+  type TraceClaimProvenance,
+  type TraceComparisonResult,
+  type TraceEvidenceReference,
+  type TraceEvidenceSource,
+  type TraceInputDescriptor,
+} from "./domain/trace-comparison.js";
 export type {
   AnalysisResult,
   Claim,
@@ -46,5 +56,30 @@ export type {
   PflSnapshotRelation,
   PflSnapshotResolved,
 } from "./input/pfl-export.js";
-export { formatComparisonHuman, formatHuman } from "./output/human.js";
+export {
+  parseYuureiTrace,
+  readYuureiTrace,
+  readYuureiTraceStdin,
+  TRACE_SCHEMA_VERSION,
+} from "./input/yuurei-trace.js";
+export type {
+  YuureiTrace,
+  YuureiTraceArtifact,
+  YuureiTraceCost,
+  YuureiTraceDefinition,
+  YuureiTraceExecution,
+  YuureiTraceExecutionOptions,
+  YuureiTraceIsolation,
+  YuureiTraceModel,
+  YuureiTraceProfile,
+  YuureiTraceRequestedCell,
+  YuureiTraceResolvedReason,
+  YuureiTraceRuntime,
+  YuureiTraceTask,
+} from "./input/yuurei-trace.js";
+export {
+  formatComparisonHuman,
+  formatHuman,
+  formatTraceComparisonHuman,
+} from "./output/human.js";
 export { formatJson } from "./output/json.js";

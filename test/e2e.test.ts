@@ -341,10 +341,14 @@ describe("gatefold e2e (real process)", () => {
       "docs/release-checklist.md",
       "docs/v0.3-scope.md",
       "docs/v0.4-scope.md",
+      "docs/v0.5-scope.md",
+      "docs/yuurei-trace-contract.md",
       "schema/claim-result.v1.json",
       "schema/claim-result.v2.json",
       "schema/claim-result.v3.json",
+      "schema/claim-result.v4.json",
       "schema/examples/valid-comparison-result.json",
+      "schema/examples/valid-trace-comparison-result.json",
       "README.md",
       "package.json",
     ]) {
@@ -873,6 +877,23 @@ describe("gatefold e2e (real process)", () => {
           JSON.stringify(validateComparison.errors),
         ).toBe(true);
         expect(comparison.claims.length).toBeGreaterThan(0);
+        const compareTraces = await installed([
+          "compare-traces",
+          "--before",
+          traceFixture("a.json"),
+          "--after",
+          traceFixture("b.json"),
+          "--format",
+          "json",
+        ]);
+        expect(compareTraces.code, compareTraces.stderr).toBe(0);
+        const traceResult = JSON.parse(compareTraces.stdout);
+        expect(
+          validateTraceComparison(traceResult),
+          JSON.stringify(validateTraceComparison.errors),
+        ).toBe(true);
+        expect(traceResult.schemaVersion).toBe(4);
+        expect(traceResult.claims.length).toBeGreaterThan(0);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -900,6 +921,13 @@ const compareSchema = JSON.parse(
 const validateComparison = new Ajv2020().compile(compareSchema);
 const compareFixture = (name: string): string =>
   `${root}test/fixtures/compare/${name}`;
+
+const traceSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v4.json`, "utf8"),
+);
+const validateTraceComparison = new Ajv2020().compile(traceSchema);
+const traceFixture = (name: string): string =>
+  `${root}test/fixtures/compare-traces/${name}`;
 
 describe("gatefold compare e2e (real process)", () => {
   const before = compareFixture("before.json");
@@ -1106,5 +1134,252 @@ describe("gatefold compare e2e (real process)", () => {
         claim.claim.includes("may be unobserved"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("gatefold compare-traces e2e (real process)", () => {
+  const a = traceFixture("a.json");
+  const b = traceFixture("b.json");
+
+  it("accepts a comparable pair and emits schema v4 JSON", async () => {
+    const run = await gatefold([
+      "compare-traces",
+      "--before",
+      a,
+      "--after",
+      b,
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stderr).toBe("");
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateTraceComparison(result),
+      JSON.stringify(validateTraceComparison.errors),
+    ).toBe(true);
+    expect(result.schemaVersion).toBe(4);
+    expect(result.source.command).toBe("compare-traces");
+    expect(result.inputs.beforeTrace.label).toBe(a);
+    expect(result.inputs.afterTrace.label).toBe(b);
+    expect(result.inputs.beforeTrace.document).toBe("yuurei-trace");
+    const rules = result.claims.map(
+      (claim: { ruleId: string }) => claim.ruleId,
+    );
+    for (const ruleId of [
+      "trace-inputs",
+      "trace-profiles",
+      "trace-runtime",
+      "trace-model",
+      "trace-execution",
+      "trace-duration",
+      "trace-usage",
+      "trace-cost",
+    ])
+      expect(rules).toContain(ruleId);
+  });
+
+  it("emits human output with per-trace evidence sources", async () => {
+    const run = await gatefold(["compare-traces", "--before", a, "--after", b]);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("beforeTrace:/run_id");
+    expect(run.stdout).toContain("afterTrace:/run_id");
+    expect(run.stdout).toContain("not answer quality");
+  });
+
+  it("reads one trace from stdin and labels it <stdin>", async () => {
+    const run = await gatefoldWithStdin(
+      ["compare-traces", "--before", "-", "--after", b, "--format", "json"],
+      readFileSync(a),
+    );
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.beforeTrace.label).toBe("<stdin>");
+    expect(result.inputs.afterTrace.label).toBe(b);
+  });
+
+  it("rejects a task-mismatched pair with exit 3 before claims", async () => {
+    const run = await gatefold([
+      "compare-traces",
+      "--before",
+      a,
+      "--after",
+      traceFixture("b-task-mismatch.json"),
+    ]);
+    expect(run.code).toBe(3);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("task.digest");
+  });
+
+  it("rejects malformed and wrong-kind inputs with exit 3", async () => {
+    const malformed = await gatefold([
+      "compare-traces",
+      "--before",
+      `${root}test/fixtures/yuurei-trace/malformed.json`,
+      "--after",
+      b,
+    ]);
+    expect(malformed.code).toBe(3);
+    expect(malformed.stderr).toContain("not valid JSON");
+    const wrongKind = await gatefold([
+      "compare-traces",
+      "--before",
+      fixture("valid-report.json"),
+      "--after",
+      b,
+    ]);
+    expect(wrongKind.code).toBe(3);
+    expect(wrongKind.stderr).toContain("yuurei trace");
+    const wrongVersion = await gatefold([
+      "compare-traces",
+      "--before",
+      `${root}test/fixtures/yuurei-trace/wrong-schema-version.json`,
+      "--after",
+      b,
+    ]);
+    expect(wrongVersion.code).toBe(3);
+    expect(wrongVersion.stderr).toContain("schema_version");
+  });
+
+  it("rejects compare-traces usage errors with exit 2", async () => {
+    for (const args of [
+      ["compare-traces"],
+      ["compare-traces", "--before", a],
+      ["compare-traces", "--before", "-", "--after", "-"],
+      ["compare-traces", "--before", a, "--after", b, "extra.json"],
+      ["compare-traces", "--before", a, "--after", b, "--diff", a],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+    }
+  });
+
+  it("emits caveats rather than failing on observed drift", async () => {
+    const run = await gatefold([
+      "compare-traces",
+      "--before",
+      a,
+      "--after",
+      traceFixture("b-drift.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    const caveats = result.claims.filter(
+      (claim: { ruleId: string }) => claim.ruleId === "trace-comparability",
+    );
+    expect(caveats.length).toBe(4);
+  });
+
+  it("accepts an older trace shape with missing optional fields", async () => {
+    const run = await gatefold([
+      "compare-traces",
+      "--before",
+      traceFixture("a-older.json"),
+      "--after",
+      b,
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateTraceComparison(result)).toBe(true);
+    expect(result.inputs.beforeTrace.yuureiVersion).toBeUndefined();
+    expect(result.inputs.beforeTrace.executionOptions).toBeUndefined();
+  });
+
+  it("produces byte-identical output across runs for the same pair", async () => {
+    const args = [
+      "compare-traces",
+      "--before",
+      a,
+      "--after",
+      b,
+      "--format",
+      "json",
+    ];
+    const first = await gatefold(args);
+    const second = await gatefold(args);
+    expect(first.code).toBe(0);
+    expect(first.stdout).toBe(second.stdout);
+  });
+
+  it("resolves every emitted evidence pointer in the named trace", async () => {
+    const run = await gatefold([
+      "compare-traces",
+      "--before",
+      a,
+      "--after",
+      b,
+      "--format",
+      "json",
+    ]);
+    expect(run.code).toBe(0);
+    const result = JSON.parse(run.stdout);
+    const documents = {
+      beforeTrace: JSON.parse(readFileSync(a, "utf8")),
+      afterTrace: JSON.parse(readFileSync(b, "utf8")),
+    };
+    const resolve = (document: unknown, pointer: string): void => {
+      let current: unknown = document;
+      for (const raw of pointer.split("/").slice(1)) {
+        const segment = raw.replace(/~1/g, "/").replace(/~0/g, "~");
+        if (Array.isArray(current)) current = current[Number(segment)];
+        else if (current !== null && typeof current === "object")
+          current = (current as Record<string, unknown>)[segment];
+        else throw new Error(`pointer ${pointer} crosses a scalar`);
+      }
+      return undefined;
+    };
+    let resolved = 0;
+    for (const claim of result.claims)
+      for (const evidence of claim.evidence) {
+        expect(evidence.pointer).toMatch(/^(\/|$)/);
+        resolve(
+          documents[evidence.source as keyof typeof documents],
+          evidence.pointer,
+        );
+        resolved += 1;
+      }
+    expect(resolved).toBeGreaterThan(0);
+  });
+
+  it("never emits raw control characters in trace comparison output", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-trace-e2e-"));
+    try {
+      const hostile = JSON.parse(readFileSync(b, "utf8"));
+      hostile.diagnostics = ["bad\u001b[31m char\u200binside"];
+      hostile.task.source = "src\u202eevil";
+      const path = join(dir, "hostile.json");
+      writeFileSync(path, JSON.stringify(hostile));
+      const unsafe =
+        /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+      const human = await gatefold([
+        "compare-traces",
+        "--before",
+        a,
+        "--after",
+        path,
+      ]);
+      expect(human.code).toBe(0);
+      expect(human.stdout).not.toMatch(unsafe);
+      const json = await gatefold([
+        "compare-traces",
+        "--before",
+        a,
+        "--after",
+        path,
+        "--format",
+        "json",
+      ]);
+      const result = JSON.parse(json.stdout);
+      for (const claim of result.claims)
+        expect(claim.claim).not.toMatch(unsafe);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
