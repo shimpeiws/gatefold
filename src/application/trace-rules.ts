@@ -42,16 +42,51 @@ function claim(
 
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 
+/**
+ * The shortest representation of a number that never uses exponent notation,
+ * so a claim can quote a small measurement as a decimal.
+ */
+function plainNumber(value: number): string {
+  const shortest = String(value);
+  if (!shortest.includes("e") && !shortest.includes("E")) return shortest;
+  if (!Number.isFinite(value) || Math.abs(value) >= 1e21) return shortest;
+  const fixed = value.toFixed(20).replace(/0+$/, "").replace(/\.$/, "");
+  if (fixed === "" || fixed === "-" || Number(fixed) === 0) return shortest;
+  return fixed;
+}
+
+/**
+ * Renders a recorded number. Grouping is a display convenience, so it is used
+ * only when it leaves the recorded value unchanged: the formatter's default
+ * three-fraction-digit limit would otherwise quote a different number than
+ * the evidence points at. Fractional measurements keep their recorded digits.
+ */
 function formatNumber(value: number): string {
-  return NUMBER_FORMAT.format(value);
+  const plain = plainNumber(value);
+  const grouped = NUMBER_FORMAT.format(value);
+  return grouped.replace(/,/g, "") === plain ? grouped : plain;
+}
+
+/**
+ * Renders a computed difference. Double-precision noise is dropped, but a
+ * nonzero difference is never rendered as zero.
+ */
+function formatNumberDelta(value: number): string {
+  if (value === 0) return "0";
+  const cleaned = Number(value.toPrecision(15));
+  return formatNumber(cleaned === 0 ? value : cleaned);
 }
 
 /**
  * A cost delta is an estimate displayed to at most six decimal places, so
- * binary floating-point tails never reach the claim text.
+ * binary floating-point tails never reach the claim text. A nonzero
+ * difference below that threshold keeps its precision rather than being
+ * rounded to zero.
  */
 function formatCostDelta(value: number): string {
-  return String(Number.isInteger(value) ? value : Number(value.toFixed(6)));
+  if (value === 0 || Number.isInteger(value)) return String(value);
+  const rounded = Number(value.toFixed(6));
+  return rounded === 0 ? plainNumber(value) : String(rounded);
 }
 
 /** Escapes one usage key as an RFC 6901 pointer segment. */
@@ -61,7 +96,9 @@ function pointerSegment(key: string): string {
 
 /**
  * The recorded outcome of one side's `execution` object as a phrase:
- * timeout, then exit code or signal as recorded. Null fields are stated as
+ * timeout, then exit code and signal as recorded. A recorded signal is
+ * reported even when an exit code is present, and the missing-exit-code
+ * phrase is reserved for a run with neither. Null fields are stated as
  * unobserved, never as zero or failure.
  */
 function executionOutcome(trace: YuureiTrace, side: "A" | "B"): string {
@@ -69,9 +106,10 @@ function executionOutcome(trace: YuureiTrace, side: "A" | "B"): string {
   const parts: string[] = [];
   if (execution.timedOut) parts.push("timed out");
   if (execution.exitCode !== null) parts.push(`exited ${execution.exitCode}`);
-  else if (execution.signal !== null)
+  if (execution.signal !== null)
     parts.push(`terminated with signal '${execution.signal}'`);
-  else parts.push("recorded no exit code");
+  if (execution.exitCode === null && execution.signal === null)
+    parts.push("recorded no exit code");
   return `run ${side} ${parts.join(" and ")}`;
 }
 
@@ -172,8 +210,11 @@ export const TRACE_RULES: readonly TraceRule[] = [
         text +=
           ` The requested-cell digests differ ` +
           `('${before.requestedCell.digest}' vs ` +
-          `'${after.requestedCell.digest}'), consistent with the differing ` +
-          `profile contents.`;
+          `'${after.requestedCell.digest}')` +
+          (before.profile.digest === after.profile.digest
+            ? `, though the profile contents are identical, so the profile ` +
+              `difference does not explain it.`
+            : `, consistent with the differing profile contents.`);
       const evidence: TraceEvidenceReference[] = [
         { source: "beforeTrace", pointer: "/profile/name" },
         { source: "beforeTrace", pointer: "/profile/digest" },
@@ -198,7 +239,7 @@ export const TRACE_RULES: readonly TraceRule[] = [
       const { before, after } = view;
       const side = (trace: YuureiTrace, name: "A" | "B") =>
         trace.runtime.version === null
-          ? `run ${name} did not record a runtime version`
+          ? `run ${name} recorded the runtime version as unobserved`
           : `run ${name} recorded runtime version '${trace.runtime.version}'`;
       const text =
         `Both runs recorded runtime '${before.runtime.id}': ` +
@@ -228,7 +269,10 @@ export const TRACE_RULES: readonly TraceRule[] = [
           return `run ${name} resolved to '${trace.model.resolved}'`;
         const reason = trace.model.resolvedReason;
         if (reason === undefined)
-          return `run ${name} did not record the resolved model`;
+          return (
+            `run ${name} did not observe the effective model ` +
+            `(recorded resolved as null)`
+          );
         return (
           `run ${name} did not observe the effective model ` +
           `(resolved_reason '${reason}')`
@@ -290,7 +334,7 @@ export const TRACE_RULES: readonly TraceRule[] = [
         text =
           `Run A recorded a duration of ${formatNumber(a)} ms and run B ` +
           `${formatNumber(b)} ms, a recorded difference of ` +
-          `${formatNumber(b - a)} ms.`;
+          `${formatNumberDelta(b - a)} ms.`;
       else if (a === null && b === null)
         text = `Neither run recorded a duration; no difference is computed.`;
       else
@@ -335,7 +379,7 @@ export const TRACE_RULES: readonly TraceRule[] = [
               "trace-usage",
               `Run A recorded ${formatNumber(a)} for ${keyText}; run B ` +
                 `recorded ${formatNumber(b)} (a recorded difference of ` +
-                `${formatNumber(b - a)}).`,
+                `${formatNumberDelta(b - a)}).`,
               [aPointer, bPointer],
             ),
           );
@@ -430,20 +474,20 @@ export const TRACE_RULES: readonly TraceRule[] = [
         const absentSide = before.cost === null ? "A" : "B";
         text =
           `Run ${presentSide} recorded an estimated cost of ` +
-          `${present!.amount} ${present!.currency}; run ${absentSide} ` +
+          `${plainNumber(present!.amount)} ${present!.currency}; run ${absentSide} ` +
           `produced no cost estimate, so no difference is computed.`;
       } else if (before.cost.currency === after.cost.currency)
         text =
-          `Run A recorded an estimated cost of ${before.cost.amount} ` +
+          `Run A recorded an estimated cost of ${plainNumber(before.cost.amount)} ` +
           `${before.cost.currency} and run B an estimated ` +
-          `${after.cost.amount} ${after.cost.currency} (a recorded ` +
+          `${plainNumber(after.cost.amount)} ${after.cost.currency} (a recorded ` +
           `difference of ${formatCostDelta(after.cost.amount - before.cost.amount)} ` +
           `${before.cost.currency}). Both amounts are estimates.`;
       else
         text =
-          `Run A recorded an estimated cost of ${before.cost.amount} ` +
+          `Run A recorded an estimated cost of ${plainNumber(before.cost.amount)} ` +
           `${before.cost.currency} and run B an estimated ` +
-          `${after.cost.amount} ${after.cost.currency}; the currencies ` +
+          `${plainNumber(after.cost.amount)} ${after.cost.currency}; the currencies ` +
           `differ, so the two estimates are reported separately with no ` +
           `numeric difference.`;
       return [claim("trace-cost", text, evidence)];

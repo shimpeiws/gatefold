@@ -567,3 +567,83 @@ describe("gatefold compare-traces CLI", () => {
     });
   });
 });
+
+describe("gatefold compare-traces review regressions", () => {
+  it("quotes fractional usage values and their difference without rounding to zero", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    before.usage = { latency: 0.0004 };
+    after.usage = { latency: 0.0008 };
+    const [usage] = claimsOf(compareDocs(before, after), "trace-usage");
+    expect(usage.claim).toContain("0.0004");
+    expect(usage.claim).toContain("0.0008");
+    expect(usage.claim).toContain("difference of 0.0004");
+    expect(usage.claim).not.toContain("recorded 0 for");
+  });
+
+  it("keeps a nonzero estimated cost difference below the six-decimal threshold", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    before.cost = { amount: 0.0000001, currency: "USD" };
+    after.cost = { amount: 0.0000002, currency: "USD" };
+    const [cost] = claimsOf(compareDocs(before, after), "trace-cost");
+    expect(cost.claim).toContain("0.0000001 USD");
+    expect(cost.claim).toContain("0.0000002 USD");
+    expect(cost.claim).toContain("difference of 0.0000001 USD");
+  });
+
+  it("does not explain a requested-cell digest difference by identical profiles", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    after.profile = { ...before.profile };
+    after.requested_cell = { ...after.requested_cell, digest: "sha256:cell-z" };
+    const [profile] = claimsOf(compareDocs(before, after), "trace-profiles");
+    expect(profile.claim).toContain("requested-cell digests differ");
+    expect(profile.claim).toContain("profile contents are identical");
+    expect(profile.claim).not.toContain(
+      "consistent with the differing profile contents",
+    );
+  });
+
+  it("attributes a requested-cell digest difference to differing profiles", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    const [profile] = claimsOf(compareDocs(before, after), "trace-profiles");
+    expect(profile.claim).toContain(
+      "consistent with the differing profile contents",
+    );
+  });
+
+  it("reports a recorded signal beside a recorded exit code", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    after.execution = {
+      exit_code: 137,
+      signal: "SIGKILL",
+      duration_ms: 41800,
+      timed_out: true,
+    };
+    const [execution] = claimsOf(compareDocs(before, after), "trace-execution");
+    expect(execution.claim).toContain("exited 137");
+    expect(execution.claim).toContain("'SIGKILL'");
+    expect(execution.claim).toContain("timed out");
+    expect(execution.claim).not.toContain("recorded no exit code");
+  });
+
+  it("describes null resolved models and null runtime versions as unobserved", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    delete after.model.resolved_reason;
+    after.model.resolved = null;
+    after.runtime = { id: "claude-code", version: null };
+    const result = compareDocs(before, after);
+    const [model] = claimsOf(result, "trace-model");
+    const [runtime] = claimsOf(result, "trace-runtime");
+    expect(model.claim).toContain("did not observe the effective model");
+    expect(model.claim).not.toContain("did not record");
+    expect(runtime.claim).toContain(
+      "recorded the runtime version as unobserved",
+    );
+    expect(runtime.claim).not.toContain("did not record");
+  });
+});
