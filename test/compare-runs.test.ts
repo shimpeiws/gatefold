@@ -1,4 +1,13 @@
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
@@ -238,6 +247,40 @@ describe("compareRuns", () => {
     expect(() => compareRuns({ before, after: incompatible })).toThrowError(
       /task\.digest/,
     );
+  });
+
+  it("reports a trailing-newline-only difference explicitly", async () => {
+    const base = mkdtempSync(join(tmpdir(), "gatefold-runs-"));
+    try {
+      const trace = readFileSync(`${fixture("run-a")}/trace.json`, "utf8");
+      const make = async (name: string, patch: string) => {
+        const runDir = join(base, name);
+        mkdirSync(runDir);
+        writeFileSync(join(runDir, "trace.json"), trace);
+        writeFileSync(join(runDir, "patch.diff"), patch);
+        const digest = `sha256:${createHash("sha256").update(patch).digest("hex")}`;
+        writeFileSync(
+          join(runDir, "artifacts.json"),
+          JSON.stringify({
+            artifacts: [{ path: "patch.diff", kind: "patch", digest }],
+          }),
+        );
+        return readYuureiRun(runDir);
+      };
+      const withNewline = "--- /dev/null\n+++ f.txt\n@@ -0,0 +1,1 @@\n+x\n";
+      const withoutNewline = `${withNewline}\\ No newline at end of file\n`;
+      const result = compareRuns({
+        before: await make("a", withNewline),
+        after: await make("b", withoutNewline),
+      });
+      const changed = claimsByRule(result, "run-file-changed");
+      expect(changed).toHaveLength(1);
+      expect(changed[0].claim).toContain("trailing-newline");
+      expect(changed[0].claim).toContain("f.txt");
+      expectSchemaValid(result);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   it("is deterministic across repeated runs", async () => {

@@ -195,24 +195,30 @@ describe("readYuureiRun", () => {
     }
   });
 
-  it.each(["../escape", "a/../b", "/absolute", "C:\\win", ".", "a//b", ""])(
-    "rejects the unconfined manifest path %j",
-    async (path) => {
-      const base = tmp();
-      try {
-        const runDir = writeRun(base, {
-          manifest: {
-            artifacts: [{ path, kind: "patch", digest: sha256("") }],
-          },
-        });
-        await expect(readYuureiRun(runDir)).rejects.toMatchObject({
-          code: "invalid-shape",
-        });
-      } finally {
-        rmSync(base, { recursive: true, force: true });
-      }
-    },
-  );
+  it.each([
+    "../escape",
+    "a/../b",
+    "/absolute",
+    "C:\\win",
+    ".",
+    "a//b",
+    "",
+    "a\0b",
+  ])("rejects the unconfined manifest path %j", async (path) => {
+    const base = tmp();
+    try {
+      const runDir = writeRun(base, {
+        manifest: {
+          artifacts: [{ path, kind: "patch", digest: sha256("") }],
+        },
+      });
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
 
   it("rejects a patch.diff symlink that escapes the run directory", async () => {
     const base = tmp();
@@ -270,6 +276,49 @@ describe("readYuureiRun", () => {
       expect(run.patchState).toBe("digest-mismatch");
       expect(run.patch).toBeNull();
       expect(run.entries[0].bytes).toBeGreaterThan(0);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a manifest with more entries than the ceiling", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeRun(base, {
+        manifest: {
+          artifacts: Array.from({ length: 10_001 }, (_unused, index) => ({
+            path: `f${index}`,
+            kind: "file",
+            digest: sha256(""),
+          })),
+        },
+      });
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("marks a verified patch with duplicate file paths as malformed", async () => {
+    const base = tmp();
+    try {
+      const patch =
+        "--- /dev/null\n+++ a.txt\n@@ -0,0 +1,1 @@\n+x\n" +
+        "--- /dev/null\n+++ a.txt\n@@ -0,0 +1,1 @@\n+y\n";
+      const runDir = writeRun(base, {
+        patch,
+        manifest: {
+          artifacts: [
+            { path: "patch.diff", kind: "patch", digest: sha256(patch) },
+          ],
+        },
+      });
+      const run = await readYuureiRun(runDir);
+      expect(run.patchState).toBe("malformed");
+      expect(run.patch).toBeNull();
+      expect(run.entries[0].state).toBe("verified");
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

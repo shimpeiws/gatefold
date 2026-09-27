@@ -504,27 +504,32 @@ export const RUN_RULES: readonly RunRule[] = [
       );
       return diff.changed.map(({ file, before, after }) => {
         const region = diffRegion(before.lines, after.lines);
-        return claim(
-          "run-file-changed",
-          `Both runs' patches record '${file.path}' but the generated ` +
+        const linesIdentical =
+          before.lines.length === after.lines.length &&
+          before.lines.every((line, index) => line === after.lines[index]);
+        const text = linesIdentical
+          ? `Both runs' patches record '${file.path}' with identical ` +
+            `lines; only the trailing-newline marker differs (run ` +
+            `${before.trailingNewline ? "B's" : "A's"} record carries none ` +
+            `on the file's last line).`
+          : `Both runs' patches record '${file.path}' but the generated ` +
             `content differs: run A records ` +
             `${plural(before.lines.length, "line")}, run B records ` +
-            `${plural(after.lines.length, "line")}.`,
-          [
-            fileEvidence(
-              view.before,
-              "beforePatch",
-              before,
-              regionRange(before, region.aStart, region.aEnd),
-            ),
-            fileEvidence(
-              view.after,
-              "afterPatch",
-              after,
-              regionRange(after, region.bStart, region.bEnd),
-            ),
-          ],
-        );
+            `${plural(after.lines.length, "line")}.`;
+        return claim("run-file-changed", text, [
+          fileEvidence(
+            view.before,
+            "beforePatch",
+            before,
+            regionRange(before, region.aStart, region.aEnd),
+          ),
+          fileEvidence(
+            view.after,
+            "afterPatch",
+            after,
+            regionRange(after, region.bStart, region.bEnd),
+          ),
+        ]);
       });
     },
   },

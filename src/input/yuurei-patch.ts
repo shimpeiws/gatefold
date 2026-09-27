@@ -118,6 +118,7 @@ export function parsePatchDiff(
 ): ParsedPatch {
   const { lines, partialTail } = splitLines(bytes);
   const files: PatchFile[] = [];
+  const seenPaths = new Set<string>();
 
   const fail = (message: string): never => {
     if (options.allowTruncatedTail) throw new CutTail();
@@ -144,6 +145,14 @@ export function parsePatchDiff(
       const path = lines[pos].text.slice(4);
       if (path.length === 0)
         fail(`empty path in the '+++' header at patch line ${pos + 1}`);
+      // A well-formed yuurei patch records each workspace path exactly once;
+      // a duplicate is a grammar violation, not a cut tail, so it stays a
+      // hard error even when truncation is allowed.
+      if (seenPaths.has(path))
+        throw new PatchParseError(
+          `duplicate '+++' path '${path}' at patch line ${pos + 1}`,
+        );
+      seenPaths.add(path);
       pos += 1;
 
       const content: PatchContentLine[] = [];

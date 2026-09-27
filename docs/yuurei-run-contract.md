@@ -139,7 +139,10 @@ When the manifest records `truncated: true`, an incomplete final block is
 accepted: the complete prefix is parsed and the cut tail is reported as
 unknown. When the entry is not marked truncated, bytes that violate the
 grammar make the patch `malformed`: verified bytes that Gatefold cannot
-interpret, so no file-level claims are emitted from it.
+interpret, so no file-level claims are emitted from it. A well-formed yuurei
+patch records each workspace path exactly once; a patch that repeats a
+`+++` path is `malformed` under either truncation marking — the duplicate is
+a grammar violation, not a cut tail.
 
 ## Evidence locations
 
