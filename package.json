@@ -36,7 +36,7 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "format:check": "oxfmt src/input/yuurei-patch.ts test/patch-parse.test.ts && git diff -- src/input/yuurei-patch.ts test/patch-parse.test.ts",
+    "format:check": "oxfmt --check .",
     "lint": "oxlint .",
     "test": "vitest",
     "typecheck": "tsc --noEmit --project tsconfig.json",
