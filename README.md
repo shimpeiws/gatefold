@@ -16,6 +16,9 @@ gatefold <input.json> --min-confidence 0.8     # drop claims below the threshold
 pfl report --json | gatefold -                 # read a document from stdin
 pfl export --json | gatefold -                 # full snapshot: elements, relations, findings
 pfl diff --json   | gatefold -                 # A → B comparison
+gatefold compare --before a.json --after b.json --diff d.json
+                                               # contextual A → B comparison
+                                               # across the three documents
 ```
 
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
@@ -39,6 +42,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.1 scope and acceptance criteria](docs/v0.1-scope.md)
 - [v0.2 scope and acceptance criteria](docs/v0.2-scope.md)
 - [v0.3 scope and input contract](docs/v0.3-scope.md)
+- [v0.4 scope and comparison contract](docs/v0.4-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [pfl export contract](docs/pfl-export-contract.md)

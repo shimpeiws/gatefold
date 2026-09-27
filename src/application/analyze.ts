@@ -5,11 +5,8 @@ import { PflExportError } from "../input/pfl-export.js";
 import type { PflDocument } from "../input/pfl-export.js";
 import { DIFF_RULES } from "./diff-rules.js";
 import { EXPORT_RULES } from "./export-rules.js";
+import { MAX_EMITTED_CLAIMS, MAX_EVIDENCE_REFERENCES } from "./limits.js";
 import { RULES } from "./rules.js";
-
-/** Output amplification ceilings (docs/v0.3-scope.md). */
-const MAX_EMITTED_CLAIMS = 50_000;
-const MAX_EVIDENCE_REFERENCES = 100_000;
 
 export function analyze(input: PflDocument): AnalysisResult {
   const claims =

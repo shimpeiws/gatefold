@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 3,
+  "source": { "command": "compare" },
+  "inputs": {
+    "before": {
+      "label": "export-a.json",
+      "command": "export",
+      "pflVersion": "1.4.0",
+      "observedSnapshotId": "obs-aaa",
+      "resolvedSnapshotId": "res-aaa",
+      "completeness": "complete",
+      "runtimeVersion": "2.0.0",
+      "semanticsVersion": "1.0.0",
+      "classifierVersion": "1.0.0",
+      "interpretationOrigin": "stored"
+    },
+    "after": {
+      "label": "export-b.json",
+      "command": "export",
+      "pflVersion": "1.4.0",
+      "observedSnapshotId": "obs-bbb",
+      "resolvedSnapshotId": "res-bbb",
+      "completeness": "complete",
+      "runtimeVersion": "2.0.0",
+      "semanticsVersion": "1.0.0",
+      "classifierVersion": "1.0.0",
+      "interpretationOrigin": "stored"
+    },
+    "diff": {
+      "label": "diff.json",
+      "command": "diff",
+      "pflVersion": "1.4.0",
+      "observedSnapshotIdA": "obs-aaa",
+      "observedSnapshotIdB": "obs-bbb",
+      "resolvedSnapshotIdA": "res-aaa",
+      "resolvedSnapshotIdB": "res-bbb",
+      "completeness": "complete",
+      "classifierVersionA": "1.0.0",
+      "classifierVersionB": "1.0.0",
+      "interpretationOriginA": "stored",
+      "interpretationOriginB": "stored"
+    }
+  },
+  "claims": [
+    {
+      "claim": "The diff lists element 'el-added' as added between A and B; in B it is observed as kind 'markdown' from origin 'project' with observed status 'observed'; it resolves as 'effective' (potentially effective in the static environment, not evidence that an agent used it) with activation 'always'; the classifier assigns facets 'instructions' (confidence 'high').",
+      "ruleId": "compare-element-added",
+      "evidence": [
+        {
+          "source": "after",
+          "pointer": "/data/elements/0/id",
+          "elementId": "el-added"
+        },
+        {
+          "source": "after",
+          "pointer": "/data/elements/0/resolved/status",
+          "elementId": "el-added"
+        },
+        {
+          "source": "diff",
+          "pointer": "/data/structural/addedIds/0",
+          "elementId": "el-added"
+        }
+      ],
+      "provenance": {
+        "transform": ["compare-reconcile", "rule:compare-element-added"]
+      },
+      "confidence": 1
+    }
+  ]
+}

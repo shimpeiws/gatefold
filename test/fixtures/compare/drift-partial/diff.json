@@ -1,0 +1,53 @@
+{
+  "pflVersion": "1.5.0",
+  "command": "diff",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "runtime": "claude-code",
+    "observedSnapshotIdA": "obs-drift-a",
+    "observedSnapshotIdB": "obs-drift-b",
+    "resolvedSnapshotIdA": "res-drift-a",
+    "resolvedSnapshotIdB": "res-drift-b",
+    "structural": {
+      "added": 0,
+      "removed": 0,
+      "changed": 0,
+      "addedIds": [],
+      "removedIds": [],
+      "changedIds": []
+    },
+    "effective": {
+      "newlyEffective": 0,
+      "noLongerEffective": 1,
+      "activationChanged": 0,
+      "statusChanges": [
+        { "id": "el-x", "from": "effective", "to": "shadowed" }
+      ]
+    },
+    "facetDeltas": {},
+    "relations": { "added": [], "removed": [] },
+    "findings": {
+      "added": [
+        {
+          "rule": "shadowed-instructions",
+          "message": "instruction element is shadowed by a higher-precedence element",
+          "elementIds": ["el-x"]
+        }
+      ],
+      "removed": [
+        {
+          "rule": "shadowed-instructions",
+          "message": "instruction element shadowed by higher precedence",
+          "elementIds": ["el-x"]
+        }
+      ]
+    },
+    "versionNotes": ["classifier updated to 1.1.0"],
+    "interpretation": {
+      "a": { "classifierVersion": "1.0.0", "origin": "stored" },
+      "b": { "classifierVersion": "1.1.0", "origin": "recomputed" }
+    }
+  }
+}

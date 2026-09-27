@@ -1,0 +1,75 @@
+{
+  "pflVersion": "1.4.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": { "id": "proj-compare", "displayName": "Compare Fixture" },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.0.0",
+      "adapter": {
+        "id": "claude-code-adapter",
+        "version": "1.0.0",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs-rel-b",
+      "resolvedSnapshotId": "res-rel-b",
+      "capturedAt": "2026-09-27T00:00:00Z",
+      "schemaVersion": "1"
+    },
+    "resolution": { "semanticsVersion": "1.0.0", "confidence": "verified" },
+    "elements": [
+      {
+        "id": "el-a",
+        "observed": {
+          "id": "el-a",
+          "native": { "kind": "markdown", "origin": "project", "scope": null },
+          "source": { "path": "docs/a.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el-a",
+          "status": "effective",
+          "activation": "always",
+          "resolution": { "strategy": "override" }
+        },
+        "interpretation": {
+          "elementId": "el-a",
+          "facets": ["instructions"],
+          "confidence": "high",
+          "reason": "matched instruction pattern"
+        }
+      },
+      {
+        "id": "el-b",
+        "observed": {
+          "id": "el-b",
+          "native": { "kind": "markdown", "origin": "user", "scope": null },
+          "source": { "path": "docs/b.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el-b",
+          "status": "effective",
+          "activation": "always",
+          "resolution": { "strategy": "available" }
+        },
+        "interpretation": null
+      }
+    ],
+    "relations": [{ "type": "shadows", "from": "el-a", "to": "el-b" }],
+    "findings": [],
+    "interpretation": {
+      "classifier": { "id": "pfl-classifier", "version": "1.0.0" },
+      "origin": "stored"
+    }
+  }
+}

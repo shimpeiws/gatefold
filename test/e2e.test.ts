@@ -340,8 +340,11 @@ describe("gatefold e2e (real process)", () => {
       "docs/overview.md",
       "docs/release-checklist.md",
       "docs/v0.3-scope.md",
+      "docs/v0.4-scope.md",
       "schema/claim-result.v1.json",
       "schema/claim-result.v2.json",
+      "schema/claim-result.v3.json",
+      "schema/examples/valid-comparison-result.json",
       "README.md",
       "package.json",
     ]) {
@@ -781,7 +784,7 @@ describe("gatefold e2e (real process)", () => {
   });
 
   it(
-    "installed tarball smoke: pack, install to a prefix, and run all three commands",
+    "installed tarball smoke: pack, install to a prefix, and run all commands including compare",
     { timeout: 180_000 },
     async () => {
       const dir = mkdtempSync(join(tmpdir(), "gatefold-pack-"));
@@ -852,6 +855,24 @@ describe("gatefold e2e (real process)", () => {
           expect(validate(result), fixtureName).toBe(true);
           expect(result.claims.length, fixtureName).toBeGreaterThan(0);
         }
+        const compare = await installed([
+          "compare",
+          "--before",
+          compareFixture("before.json"),
+          "--after",
+          compareFixture("after.json"),
+          "--diff",
+          compareFixture("diff.json"),
+          "--format",
+          "json",
+        ]);
+        expect(compare.code, compare.stderr).toBe(0);
+        const comparison = JSON.parse(compare.stdout);
+        expect(
+          validateComparison(comparison),
+          JSON.stringify(validateComparison.errors),
+        ).toBe(true);
+        expect(comparison.claims.length).toBeGreaterThan(0);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -870,5 +891,220 @@ describe("gatefold e2e (real process)", () => {
       "pnpm test --run",
       "pnpm build",
     ]);
+  });
+});
+
+const compareSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v3.json`, "utf8"),
+);
+const validateComparison = new Ajv2020().compile(compareSchema);
+const compareFixture = (name: string): string =>
+  `${root}test/fixtures/compare/${name}`;
+
+describe("gatefold compare e2e (real process)", () => {
+  const before = compareFixture("before.json");
+  const after = compareFixture("after.json");
+  const diff = compareFixture("diff.json");
+
+  it("accepts a matching triple and emits schema v3 JSON", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      before,
+      "--after",
+      after,
+      "--diff",
+      diff,
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateComparison(result),
+      JSON.stringify(validateComparison.errors),
+    ).toBe(true);
+    expect(result.schemaVersion).toBe(3);
+    expect(result.source.command).toBe("compare");
+    expect(result.inputs.before.label).toBe(before);
+    expect(result.inputs.diff.command).toBe("diff");
+  });
+
+  it("reads one input from stdin", async () => {
+    const run = await gatefoldWithStdin(
+      [
+        "compare",
+        "--before",
+        before,
+        "--after",
+        after,
+        "--diff",
+        "-",
+        "--format",
+        "json",
+      ],
+      readFileSync(diff),
+    );
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.diff.label).toBe("<stdin>");
+  });
+
+  it("rejects swapped exports with exit 3 and a swap hint on stderr", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      after,
+      "--after",
+      before,
+      "--diff",
+      diff,
+    ]);
+    expect(run.code).toBe(3);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("swap");
+  });
+
+  it("rejects a mismatched snapshot binding with exit 3", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      before,
+      "--after",
+      after,
+      "--diff",
+      compareFixture("diff-wrong-snapshots.json"),
+    ]);
+    expect(run.code).toBe(3);
+    expect(run.stderr).toContain("snapshot");
+  });
+
+  it("rejects a project mismatch and a wrong-command role with exit 3", async () => {
+    const projectMismatch = await gatefold([
+      "compare",
+      "--before",
+      before,
+      "--after",
+      compareFixture("after-wrong-project.json"),
+      "--diff",
+      diff,
+    ]);
+    expect(projectMismatch.code).toBe(3);
+    expect(projectMismatch.stderr).toContain("different projects");
+    const wrongCommand = await gatefold([
+      "compare",
+      "--before",
+      fixture("valid-report.json"),
+      "--after",
+      after,
+      "--diff",
+      diff,
+    ]);
+    expect(wrongCommand.code).toBe(3);
+    expect(wrongCommand.stderr).toContain("must be a pfl export");
+  });
+
+  it("rejects an oversized compare input with exit 3", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-oversize-"));
+    try {
+      const oversized = join(dir, "big.json");
+      writeFileSync(oversized, Buffer.alloc(16 * 1024 * 1024 + 1));
+      const run = await gatefold([
+        "compare",
+        "--before",
+        oversized,
+        "--after",
+        after,
+        "--diff",
+        diff,
+      ]);
+      expect(run.code).toBe(3);
+      expect(run.stderr).toContain("byte limit");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects malformed input and usage errors", async () => {
+    const malformed = await gatefold([
+      "compare",
+      "--before",
+      fixture("malformed.json"),
+      "--after",
+      after,
+      "--diff",
+      diff,
+    ]);
+    expect(malformed.code).toBe(3);
+    const missing = await gatefold(["compare", "--before", before]);
+    expect(missing.code).toBe(2);
+    const twoStdin = await gatefold([
+      "compare",
+      "--before",
+      "-",
+      "--after",
+      "-",
+      "--diff",
+      diff,
+    ]);
+    expect(twoStdin.code).toBe(2);
+  });
+
+  it("emits relation claims and no element claims for a relation-only triple", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      compareFixture("relation-only/before.json"),
+      "--after",
+      compareFixture("relation-only/after.json"),
+      "--diff",
+      compareFixture("relation-only/diff.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateComparison(result),
+      JSON.stringify(validateComparison.errors),
+    ).toBe(true);
+    const rules = result.claims.map(
+      (claim: { ruleId: string }) => claim.ruleId,
+    );
+    expect(rules).toContain("compare-relation-added");
+    expect(rules).not.toContain("compare-element-added");
+    expect(rules).not.toContain("compare-status-transition");
+  });
+
+  it("surfaces drift caveats and a reworded finding on the partial triple", async () => {
+    const run = await gatefold([
+      "compare",
+      "--before",
+      compareFixture("drift-partial/before.json"),
+      "--after",
+      compareFixture("drift-partial/after.json"),
+      "--diff",
+      compareFixture("drift-partial/diff.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateComparison(result),
+      JSON.stringify(validateComparison.errors),
+    ).toBe(true);
+    const rules = result.claims.map(
+      (claim: { ruleId: string }) => claim.ruleId,
+    );
+    expect(rules).toContain("compare-completeness");
+    expect(rules).toContain("compare-version-drift");
+    expect(rules).toContain("compare-finding-reworded");
+    expect(rules).toContain("compare-status-transition");
+    expect(
+      result.claims.some((claim: { claim: string }) =>
+        claim.claim.includes("may be unobserved"),
+      ),
+    ).toBe(true);
   });
 });

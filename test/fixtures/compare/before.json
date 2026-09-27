@@ -1,0 +1,78 @@
+{
+  "pflVersion": "1.4.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": { "id": "proj-compare", "displayName": "Compare Fixture" },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.0.0",
+      "adapter": {
+        "id": "claude-code-adapter",
+        "version": "1.0.0",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs-aaa",
+      "resolvedSnapshotId": "res-aaa",
+      "capturedAt": "2026-09-26T00:00:00Z",
+      "schemaVersion": "1"
+    },
+    "resolution": {
+      "semanticsVersion": "1.0.0",
+      "confidence": "verified"
+    },
+    "elements": [
+      {
+        "id": "el-kept",
+        "observed": {
+          "id": "el-kept",
+          "native": { "kind": "markdown", "origin": "project", "scope": null },
+          "source": { "path": "docs/kept.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el-kept",
+          "status": "effective",
+          "activation": "always",
+          "resolution": { "strategy": "override" }
+        },
+        "interpretation": {
+          "elementId": "el-kept",
+          "facets": ["instructions"],
+          "confidence": "high",
+          "reason": "matched instruction pattern"
+        }
+      },
+      {
+        "id": "el-removed",
+        "observed": {
+          "id": "el-removed",
+          "native": { "kind": "markdown", "origin": "user", "scope": null },
+          "source": { "path": "docs/removed.md" },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el-removed",
+          "status": "effective",
+          "activation": "on-demand",
+          "resolution": { "strategy": "available" }
+        },
+        "interpretation": null
+      }
+    ],
+    "relations": [],
+    "findings": [],
+    "interpretation": {
+      "classifier": { "id": "pfl-classifier", "version": "1.0.0" },
+      "origin": "stored"
+    }
+  }
+}

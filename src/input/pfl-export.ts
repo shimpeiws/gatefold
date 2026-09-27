@@ -7,7 +7,8 @@ export type PflExportErrorCode =
   | "invalid-shape"
   | "unsupported-command"
   | "export-failed"
-  | "unsupported-version";
+  | "unsupported-version"
+  | "mismatched-inputs";
 
 export class PflExportError extends Error {
   readonly code: PflExportErrorCode;
