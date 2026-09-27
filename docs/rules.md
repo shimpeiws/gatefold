@@ -2,11 +2,13 @@
 
 The analyzer registers an explicit list of descriptive rules per input
 command: `src/application/rules.ts` for `report` documents,
-`src/application/export-rules.ts` for `export` and `diff` documents, and
-`src/application/compare-rules.ts` for `compare` results. Each rule emits
-claims about what the document contains — never a judgement of whether the
-harness is good or bad. Every claim carries evidence, provenance, and
-confidence per `schema/claim-result.v2.json`.
+`src/application/export-rules.ts` for `export` and `diff` documents,
+`src/application/compare-rules.ts` for `compare` results, and
+`src/application/trace-rules.ts` for `compare-traces` results. Each rule
+emits claims about what the documents contain — never a judgement of
+whether the harness or run is good or bad. Every claim carries evidence,
+provenance, and confidence per the matching result schema
+(`claim-result.v2.json`, `.v3.json`, `.v4.json`).
 
 ## `report` rules
 
@@ -83,6 +85,26 @@ reference names `before`, `after`, or `diff` explicitly.
 | `compare-finding-removed` | Per removed finding, same shape as `compare-finding-added`; a same-rule, same-elements addition is cross-referenced. | 1.0 |
 | `compare-finding-reworded` | A removed finding paired with an added finding of the same rule and element ids but different message — consistent with rewording, never proof the condition resolved. | 1.0 |
 | `compare-contradiction` | Each recorded disagreement between the diff's assertions and the exports' contents. | 1.0 |
+
+## `compare-traces` rules
+
+Emitted in this order by `gatefold compare-traces` (schema v4); each evidence
+reference names `beforeTrace` or `afterTrace` explicitly and its pointer
+resolves inside the named trace. Claims describe recorded run state only —
+never causation, never answer quality.
+
+| Rule id | What it claims | Confidence |
+| --- | --- | --- |
+| `trace-inputs` | The pair's shared identity: same task content digest, runtime id, requested model, and isolation strategy; run ids and task sources are quoted as provenance, and a differing `isolation.verified` is stated. | 1.0 |
+| `trace-comparability` | One caveat per allowed-but-meaningful difference or gap: `requested_cell` / `execution_options` absent on either side (unverifiable, not assumed), and observed drift in `yuurei_version`, `runtime.version`, `model.resolved`, `model.resolved_reason`, or `isolation.verified`. Sorted by field name. | 1.0 |
+| `trace-profiles` | The profile/harness variant: both profiles' names and content digests, and — when both record it — the `requested_cell.digest` difference consistent with them. The compared variable, never a rejection. | 1.0 |
+| `trace-runtime` | The shared runtime id and each side's recorded `runtime.version`; a null version is stated as unobserved (the trace records the key, not a value), never as a difference. | 1.0 |
+| `trace-model` | The shared requested model and each side's observed `model.resolved`; null is stated as unobserved with `resolved_reason` when recorded. | 1.0 |
+| `trace-execution` | Each side's recorded outcome — `timed_out`, `exit_code`, `signal` — always with the disclaimer that exit status describes process termination, not answer quality. | 1.0 |
+| `trace-duration` | The recorded `duration_ms` of each side and the A → B difference; no difference is computed when either side is null. | 1.0 |
+| `trace-usage` | One claim per usage key in byte order: a numeric difference only when the key is numeric on both sides; `null` is stated as attempted-but-unobserved and absent as never-attempted — the two cases are never merged. | 1.0 |
+| `trace-cost` | Each side's cost estimate; a numeric difference only when both estimates share a currency. Null means no estimate was produced, and a currency mismatch is reported as two separate estimates. Amounts are always called estimates. | 1.0 |
+| `trace-diagnostic` | Each `diagnostics` entry quoted verbatim with its run label; diagnostics are free text and are never parsed into codes. | 1.0 |
 
 ## Conventions
 

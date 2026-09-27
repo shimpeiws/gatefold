@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.3",
+  "run_id": "run-t1",
+  "yuurei_version": "0.3.0",
+  "started_at": "2026-09-22T08:00:00Z",
+  "finished_at": "2026-09-22T08:10:00Z",
+  "runtime": { "id": "claude-code", "version": "2.1.272" },
+  "model": {
+    "requested": "claude-sonnet-4-5",
+    "resolved": "claude-sonnet-4-5-20250929",
+    "resolved_reason": "observed"
+  },
+  "profile": { "name": "baseline", "digest": "sha256:aaa" },
+  "task": { "source": ".yuurei/tasks/rename.md", "digest": "sha256:task1" },
+  "isolation": { "strategy": "cell", "verified": true },
+  "execution": {
+    "exit_code": null,
+    "signal": "SIGKILL",
+    "duration_ms": 600000,
+    "timed_out": true
+  },
+  "usage": { "input_tokens": 80000, "output_tokens": null },
+  "cost": null,
+  "artifacts": [{ "path": "artifacts/patch.diff", "kind": "patch" }],
+  "diagnostics": ["runtime did not report a model identity"]
+}

@@ -1,5 +1,10 @@
-import { open } from "node:fs/promises";
 import { sanitizeText } from "../domain/sanitize.js";
+import {
+  InputTooLargeError,
+  MAX_INPUT_BYTES,
+  readBounded,
+  readBoundedStdin,
+} from "./bounded.js";
 
 export type PflExportErrorCode =
   | "unreadable-file"
@@ -245,7 +250,6 @@ export type PflDocument =
 export type PflExport = PflReportDocument;
 
 /** Resource ceilings for untrusted exports (see docs/pfl-export-contract.md). */
-const MAX_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_DIAGNOSTICS = 1_000;
 const MAX_FINDINGS = 10_000;
 const MAX_ELEMENT_IDS = 1_000;
@@ -1428,59 +1432,8 @@ export function parsePflExport(
   return { ...base, command, data: parseDiffData(value.data) };
 }
 
-class InputTooLargeError extends Error {}
-
 /** provenance.sourceFile recorded for exports read from standard input. */
 export const STDIN_SOURCE = "<stdin>";
-
-/**
- * Reads at most MAX_FILE_BYTES bytes. Regular files are rejected by size
- * before reading; pipes and devices are read in chunks and cut off at the
- * limit, so an oversized or endless input never has to fit in memory.
- */
-async function readBounded(path: string): Promise<Buffer> {
-  const handle = await open(path, "r");
-  try {
-    const info = await handle.stat();
-    if (info.isFile() && info.size > MAX_FILE_BYTES)
-      throw new InputTooLargeError();
-    const chunks: Buffer[] = [];
-    let total = 0;
-    for (;;) {
-      const chunk = Buffer.alloc(64 * 1024);
-      const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
-      if (bytesRead === 0) break;
-      total += bytesRead;
-      if (total > MAX_FILE_BYTES) throw new InputTooLargeError();
-      chunks.push(chunk.subarray(0, bytesRead));
-    }
-    return Buffer.concat(chunks, total);
-  } finally {
-    await handle.close();
-  }
-}
-
-/** Reads standard input under the same byte ceiling as file input. */
-async function readBoundedStdin(
-  stream: AsyncIterable<Buffer | string> = process.stdin,
-): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  // Chunks are strings when a consumer already called setEncoding('utf8'):
-  // re-encode so the ceiling counts bytes, not UTF-16 code units.
-  for await (const chunk of stream) {
-    const buffer =
-      typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
-    total += buffer.length;
-    if (total > MAX_FILE_BYTES) {
-      const destroy = (stream as { destroy?: unknown }).destroy;
-      if (typeof destroy === "function") (destroy as () => void).call(stream);
-      throw new InputTooLargeError();
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks, total);
-}
 
 function parseExportContent(
   content: string,
@@ -1508,7 +1461,7 @@ export async function readPflExport(path: string): Promise<PflDocument> {
     if (error instanceof InputTooLargeError)
       throw new PflExportError(
         "invalid-shape",
-        `input file exceeds the ${MAX_FILE_BYTES}-byte limit: ${path}`,
+        `input file exceeds the ${MAX_INPUT_BYTES}-byte limit: ${path}`,
       );
     throw new PflExportError(
       "unreadable-file",
@@ -1533,7 +1486,7 @@ export async function readPflExportStdin(
     if (error instanceof InputTooLargeError)
       throw new PflExportError(
         "invalid-shape",
-        `standard input exceeds the ${MAX_FILE_BYTES}-byte limit`,
+        `standard input exceeds the ${MAX_INPUT_BYTES}-byte limit`,
       );
     throw new PflExportError("unreadable-file", "cannot read standard input");
   }

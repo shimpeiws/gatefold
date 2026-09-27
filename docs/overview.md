@@ -18,7 +18,7 @@ The full boundary — supported input, output guarantees, exclusions, compatibil
 
 `pfl` provides the encoded harness representation. `yuurei` provides observed execution traces. Gatefold interprets these inputs.
 
-The initial implementation uses only the `pfl` export boundary. Future versions can add observed traces without changing the claim concept.
+The `pfl` export boundary came first; v0.5 adds the `yuurei` trace boundary for observed run comparison (`compare-traces`) without changing the claim concept.
 
 ## Command
 
@@ -26,6 +26,8 @@ The initial implementation uses only the `pfl` export boundary. Future versions 
 gatefold <input.json> --format human
 gatefold <input.json> --format json --min-confidence 0.8
 pfl report --json | gatefold -
+gatefold compare --before a.json --after b.json --diff d.json
+gatefold compare-traces --before a.trace.json --after b.trace.json
 ```
 
 A lone `-` reads the export from standard input. After `--`, `-` names a file

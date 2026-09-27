@@ -1,14 +1,21 @@
 import { analyze } from "./application/analyze.js";
 import { compareDocuments } from "./application/compare.js";
+import { compareTraces } from "./application/compare-traces.js";
 import type { ComparisonResult } from "./domain/comparison.js";
 import { sanitizeText } from "./domain/sanitize.js";
+import type { TraceComparisonResult } from "./domain/trace-comparison.js";
 import {
   PflExportError,
   readPflExport,
   readPflExportStdin,
   STDIN_SOURCE,
 } from "./input/pfl-export.js";
-import { formatComparisonHuman, formatHuman } from "./output/human.js";
+import { readYuureiTrace, readYuureiTraceStdin } from "./input/yuurei-trace.js";
+import {
+  formatComparisonHuman,
+  formatHuman,
+  formatTraceComparisonHuman,
+} from "./output/human.js";
 import { formatJson } from "./output/json.js";
 
 type OutputFormat = "human" | "json";
@@ -34,6 +41,10 @@ interface CliOptions {
     before?: string;
     after?: string;
     diff?: string;
+  };
+  readonly compareTraces?: {
+    before?: string;
+    after?: string;
   };
   readonly format: OutputFormat;
   readonly minConfidence: number;
@@ -61,6 +72,7 @@ function parseArgs(args: readonly string[]): CliOptions {
   let inputPath: string | undefined;
   let stdin = false;
   let compare: CliOptions["compare"];
+  let compareTraces: CliOptions["compareTraces"];
   let format: OutputFormat = "human";
   let minConfidence = 0;
   let minConfidenceText = "0";
@@ -83,13 +95,13 @@ function parseArgs(args: readonly string[]): CliOptions {
     }
     if (
       !optionsDone &&
-      compare !== undefined &&
+      (compare !== undefined || compareTraces !== undefined) &&
       (argument === "--before" ||
         argument.startsWith("--before=") ||
         argument === "--after" ||
         argument.startsWith("--after=") ||
-        argument === "--diff" ||
-        argument.startsWith("--diff="))
+        (compare !== undefined &&
+          (argument === "--diff" || argument.startsWith("--diff="))))
     ) {
       const name = argument.slice(
         2,
@@ -97,9 +109,11 @@ function parseArgs(args: readonly string[]): CliOptions {
       );
       const [value, consumed] = optionValue(args, index, `--${name}`);
       index = consumed;
-      if (compare[name as "before" | "after" | "diff"] !== undefined)
+      const target = compare ?? compareTraces;
+      if ((target as Record<string, unknown>)[name] !== undefined)
         throw new CliError(`--${name} is already set`, EXIT_USAGE);
-      compare = { ...compare, [name]: value };
+      if (compare !== undefined) compare = { ...compare, [name]: value };
+      else compareTraces = { ...compareTraces, [name]: value };
       continue;
     }
     if (
@@ -144,6 +158,11 @@ function parseArgs(args: readonly string[]): CliOptions {
           "compare inputs must be given with --before/--after/--diff; '-' is a flag value, not a positional",
           EXIT_USAGE,
         );
+      if (compareTraces !== undefined)
+        throw new CliError(
+          "compare-traces inputs must be given with --before/--after; '-' is a flag value, not a positional",
+          EXIT_USAGE,
+        );
       if (inputPath !== undefined)
         throw new CliError("only one input file is allowed", EXIT_USAGE);
       inputPath = argument;
@@ -158,15 +177,22 @@ function parseArgs(args: readonly string[]): CliOptions {
     if (
       !optionsDone &&
       compare === undefined &&
+      compareTraces === undefined &&
       inputPath === undefined &&
-      argument === "compare"
+      (argument === "compare" || argument === "compare-traces")
     ) {
-      compare = {};
+      if (argument === "compare") compare = {};
+      else compareTraces = {};
       continue;
     }
     if (compare !== undefined)
       throw new CliError(
         "compare takes no positional inputs; use --before/--after/--diff",
+        EXIT_USAGE,
+      );
+    if (compareTraces !== undefined)
+      throw new CliError(
+        "compare-traces takes no positional inputs; use --before/--after",
         EXIT_USAGE,
       );
     if (inputPath !== undefined)
@@ -191,10 +217,29 @@ function parseArgs(args: readonly string[]): CliOptions {
         EXIT_USAGE,
       );
   }
+  if (compareTraces !== undefined) {
+    const missing = (["before", "after"] as const).filter(
+      (flag) => compareTraces[flag] === undefined,
+    );
+    if (missing.length > 0)
+      throw new CliError(
+        `compare-traces requires ${missing.map((f) => `--${f}`).join(", ")} (see --help)`,
+        EXIT_USAGE,
+      );
+    const stdinCount = [compareTraces.before, compareTraces.after].filter(
+      (value) => value === "-",
+    ).length;
+    if (stdinCount > 1)
+      throw new CliError(
+        "at most one of --before/--after may read from stdin ('-')",
+        EXIT_USAGE,
+      );
+  }
   return {
     inputPath,
     stdin,
     compare,
+    compareTraces,
     format,
     minConfidence,
     minConfidenceText,
@@ -208,6 +253,8 @@ function usage(): string {
     "       gatefold -               Read a pfl document from standard input",
     "       gatefold compare --before <A.json|-> --after <B.json|-> --diff <D.json|->",
     "                              Compare two pfl exports through their diff",
+    "       gatefold compare-traces --before <A.trace.json|-> --after <B.trace.json|->",
+    "                              Compare two yuurei runs through their traces",
     "",
     "Analyze a pfl report, export, or diff and print evidence-backed claims.",
     "The document's top-level 'command' field selects the reader.",
@@ -219,6 +266,12 @@ function usage(): string {
     "(--after), and the A → B diff (--diff). At most one of the three may",
     "be '-' for stdin. The exports must describe the same project and",
     "runtime and must bind to the diff's A and B snapshot sides.",
+    "",
+    "compare-traces reads two yuurei trace.json documents: run A",
+    "(--before) and run B (--after). At most one of the two may be '-'",
+    "for stdin. The runs are compared only when the requested task and",
+    "execution conditions match; the profile/harness variant may differ",
+    "intentionally. A pfl document passed as a trace input is rejected.",
     "",
     "Options:",
     "  --format <human|json>        Output format (default: human)",
@@ -252,9 +305,41 @@ async function readCompareInput(argument: string) {
   return argument === "-" ? readPflExportStdin() : readPflExport(argument);
 }
 
+async function readTraceInput(argument: string) {
+  return argument === "-" ? readYuureiTraceStdin() : readYuureiTrace(argument);
+}
+
 export async function runCli(args: readonly string[]): Promise<string> {
   const options = parseArgs(args);
   if (options.help) return usage();
+  if (options.compareTraces !== undefined) {
+    const compareTracesArgs = options.compareTraces as {
+      before: string;
+      after: string;
+    };
+    const result: TraceComparisonResult = compareTraces({
+      before: await readTraceInput(compareTracesArgs.before),
+      after: await readTraceInput(compareTracesArgs.after),
+      labels: {
+        before:
+          compareTracesArgs.before === "-"
+            ? STDIN_SOURCE
+            : compareTracesArgs.before,
+        after:
+          compareTracesArgs.after === "-"
+            ? STDIN_SOURCE
+            : compareTracesArgs.after,
+      },
+    });
+    const filtered = filterClaims(result, options.minConfidence);
+    return options.format === "json"
+      ? formatJson(filtered)
+      : formatTraceComparisonHuman(
+          filtered,
+          options.minConfidence,
+          options.minConfidenceText,
+        );
+  }
   if (options.compare !== undefined) {
     const compare = options.compare as {
       before: string;

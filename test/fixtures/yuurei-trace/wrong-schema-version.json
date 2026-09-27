@@ -1,0 +1,20 @@
+{
+  "schema_version": "0.4",
+  "run_id": "run-x1",
+  "started_at": "2026-09-25T10:00:00Z",
+  "finished_at": "2026-09-25T10:00:01Z",
+  "runtime": { "id": "claude-code", "version": "2.1.272" },
+  "model": { "requested": "claude-sonnet-4-5", "resolved": null },
+  "profile": { "name": "baseline", "digest": "sha256:aaa" },
+  "task": { "source": ".yuurei/tasks/rename.md", "digest": "sha256:task1" },
+  "isolation": { "strategy": "cell", "verified": true },
+  "execution": {
+    "exit_code": 0,
+    "signal": null,
+    "duration_ms": 1000,
+    "timed_out": false
+  },
+  "usage": {},
+  "cost": null,
+  "artifacts": []
+}

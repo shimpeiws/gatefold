@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "../domain/claim.js";
 import type { ComparisonResult } from "../domain/comparison.js";
+import type { TraceComparisonResult } from "../domain/trace-comparison.js";
 import { sanitizeText } from "../domain/sanitize.js";
 
 export function formatHuman(
@@ -54,6 +55,38 @@ export function formatComparisonHuman(
             ? `${entry.source}:${entry.pointer}`
             : `${entry.source}:${entry.pointer} (${sanitizeText(entry.elementId)})`,
         )
+        .join(", ");
+      return [
+        `${index + 1}. ${claim.claim}`,
+        `   confidence: ${claim.confidence.toFixed(2)}`,
+        `   evidence: ${evidence}`,
+        `   provenance: ${labels} · ${claim.provenance.transform.join(" → ")}`,
+      ].join("\n");
+    })
+    .join("\n");
+}
+
+export function formatTraceComparisonHuman(
+  result: TraceComparisonResult,
+  minConfidence = 0,
+  minConfidenceDisplay = String(minConfidence),
+): string {
+  if (result.claims.length === 0)
+    return minConfidence > 0
+      ? `No claims found at or above confidence ${minConfidenceDisplay}.`
+      : "No claims found.";
+  const labels =
+    `${sanitizeText(result.inputs.beforeTrace.label)} → ` +
+    `${sanitizeText(result.inputs.afterTrace.label)}`;
+  return result.claims
+    .map((claim, index) => {
+      const evidence = claim.evidence
+        .map((entry) => {
+          const detail = entry.elementId ?? entry.note;
+          return detail === undefined
+            ? `${entry.source}:${entry.pointer}`
+            : `${entry.source}:${entry.pointer} (${sanitizeText(detail)})`;
+        })
         .join(", ");
       return [
         `${index + 1}. ${claim.claim}`,

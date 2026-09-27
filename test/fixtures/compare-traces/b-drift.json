@@ -1,0 +1,34 @@
+{
+  "schema_version": "0.3",
+  "run_id": "run-b3",
+  "yuurei_version": "0.3.1",
+  "started_at": "2026-09-21T11:00:00Z",
+  "finished_at": "2026-09-21T11:00:41Z",
+  "runtime": { "id": "claude-code", "version": "2.1.300" },
+  "model": {
+    "requested": "claude-sonnet-4-5",
+    "resolved": "claude-sonnet-4-5-20251001",
+    "resolved_reason": "observed"
+  },
+  "profile": { "name": "variant", "digest": "sha256:bbb" },
+  "task": { "source": ".yuurei/tasks/rename.md", "digest": "sha256:task1" },
+  "requested_cell": { "digest": "sha256:cell-b", "inputs_version": 1 },
+  "isolation": { "strategy": "cell", "verified": false },
+  "execution_options": {
+    "timeout_ms": 600000,
+    "runtime": { "max_turns": 40 }
+  },
+  "execution": {
+    "exit_code": 0,
+    "signal": null,
+    "duration_ms": 40200,
+    "timed_out": false
+  },
+  "usage": {
+    "input_tokens": 14800,
+    "output_tokens": 2300
+  },
+  "cost": { "amount": 0.88, "currency": "USD" },
+  "artifacts": [],
+  "diagnostics": []
+}
