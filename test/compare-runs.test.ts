@@ -17,6 +17,7 @@ import type {
   RunComparisonResult,
 } from "../src/domain/run-comparison.js";
 import { readYuureiRun } from "../src/input/yuurei-run.js";
+import { formatRunComparisonHuman } from "../src/output/human.js";
 
 const dir = new URL("fixtures/yuurei-run/", import.meta.url);
 const fixture = (name: string): string => fileURLToPath(new URL(name, dir));
@@ -201,6 +202,40 @@ describe("compareRuns", () => {
     expect(claimsByRule(result, "run-file-added")).toHaveLength(2);
     expect(claimsByRule(result, "run-file-removed")).toEqual([]);
     expectSchemaValid(result);
+  });
+
+  it("keeps the unknown remainder caveat for a truncated complete prefix", async () => {
+    const base = mkdtempSync(join(tmpdir(), "gatefold-runs-"));
+    try {
+      const trace = readFileSync(`${fixture("run-a")}/trace.json`, "utf8");
+      const make = async (name: string, patch: string, truncated: boolean) => {
+        const runDir = join(base, name);
+        mkdirSync(runDir);
+        writeFileSync(join(runDir, "trace.json"), trace);
+        writeFileSync(join(runDir, "patch.diff"), patch);
+        const digest = `sha256:${createHash("sha256").update(patch).digest("hex")}`;
+        writeFileSync(
+          join(runDir, "artifacts.json"),
+          JSON.stringify({
+            artifacts: [
+              { path: "patch.diff", kind: "patch", digest, truncated },
+            ],
+          }),
+        );
+        return readYuureiRun(runDir);
+      };
+      const completePrefix =
+        "--- /dev/null\n+++ a.txt\n@@ -0,0 +1,1 @@\n+x\n\\ No newline at end of file\n";
+      const result = compareRuns({
+        before: await make("a", completePrefix, true),
+        after: await make("b", completePrefix, false),
+      });
+      const summary = claimsByRule(result, "run-generated-files")[0].claim;
+      expect(summary).toContain("truncated");
+      expect(summary).toContain("unknown");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   it("never claims a file whose block ends at the truncation boundary", async () => {
