@@ -359,7 +359,7 @@ export const RUN_RULES: readonly RunRule[] = [
           text =
             `Run ${side.name}'s patch.diff verifies against the manifest ` +
             `but is marked truncated at yuurei's size cap; ` +
-            (run.patch?.complete === false
+            (run.patchState === "verified-truncated"
               ? `${plural(run.patch.files.length, "file")} are recorded in ` +
                 `the stored prefix and anything past the cut is unknown.`
               : `the stored bytes nonetheless form a complete patch.`);
@@ -394,7 +394,7 @@ export const RUN_RULES: readonly RunRule[] = [
         "so a file absent from a patch is not evidence the run did not " +
         "write it.";
       const truncatedNote = (run: YuureiRun, name: Side) =>
-        run.patch?.complete === false
+        run.patchState === "verified-truncated"
           ? ` Run ${name}'s patch is truncated: the comparison covers only ` +
             `its stored prefix.`
           : "";
