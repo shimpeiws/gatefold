@@ -46,6 +46,19 @@ describe("claim schema validation", () => {
     expect(validateV3(example), JSON.stringify(validateV3.errors)).toBe(true);
   });
 
+  it("accepts the committed v4 trace-comparison example", async () => {
+    const v4Schema = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("schema/claim-result.v4.json", root)),
+        "utf8",
+      ),
+    );
+    expect(ajv.validateSchema(v4Schema)).toBe(true);
+    const validateV4 = ajv.compile(v4Schema);
+    const example = await readExample("valid-trace-comparison-result.json");
+    expect(validateV4(example), JSON.stringify(validateV4.errors)).toBe(true);
+  });
+
   it("rejects every committed invalid example", async () => {
     const files = await readdir(examplesDir);
     const invalid = files.filter((f) => f.startsWith("invalid-"));

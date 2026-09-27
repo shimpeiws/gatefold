@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 4,
+  "source": { "command": "compare-traces" },
+  "inputs": {
+    "beforeTrace": {
+      "label": "runs/a/trace.json",
+      "document": "yuurei-trace",
+      "schemaVersion": "0.3",
+      "runId": "run-a1",
+      "yuureiVersion": "0.3.0",
+      "startedAt": "2026-09-20T10:00:00Z",
+      "finishedAt": "2026-09-20T10:00:12Z",
+      "runtimeId": "claude-code",
+      "runtimeVersion": "2.1.272",
+      "modelRequested": "claude-sonnet-4-5",
+      "modelResolved": "claude-sonnet-4-5-20250929",
+      "modelResolvedReason": "observed",
+      "profileName": "baseline",
+      "profileDigest": "sha256:aaa",
+      "taskSource": ".yuurei/tasks/rename.md",
+      "taskDigest": "sha256:task1",
+      "isolationStrategy": "cell",
+      "isolationVerified": true,
+      "requestedCellDigest": "sha256:cell-a",
+      "requestedCellInputsVersion": 1,
+      "executionOptions": { "timeout_ms": 600000, "runtime": {} }
+    },
+    "afterTrace": {
+      "label": "runs/b/trace.json",
+      "document": "yuurei-trace",
+      "schemaVersion": "0.3",
+      "runId": "run-b2",
+      "yuureiVersion": "0.3.0",
+      "startedAt": "2026-09-20T11:00:00Z",
+      "finishedAt": "2026-09-20T11:00:41Z",
+      "runtimeId": "claude-code",
+      "runtimeVersion": "2.1.272",
+      "modelRequested": "claude-sonnet-4-5",
+      "modelResolved": "claude-sonnet-4-5-20250929",
+      "modelResolvedReason": "observed",
+      "profileName": "variant",
+      "profileDigest": "sha256:bbb",
+      "taskSource": ".yuurei/tasks/rename.md",
+      "taskDigest": "sha256:task1",
+      "isolationStrategy": "cell",
+      "isolationVerified": true,
+      "requestedCellDigest": "sha256:cell-b",
+      "requestedCellInputsVersion": 1,
+      "executionOptions": { "timeout_ms": 600000, "runtime": {} }
+    }
+  },
+  "claims": [
+    {
+      "claim": "Run A used profile 'baseline' and run B used profile 'variant'; the profile difference is the compared variable.",
+      "ruleId": "trace-profiles-described",
+      "evidence": [
+        { "source": "beforeTrace", "pointer": "/profile/name" },
+        { "source": "afterTrace", "pointer": "/profile/name" }
+      ],
+      "provenance": { "transform": ["compare-traces", "rule:trace-profiles-described"] },
+      "confidence": 1.0
+    },
+    {
+      "claim": "Both runs requested model 'claude-sonnet-4-5' and resolved to 'claude-sonnet-4-5-20250929'.",
+      "ruleId": "trace-model-described",
+      "evidence": [
+        { "source": "beforeTrace", "pointer": "/model/requested" },
+        { "source": "beforeTrace", "pointer": "/model/resolved" },
+        { "source": "afterTrace", "pointer": "/model/requested" },
+        { "source": "afterTrace", "pointer": "/model/resolved" }
+      ],
+      "provenance": { "transform": ["compare-traces", "rule:trace-model-described"] },
+      "confidence": 1.0
+    },
+    {
+      "claim": "Run A exited 0 after a recorded 12400 ms; run B exited 0 after a recorded 41800 ms. Exit status describes process termination, not answer quality.",
+      "ruleId": "trace-execution-compared",
+      "evidence": [
+        { "source": "beforeTrace", "pointer": "/execution/exit_code" },
+        { "source": "beforeTrace", "pointer": "/execution/duration_ms" },
+        { "source": "afterTrace", "pointer": "/execution/exit_code" },
+        { "source": "afterTrace", "pointer": "/execution/duration_ms" }
+      ],
+      "provenance": { "transform": ["compare-traces", "rule:trace-execution-compared"] },
+      "confidence": 1.0
+    },
+    {
+      "claim": "Run A recorded 980 output tokens; run B recorded 2410 output tokens.",
+      "ruleId": "trace-usage-compared",
+      "evidence": [
+        { "source": "beforeTrace", "pointer": "/usage/output_tokens" },
+        { "source": "afterTrace", "pointer": "/usage/output_tokens" }
+      ],
+      "provenance": { "transform": ["compare-traces", "rule:trace-usage-compared"] },
+      "confidence": 1.0
+    }
+  ]
+}
