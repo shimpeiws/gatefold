@@ -1,0 +1,19 @@
+{
+  "reportVersion": 1,
+  "evaluator": {
+    "id": "vitest",
+    "version": "3.0.0"
+  },
+  "subject": {
+    "taskDigest": "sha256:task-seeded-1",
+    "baselineDigest": "sha256:baseline-seeded-1"
+  },
+  "results": [
+    {
+      "criterionId": "unit-tests",
+      "verdict": "fail",
+      "suite": "test/auth.test.ts",
+      "note": "test file missing"
+    }
+  ]
+}

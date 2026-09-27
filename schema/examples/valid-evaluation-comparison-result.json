@@ -1,0 +1,461 @@
+{
+  "schemaVersion": 7,
+  "source": {
+    "command": "compare-evaluations"
+  },
+  "inputs": {
+    "beforeRun": {
+      "label": "test/fixtures/yuurei-run/seeded-a",
+      "document": "yuurei-run",
+      "trace": {
+        "label": "test/fixtures/yuurei-run/seeded-a/trace.json",
+        "document": "yuurei-trace",
+        "schemaVersion": "0.3",
+        "runId": "run-seeded-a1",
+        "yuureiVersion": "0.4.0",
+        "startedAt": "2026-09-27T09:00:00Z",
+        "finishedAt": "2026-09-27T09:00:14Z",
+        "runtimeId": "claude-code",
+        "runtimeVersion": "2.1.272",
+        "modelRequested": "claude-sonnet-4-5",
+        "modelResolved": "claude-sonnet-4-5-20250929",
+        "modelResolvedReason": "observed",
+        "profileName": "candidate-a",
+        "profileDigest": "sha256:prof-a",
+        "taskSource": ".yuurei/tasks/fix-auth.md",
+        "taskDigest": "sha256:task-seeded-1",
+        "isolationStrategy": "cell",
+        "isolationVerified": true,
+        "requestedCellDigest": "sha256:cell-seeded",
+        "requestedCellInputsVersion": 1,
+        "executionOptions": {
+          "timeout_ms": 600000,
+          "runtime": {
+            "max_turns": 40
+          }
+        }
+      },
+      "seeded": true,
+      "baseline": {
+        "digest": "sha256:baseline-seeded-1",
+        "source": "seed://fixtures/auth-base"
+      },
+      "patchState": "verified",
+      "resultState": "verified",
+      "artifacts": [
+        {
+          "path": "stdout.log",
+          "kind": "log",
+          "digest": "sha256:1f67ef347f223a3444db73fd39bdf781312c6bc1f6bd197b6480daf21ca3b888",
+          "state": "unverified"
+        },
+        {
+          "path": "stderr.log",
+          "kind": "log",
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "state": "unverified"
+        },
+        {
+          "path": "patch.diff",
+          "kind": "patch",
+          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
+          "bytes": 406,
+          "state": "verified"
+        },
+        {
+          "path": "result.txt",
+          "kind": "result",
+          "digest": "sha256:b3b2241a2ae8db2bbde000510c4e67d5a8c1516d8b4ee1344c8e1830c9c412d4",
+          "bytes": 62,
+          "state": "verified"
+        }
+      ]
+    },
+    "afterRun": {
+      "label": "test/fixtures/yuurei-run/seeded-b",
+      "document": "yuurei-run",
+      "trace": {
+        "label": "test/fixtures/yuurei-run/seeded-b/trace.json",
+        "document": "yuurei-trace",
+        "schemaVersion": "0.3",
+        "runId": "run-seeded-b1",
+        "yuureiVersion": "0.4.0",
+        "startedAt": "2026-09-27T09:00:00Z",
+        "finishedAt": "2026-09-27T09:00:14Z",
+        "runtimeId": "claude-code",
+        "runtimeVersion": "2.1.272",
+        "modelRequested": "claude-sonnet-4-5",
+        "modelResolved": "claude-sonnet-4-5-20250929",
+        "modelResolvedReason": "observed",
+        "profileName": "candidate-b",
+        "profileDigest": "sha256:prof-b",
+        "taskSource": ".yuurei/tasks/fix-auth.md",
+        "taskDigest": "sha256:task-seeded-1",
+        "isolationStrategy": "cell",
+        "isolationVerified": true,
+        "requestedCellDigest": "sha256:cell-seeded",
+        "requestedCellInputsVersion": 1,
+        "executionOptions": {
+          "timeout_ms": 600000,
+          "runtime": {
+            "max_turns": 40
+          }
+        }
+      },
+      "seeded": true,
+      "baseline": {
+        "digest": "sha256:baseline-seeded-1",
+        "source": "seed://fixtures/auth-base"
+      },
+      "patchState": "verified",
+      "resultState": "verified",
+      "artifacts": [
+        {
+          "path": "stdout.log",
+          "kind": "log",
+          "digest": "sha256:3240dc098bc9623c810ff93889211e2d073f8c5434ae7d9f1b90e859f903606e",
+          "state": "unverified"
+        },
+        {
+          "path": "stderr.log",
+          "kind": "log",
+          "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "state": "unverified"
+        },
+        {
+          "path": "patch.diff",
+          "kind": "patch",
+          "digest": "sha256:610e1bee6f2ae285f760d3876bb41a10e5b724e83117ea8dfab38d82a73e58a4",
+          "bytes": 86,
+          "state": "verified"
+        },
+        {
+          "path": "result.txt",
+          "kind": "result",
+          "digest": "sha256:e06984ec27c9dba7a8bfbedff5fd223d0343bd70b695e12f53183f0f7414f446",
+          "bytes": 70,
+          "state": "verified"
+        }
+      ]
+    },
+    "spec": {
+      "label": "test/fixtures/evaluation/task-spec.json",
+      "document": "task-spec",
+      "specVersion": 1,
+      "rubricId": "auth-repair-v1",
+      "taskDigest": "sha256:task-seeded-1",
+      "baselineDigest": "sha256:baseline-seeded-1",
+      "criterionCount": 6
+    },
+    "beforeCheckReports": [
+      {
+        "label": "test/fixtures/evaluation/check-report-a.json",
+        "document": "check-report",
+        "evaluatorId": "vitest",
+        "evaluatorVersion": "3.0.0",
+        "state": "accepted",
+        "resultCount": 1
+      }
+    ],
+    "afterCheckReports": [
+      {
+        "label": "test/fixtures/evaluation/check-report-b.json",
+        "document": "check-report",
+        "evaluatorId": "vitest",
+        "evaluatorVersion": "3.0.0",
+        "state": "accepted",
+        "resultCount": 1
+      }
+    ]
+  },
+  "context": {
+    "before": {
+      "execution": {
+        "exitCode": 0,
+        "signal": null,
+        "timedOut": false
+      },
+      "model": {
+        "requested": "claude-sonnet-4-5",
+        "resolved": "claude-sonnet-4-5-20250929",
+        "resolvedReason": "observed"
+      },
+      "usage": {
+        "input_tokens": 15000,
+        "output_tokens": 1200
+      },
+      "cost": {
+        "amount": 0.5,
+        "currency": "USD"
+      }
+    },
+    "after": {
+      "execution": {
+        "exitCode": 0,
+        "signal": null,
+        "timedOut": false
+      },
+      "model": {
+        "requested": "claude-sonnet-4-5",
+        "resolved": "claude-sonnet-4-5-20250929",
+        "resolvedReason": "observed"
+      },
+      "usage": {
+        "input_tokens": 15000,
+        "output_tokens": 1200
+      },
+      "cost": {
+        "amount": 0.5,
+        "currency": "USD"
+      }
+    }
+  },
+  "transitions": [
+    {
+      "criterionId": "auth-fixed",
+      "kind": "file-modified",
+      "before": "pass",
+      "after": "fail",
+      "changed": true,
+      "reason": "criterion 'auth-fixed' moved pass → fail: A — the patch records 'src/auth.ts' as modified; B — the complete patch does not record 'src/auth.ts'",
+      "confidence": 1,
+      "evidence": [
+        {
+          "source": "spec",
+          "pointer": "/criteria/0"
+        },
+        {
+          "source": "beforePatch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
+          "path": "src/auth.ts",
+          "lines": {
+            "start": 1,
+            "end": 8
+          },
+          "bytes": {
+            "start": 0,
+            "end": 190
+          }
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/2",
+          "note": "no block for src/auth.ts"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-evaluations",
+          "criterion:auth-fixed"
+        ]
+      }
+    },
+    {
+      "criterionId": "tests-added",
+      "kind": "file-added",
+      "before": "pass",
+      "after": "fail",
+      "changed": true,
+      "reason": "criterion 'tests-added' moved pass → fail: A — the patch records 'test/auth.test.ts' as added; B — the complete patch does not record 'test/auth.test.ts'",
+      "confidence": 1,
+      "evidence": [
+        {
+          "source": "spec",
+          "pointer": "/criteria/1"
+        },
+        {
+          "source": "beforePatch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
+          "path": "test/auth.test.ts",
+          "lines": {
+            "start": 9,
+            "end": 13
+          },
+          "bytes": {
+            "start": 190,
+            "end": 329
+          }
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/2",
+          "note": "no block for test/auth.test.ts"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-evaluations",
+          "criterion:tests-added"
+        ]
+      }
+    },
+    {
+      "criterionId": "legacy-removed",
+      "kind": "file-deleted",
+      "before": "pass",
+      "after": "fail",
+      "changed": true,
+      "reason": "criterion 'legacy-removed' moved pass → fail: A — the patch records 'legacy/util.ts' as deleted; B — the complete patch does not record 'legacy/util.ts'",
+      "confidence": 1,
+      "evidence": [
+        {
+          "source": "spec",
+          "pointer": "/criteria/2"
+        },
+        {
+          "source": "beforePatch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:7a534bda832e55f9943786a490c044d9166927eee22559374127528ac13f849b",
+          "path": "legacy/util.ts",
+          "lines": {
+            "start": 14,
+            "end": 17
+          },
+          "bytes": {
+            "start": 329,
+            "end": 406
+          }
+        },
+        {
+          "source": "afterManifest",
+          "pointer": "/artifacts/2",
+          "note": "no block for legacy/util.ts"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-evaluations",
+          "criterion:legacy-removed"
+        ]
+      }
+    },
+    {
+      "criterionId": "answer-status",
+      "kind": "final-result-json-field",
+      "before": "pass",
+      "after": "fail",
+      "changed": true,
+      "reason": "criterion 'answer-status' moved pass → fail: A — the final result field '/status' equals the expected value; B — the final result field '/status' does not equal the expected value",
+      "confidence": 1,
+      "evidence": [
+        {
+          "source": "spec",
+          "pointer": "/criteria/3"
+        },
+        {
+          "source": "beforeResult",
+          "pointer": "/artifacts/3",
+          "digest": "sha256:b3b2241a2ae8db2bbde000510c4e67d5a8c1516d8b4ee1344c8e1830c9c412d4",
+          "lines": {
+            "start": 1,
+            "end": 1
+          },
+          "bytes": {
+            "start": 0,
+            "end": 62
+          }
+        },
+        {
+          "source": "afterResult",
+          "pointer": "/artifacts/3",
+          "digest": "sha256:e06984ec27c9dba7a8bfbedff5fd223d0343bd70b695e12f53183f0f7414f446",
+          "lines": {
+            "start": 1,
+            "end": 1
+          },
+          "bytes": {
+            "start": 0,
+            "end": 70
+          }
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-evaluations",
+          "criterion:answer-status"
+        ]
+      }
+    },
+    {
+      "criterionId": "answer-mentions-expiry",
+      "kind": "final-result-contains",
+      "before": "pass",
+      "after": "pass",
+      "changed": false,
+      "reason": "criterion 'answer-mentions-expiry' stayed pass: the final result contains the expected text",
+      "confidence": 1,
+      "evidence": [
+        {
+          "source": "spec",
+          "pointer": "/criteria/4"
+        },
+        {
+          "source": "beforeResult",
+          "pointer": "/artifacts/3",
+          "digest": "sha256:b3b2241a2ae8db2bbde000510c4e67d5a8c1516d8b4ee1344c8e1830c9c412d4",
+          "lines": {
+            "start": 1,
+            "end": 1
+          },
+          "bytes": {
+            "start": 0,
+            "end": 62
+          }
+        },
+        {
+          "source": "afterResult",
+          "pointer": "/artifacts/3",
+          "digest": "sha256:e06984ec27c9dba7a8bfbedff5fd223d0343bd70b695e12f53183f0f7414f446",
+          "lines": {
+            "start": 1,
+            "end": 1
+          },
+          "bytes": {
+            "start": 0,
+            "end": 70
+          }
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-evaluations",
+          "criterion:answer-mentions-expiry"
+        ]
+      }
+    },
+    {
+      "criterionId": "unit-tests",
+      "kind": "external-check",
+      "before": "pass",
+      "after": "fail",
+      "changed": true,
+      "reason": "criterion 'unit-tests' moved pass → fail: A — evaluator 'vitest' reported pass; B — evaluator 'vitest' reported fail",
+      "confidence": 1,
+      "evidence": [
+        {
+          "source": "spec",
+          "pointer": "/criteria/5"
+        },
+        {
+          "source": "beforeCheckReport",
+          "pointer": "/results/0",
+          "elementId": "test/fixtures/evaluation/check-report-a.json"
+        },
+        {
+          "source": "afterCheckReport",
+          "pointer": "/results/0",
+          "elementId": "test/fixtures/evaluation/check-report-b.json"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-evaluations",
+          "criterion:unit-tests"
+        ]
+      }
+    }
+  ],
+  "caveats": []
+}

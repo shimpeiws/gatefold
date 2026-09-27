@@ -74,6 +74,35 @@ export interface YuureiTraceDefinition {
 }
 
 /**
+ * Seeded-workspace provenance (docs/yuurei-seeded-run-contract.md): the
+ * identity of the tree materialized into the cell before execution. A trace
+ * carrying `baseline` is a seeded run; one without it is a legacy
+ * empty-workspace run.
+ */
+export interface YuureiTraceBaseline {
+  /** Stable identity of the seeded tree's content and paths. */
+  readonly digest: string;
+  /** Provenance: where the seed tree came from. Never part of identity. */
+  readonly source?: string;
+}
+
+/** Why `final_result` has its recorded availability. */
+export type YuureiFinalResultStatus =
+  | "recorded"
+  | "not_emitted"
+  | "parse_failed";
+
+/**
+ * The durable final-result honesty marker
+ * (docs/yuurei-seeded-run-contract.md): distinguishes "no result emitted"
+ * from "a result existed but could not be parsed". Absent on older traces —
+ * availability is then inferred from the manifest alone.
+ */
+export interface YuureiTraceFinalResult {
+  readonly status: YuureiFinalResultStatus;
+}
+
+/**
  * A validated yuurei `trace.json` document. Optional fields keep their
  * absent-vs-null distinction: absent optional fields are `undefined`
  * (unknown), while fields the trace records as `null` stay `null`
@@ -99,6 +128,8 @@ export interface YuureiTrace {
   readonly requestedCell?: YuureiTraceRequestedCell;
   readonly executionOptions?: YuureiTraceExecutionOptions;
   readonly definition?: YuureiTraceDefinition;
+  readonly baseline?: YuureiTraceBaseline;
+  readonly finalResult?: YuureiTraceFinalResult;
   readonly diagnostics: readonly string[];
   readonly document: unknown;
 }
@@ -115,6 +146,11 @@ const MAX_RUNTIME_OPTION_NODES = 10_000;
 const MAX_SCALAR_CHARS = 4_096;
 
 const RESOLVED_REASONS = ["observed", "unobserved", "parse_failed"] as const;
+const FINAL_RESULT_STATUSES = [
+  "recorded",
+  "not_emitted",
+  "parse_failed",
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -419,6 +455,39 @@ function parseDefinition(value: unknown): YuureiTraceDefinition | undefined {
   };
 }
 
+function parseBaseline(value: unknown): YuureiTraceBaseline | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw shapeError("baseline", "an object");
+  const source = value.source;
+  if (
+    source !== undefined &&
+    (typeof source !== "string" || source.length > MAX_SCALAR_CHARS)
+  )
+    throw shapeError(
+      "baseline.source",
+      `a string of at most ${MAX_SCALAR_CHARS} characters`,
+    );
+  return {
+    digest: stringField(value, "digest", "baseline.digest"),
+    ...(source === undefined ? {} : { source: source as string }),
+  };
+}
+
+function parseFinalResult(value: unknown): YuureiTraceFinalResult | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw shapeError("final_result", "an object");
+  const status = value.status;
+  if (
+    typeof status !== "string" ||
+    !(FINAL_RESULT_STATUSES as readonly string[]).includes(status)
+  )
+    throw shapeError(
+      "final_result.status",
+      `one of ${FINAL_RESULT_STATUSES.map((s) => `"${s}"`).join(", ")}`,
+    );
+  return { status: status as YuureiFinalResultStatus };
+}
+
 function parseDiagnostics(value: unknown): readonly string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw shapeError("diagnostics", "an array");
@@ -570,6 +639,12 @@ export function parseYuureiTrace(
     ...(value.definition === undefined
       ? {}
       : { definition: parseDefinition(value.definition) }),
+    ...(value.baseline === undefined
+      ? {}
+      : { baseline: parseBaseline(value.baseline) }),
+    ...(value.final_result === undefined
+      ? {}
+      : { finalResult: parseFinalResult(value.final_result) }),
     diagnostics: parseDiagnostics(value.diagnostics),
     document: value,
   };

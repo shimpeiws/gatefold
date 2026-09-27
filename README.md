@@ -7,9 +7,11 @@ It reads a [`pfl`](docs/pfl-export-contract.md) JSON document — a
 [`yuurei`](docs/yuurei-trace-contract.md) `trace.json` run records, and
 since v0.6 a pair of whole
 [`yuurei` run directories](docs/yuurei-run-contract.md) including their
-artifact manifests and `patch.diff` records. It emits descriptive claims,
-each with evidence, provenance, and confidence. It does not score or rank
-harnesses.
+artifact manifests and `patch.diff` records, and since v0.7 an explicit
+[task-evaluation spec](docs/v0.7-scope.md) it can evaluate a
+[seeded run](docs/yuurei-seeded-run-contract.md) against. It emits
+descriptive claims, each with evidence, provenance, and confidence. It does
+not score or rank harnesses.
 
 ## CLI usage
 
@@ -30,6 +32,15 @@ gatefold compare-runs --before a-run-dir --after b-run-dir
                                                # A → B comparison of two
                                                # yuurei run directories,
                                                # artifacts included (schema v5)
+gatefold evaluate-run --run run-dir --spec task-spec.json \
+                      [--check-report report.json] ...
+                                               # per-criterion pass/fail/unknown
+                                               # verdicts (schema v6)
+gatefold compare-evaluations --before a-run-dir --after b-run-dir \
+                             --spec task-spec.json \
+                             [--before-check-report f] [--after-check-report f] ...
+                                               # per-criterion A → B verdict
+                                               # transitions (schema v7)
 ```
 
 `compare-traces` compares two yuurei `trace.json` runs only when they
@@ -51,6 +62,18 @@ the artifact digest, and a bounded line/byte range into the stored patch.
 Missing, truncated, digest-mismatched, and unverifiable artifacts are
 reported as such, never as absent output. See
 [v0.6 scope](docs/v0.6-scope.md) for the full contract.
+
+`evaluate-run` binds a task-evaluation spec to one run directory: the
+spec's `task.digest` (and `baseline.digest` when declared) must match the
+run. Each declarative criterion resolves to `pass`, `fail`, or `unknown`
+from verified evidence only — the baseline-relative `patch.diff`, the
+verified `result.txt`, or an independently produced check report that
+declares the run's subject digests. `compare-evaluations` applies the same
+evaluation to two comparable runs and reports each criterion's A → B
+transition. Missing, truncated, unverifiable, or contradictory evidence is
+`unknown`, never a pass or fail; no aggregate score is emitted. See
+[v0.7 scope](docs/v0.7-scope.md) and the
+[seeded-run contract](docs/yuurei-seeded-run-contract.md).
 
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
 confidence score — see [the claim model](docs/claim-model.md).
@@ -76,11 +99,13 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.4 scope and comparison contract](docs/v0.4-scope.md)
 - [v0.5 scope and run-comparison contract](docs/v0.5-scope.md)
 - [v0.6 scope and run-directory comparison contract](docs/v0.6-scope.md)
+- [v0.7 scope and Outcome-evaluation contract](docs/v0.7-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [pfl export contract](docs/pfl-export-contract.md)
 - [yuurei trace contract](docs/yuurei-trace-contract.md)
 - [yuurei run-directory contract](docs/yuurei-run-contract.md)
+- [yuurei seeded-run contract](docs/yuurei-seeded-run-contract.md)
 - [Descriptive rules](docs/rules.md)
 - [Release checklist](docs/release-checklist.md)
 

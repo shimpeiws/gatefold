@@ -350,16 +350,22 @@ describe("gatefold e2e (real process)", () => {
       "docs/v0.4-scope.md",
       "docs/v0.5-scope.md",
       "docs/v0.6-scope.md",
+      "docs/v0.7-scope.md",
       "docs/yuurei-trace-contract.md",
       "docs/yuurei-run-contract.md",
+      "docs/yuurei-seeded-run-contract.md",
       "schema/claim-result.v1.json",
       "schema/claim-result.v2.json",
       "schema/claim-result.v3.json",
       "schema/claim-result.v4.json",
       "schema/claim-result.v5.json",
+      "schema/claim-result.v6.json",
+      "schema/claim-result.v7.json",
       "schema/examples/valid-comparison-result.json",
       "schema/examples/valid-trace-comparison-result.json",
       "schema/examples/valid-run-comparison-result.json",
+      "schema/examples/valid-evaluation-result.json",
+      "schema/examples/valid-evaluation-comparison-result.json",
       "README.md",
       "package.json",
     ]) {
@@ -922,6 +928,48 @@ describe("gatefold e2e (real process)", () => {
         ).toBe(true);
         expect(runResult.schemaVersion).toBe(5);
         expect(runResult.claims.length).toBeGreaterThan(0);
+        const evaluateResult = await installed([
+          "evaluate-run",
+          "--run",
+          runFixture("seeded-a"),
+          "--spec",
+          evalFixture("task-spec.json"),
+          "--check-report",
+          evalFixture("check-report-a.json"),
+          "--format",
+          "json",
+        ]);
+        expect(evaluateResult.code, evaluateResult.stderr).toBe(0);
+        const evaluation = JSON.parse(evaluateResult.stdout);
+        expect(
+          validateEvaluation(evaluation),
+          JSON.stringify(validateEvaluation.errors),
+        ).toBe(true);
+        expect(evaluation.schemaVersion).toBe(6);
+        expect(evaluation.evaluations.length).toBeGreaterThan(0);
+        const compareEvalsResult = await installed([
+          "compare-evaluations",
+          "--before",
+          runFixture("seeded-a"),
+          "--after",
+          runFixture("seeded-b"),
+          "--spec",
+          evalFixture("task-spec.json"),
+          "--before-check-report",
+          evalFixture("check-report-a.json"),
+          "--after-check-report",
+          evalFixture("check-report-b.json"),
+          "--format",
+          "json",
+        ]);
+        expect(compareEvalsResult.code, compareEvalsResult.stderr).toBe(0);
+        const evalComparison = JSON.parse(compareEvalsResult.stdout);
+        expect(
+          validateEvaluationComparison(evalComparison),
+          JSON.stringify(validateEvaluationComparison.errors),
+        ).toBe(true);
+        expect(evalComparison.schemaVersion).toBe(7);
+        expect(evalComparison.transitions.length).toBeGreaterThan(0);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -963,6 +1011,19 @@ const runSchema = JSON.parse(
 const validateRunComparison = new Ajv2020().compile(runSchema);
 const runFixture = (name: string): string =>
   `${root}test/fixtures/yuurei-run/${name}`;
+
+const evaluationSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v6.json`, "utf8"),
+);
+const validateEvaluation = new Ajv2020().compile(evaluationSchema);
+const evaluationComparisonSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v7.json`, "utf8"),
+);
+const validateEvaluationComparison = new Ajv2020().compile(
+  evaluationComparisonSchema,
+);
+const evalFixture = (name: string): string =>
+  `${root}test/fixtures/evaluation/${name}`;
 
 describe("gatefold compare e2e (real process)", () => {
   const before = compareFixture("before.json");
@@ -1671,6 +1732,166 @@ describe("gatefold compare-runs e2e (real process)", () => {
       const result = JSON.parse(json.stdout);
       for (const claim of result.claims)
         expect(claim.claim).not.toMatch(unsafe);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("gatefold e2e: evaluate-run and compare-evaluations", () => {
+  const runDir = runFixture;
+
+  it("evaluate-run emits schema-valid v6 verdicts for a seeded run", async () => {
+    const run = await gatefold([
+      "evaluate-run",
+      "--run",
+      runDir("seeded-a"),
+      "--spec",
+      evalFixture("task-spec.json"),
+      "--check-report",
+      evalFixture("check-report-a.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateEvaluation(result),
+      JSON.stringify(validateEvaluation.errors),
+    ).toBe(true);
+    expect(result.schemaVersion).toBe(6);
+    expect(result.source.command).toBe("evaluate-run");
+    expect(result.inputs.run.seeded).toBe(true);
+    for (const entry of result.evaluations) {
+      expect(["pass", "fail", "unknown"]).toContain(entry.verdict);
+      expect(entry.evidence.length).toBeGreaterThan(0);
+    }
+    expect(
+      result.evaluations.map((e: { criterionId: string }) => e.criterionId),
+    ).toEqual([
+      "auth-fixed",
+      "tests-added",
+      "legacy-removed",
+      "answer-status",
+      "answer-mentions-expiry",
+      "unit-tests",
+    ]);
+  });
+
+  it("evaluate-run emits human-readable verdicts by default", async () => {
+    const run = await gatefold([
+      "evaluate-run",
+      "--run",
+      runDir("seeded-b"),
+      "--spec",
+      evalFixture("task-spec.json"),
+      "--check-report",
+      evalFixture("check-report-b.json"),
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toContain("[fail] criterion 'auth-fixed'");
+    expect(run.stdout).toContain("[pass] criterion 'answer-mentions-expiry'");
+    expect(run.stdout).toContain("confidence:");
+    expect(run.stdout).toContain("evidence:");
+  });
+
+  it("a rejected check report leaves external criteria unknown, exit 0", async () => {
+    const run = await gatefold([
+      "evaluate-run",
+      "--run",
+      runDir("seeded-a"),
+      "--spec",
+      evalFixture("task-spec.json"),
+      "--check-report",
+      evalFixture("check-report-mismatched.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.checkReports[0].state).toBe("mismatched");
+    expect(
+      result.evaluations.find(
+        (e: { criterionId: string }) => e.criterionId === "unit-tests",
+      ).verdict,
+    ).toBe("unknown");
+  });
+
+  it("compare-evaluations emits schema-valid v7 transitions", async () => {
+    const run = await gatefold([
+      "compare-evaluations",
+      "--before",
+      runDir("seeded-a"),
+      "--after",
+      runDir("seeded-b"),
+      "--spec",
+      evalFixture("task-spec.json"),
+      "--before-check-report",
+      evalFixture("check-report-a.json"),
+      "--after-check-report",
+      evalFixture("check-report-b.json"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(
+      validateEvaluationComparison(result),
+      JSON.stringify(validateEvaluationComparison.errors),
+    ).toBe(true);
+    expect(result.schemaVersion).toBe(7);
+    const transition = result.transitions.find(
+      (t: { criterionId: string }) => t.criterionId === "auth-fixed",
+    );
+    expect([transition.before, transition.after, transition.changed]).toEqual([
+      "pass",
+      "fail",
+      true,
+    ]);
+  });
+
+  it("rejects evaluate-run missing flags with exit 2", async () => {
+    for (const args of [
+      ["evaluate-run"],
+      ["evaluate-run", "--run", runDir("seeded-a")],
+      ["evaluate-run", "--run", "-", "--spec", evalFixture("task-spec.json")],
+      [
+        "compare-evaluations",
+        "--before",
+        runDir("seeded-a"),
+        "--spec",
+        evalFixture("task-spec.json"),
+      ],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+    }
+  });
+
+  it("rejects a spec that does not bind to the run with exit 3", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-eval-e2e-"));
+    try {
+      const spec = join(dir, "spec.json");
+      writeFileSync(
+        spec,
+        JSON.stringify({
+          specVersion: 1,
+          rubricId: "r",
+          task: { digest: "sha256:other-task" },
+          criteria: [{ id: "a", kind: "file-added", path: "x" }],
+        }),
+      );
+      const run = await gatefold([
+        "evaluate-run",
+        "--run",
+        runDir("seeded-a"),
+        "--spec",
+        spec,
+      ]);
+      expect(run.code).toBe(3);
+      expect(run.stderr).toContain("task.digest");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

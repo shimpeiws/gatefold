@@ -1,6 +1,6 @@
 # Release checklist
 
-Reproducible steps to cut the current release (v0.6). Every step must pass in
+Reproducible steps to cut the current release (v0.7). Every step must pass in
 order.
 
 ## 1. Clean install
@@ -21,7 +21,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.6 scope](v0.6-scope.md).
+release gate in [v0.7 scope](v0.7-scope.md).
 
 ## 3. Package validation
 
@@ -33,8 +33,9 @@ npm pack --dry-run --json
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
 `.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
-`claim-result.v5.json`, including `schema/examples/` and the v4
-trace-comparison and v5 run-comparison examples), `README.md`,
+`claim-result.v7.json`, including `schema/examples/` and the v4
+trace-comparison, v5 run-comparison, v6 evaluation, and v7
+evaluation-comparison examples), `README.md`,
 and `package.json`. All of `docs/` is shipped intentionally — keep only
 public-facing documentation in that directory. The tarball must not contain
 `test/`, `node_modules/`, `src/`, or any agent or review artifacts.
@@ -70,6 +71,9 @@ gatefold pfl-diff.json --format json      # diff document
 gatefold compare   --before export-a.json   --after export-b.json   --diff diff.json --format json          # three-document comparison (v3)
 gatefold compare-traces --before trace-a.json --after trace-b.json --format json                          # two-trace comparison (v4)
 gatefold compare-runs --before run-a-dir --after run-b-dir --format json                                     # two-run-directory comparison (v5)
+gatefold evaluate-run --run run-dir --spec task-spec.json --format json                                      # criterion evaluation (v6)
+gatefold evaluate-run --run run-dir --spec task-spec.json --check-report check-report.json --format json    # evaluation with an external check report
+gatefold compare-evaluations --before run-a-dir --after run-b-dir --spec task-spec.json --format json        # evaluation comparison (v7)
 pfl report --json | gatefold -            # stdin transport
 pfl export --json | gatefold -            # stdin transport
 pfl diff --json | gatefold -              # stdin transport
@@ -85,7 +89,13 @@ and every evidence entry names a `source` (`beforeTrace`/`afterTrace`)
 whose pointer resolves inside that trace. For the v5 run-comparison result,
 confirm `schemaVersion` is 5, `inputs` records `beforeRun`/`afterRun`, and
 every evidence entry names a `source` that resolves inside the named run's
-trace, manifest, or verified patch bytes.
+trace, manifest, or verified patch bytes. For the v6 evaluation result,
+confirm `schemaVersion` is 6, `inputs` records `run`, `spec`, and
+`checkReports`, and every evaluation entry carries a `verdict` of
+`pass`/`fail`/`unknown` with resolving evidence. For the v7
+evaluation-comparison result, confirm `schemaVersion` is 7, `inputs`
+records `beforeRun`/`afterRun`/`spec`, and every transition carries
+`before`/`after` verdicts with resolving evidence.
 
 ## 6. Tag and publish
 

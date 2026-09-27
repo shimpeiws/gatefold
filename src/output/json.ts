@@ -1,5 +1,9 @@
 import type { AnalysisResult } from "../domain/claim.js";
 import type { ComparisonResult } from "../domain/comparison.js";
+import type {
+  EvaluationComparisonResult,
+  EvaluationResult,
+} from "../domain/evaluation.js";
 import type { RunComparisonResult } from "../domain/run-comparison.js";
 import type { TraceComparisonResult } from "../domain/trace-comparison.js";
 
@@ -8,7 +12,9 @@ export function formatJson(
     | AnalysisResult
     | ComparisonResult
     | TraceComparisonResult
-    | RunComparisonResult,
+    | RunComparisonResult
+    | EvaluationResult
+    | EvaluationComparisonResult,
 ): string {
   return JSON.stringify(result, null, 2);
 }

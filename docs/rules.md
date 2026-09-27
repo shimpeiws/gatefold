@@ -12,6 +12,12 @@ or run is good or bad. Every claim carries evidence, provenance, and
 confidence per the matching result schema (`claim-result.v2.json`,
 `.v3.json`, `.v4.json`, `.v5.json`).
 
+The `evaluate-run` and `compare-evaluations` commands (v0.7) do not run
+these rules: they resolve each spec-declared criterion to a `pass`/`fail`/
+`unknown` verdict or an A → B transition instead of emitting rule claims —
+see [v0.7 scope](v0.7-scope.md) and `claim-result.v6.json`/
+`claim-result.v7.json`.
+
 ## `report` rules
 
 | Rule id | What it claims | Confidence |

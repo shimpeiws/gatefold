@@ -120,7 +120,8 @@ function assertConfinedPath(path: string, at: string): void {
     if (part === "" || part === "." || part === "..") throw invalid();
 }
 
-interface RawEntry {
+/** A manifest entry after shape and confinement validation. */
+export interface RawEntry {
   readonly index: number;
   readonly path: string;
   readonly kind: string;
@@ -168,12 +169,12 @@ function parseManifest(value: unknown): RawEntry[] {
 }
 
 /**
- * Reads and verifies one `patch.diff` entry: resolves the path inside the
- * run directory (rejecting symlink escapes and non-regular targets), reads
- * the bytes under the shared ceiling, and compares their sha256 digest with
- * the manifest's record.
+ * Reads and verifies one manifest entry's stored bytes: resolves the path
+ * inside the run directory (rejecting symlink escapes and non-regular
+ * targets), reads the bytes under the shared ceiling, and compares their
+ * sha256 digest with the manifest's record.
  */
-async function verifyPatchEntry(
+export async function verifyArtifactEntry(
   entry: RawEntry,
   runDir: string,
   realRunDir: string,
@@ -227,12 +228,30 @@ async function verifyPatchEntry(
 }
 
 /**
- * Loads one yuurei run directory: the trace (per the trace contract), the
- * artifact manifest, and — when the manifest lists `patch.diff` with a
- * verifiable digest — the verified patch bytes parsed per the run-directory
- * contract. Everything else in the directory is never opened.
+ * The directory-level facts every run reader shares: the validated trace,
+ * the raw manifest document, and the manifest's validated entries. Artifact
+ * verification is left to the caller so each reader chooses which entry
+ * bytes it interprets.
  */
-export async function readYuureiRun(dirPath: string): Promise<YuureiRun> {
+export interface LoadedRunDirectory {
+  /** The directory argument, sanitized for display. */
+  readonly display: string;
+  /** The run directory's canonical real path, for confinement checks. */
+  readonly realRunDir: string;
+  readonly trace: YuureiTrace;
+  readonly manifestDocument: unknown;
+  readonly rawEntries: readonly RawEntry[];
+}
+
+/**
+ * Reads the directory argument, its `trace.json` (per the trace contract),
+ * and its `artifacts.json` manifest (per the run-directory contract):
+ * lexical confinement for every entry, no artifact bytes touched. Shared by
+ * the v0.6 and v0.7 run readers.
+ */
+export async function loadRunDirectory(
+  dirPath: string,
+): Promise<LoadedRunDirectory> {
   const display = sanitizeText(dirPath);
   let dirInfo;
   try {
@@ -281,7 +300,25 @@ export async function readYuureiRun(dirPath: string): Promise<YuureiRun> {
     );
   }
 
-  const raw = parseManifest(manifestDocument);
+  return {
+    display,
+    realRunDir,
+    trace,
+    manifestDocument,
+    rawEntries: parseManifest(manifestDocument),
+  };
+}
+
+/**
+ * Loads one yuurei run directory: the trace (per the trace contract), the
+ * artifact manifest, and — when the manifest lists `patch.diff` with a
+ * verifiable digest — the verified patch bytes parsed per the run-directory
+ * contract. Everything else in the directory is never opened.
+ */
+export async function readYuureiRun(dirPath: string): Promise<YuureiRun> {
+  const loaded = await loadRunDirectory(dirPath);
+  const { display, realRunDir, trace, manifestDocument } = loaded;
+  const raw = loaded.rawEntries;
   const entries: ManifestEntry[] = [];
   let patch: ParsedPatch | null = null;
   let patchBytes: Buffer | null = null;
@@ -294,7 +331,7 @@ export async function readYuureiRun(dirPath: string): Promise<YuureiRun> {
       continue;
     }
     patchEntryIndex = entry.index;
-    const verified = await verifyPatchEntry(entry, dirPath, realRunDir);
+    const verified = await verifyArtifactEntry(entry, dirPath, realRunDir);
     const state = verified.state;
     let stateRecord: PatchState = state;
     if (
