@@ -1426,3 +1426,88 @@ describe("compare review fixes (devin-review round 4)", () => {
     expect(contradictions(result)).toHaveLength(0);
   });
 });
+
+describe("compare review fixes (devin-review round 5)", () => {
+  function compare(
+    before: { doc: PflExportDocument },
+    after: { doc: PflExportDocument },
+    diff: { doc: PflDiffDocument },
+  ) {
+    return compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+    });
+  }
+
+  const contradictions = (result: ComparisonResult) =>
+    result.claims.filter((c) => c.ruleId === "compare-contradiction");
+
+  it("flags a resolved status change the diff never recorded", () => {
+    const before = makeExport(
+      exportData([element("x", { status: "effective" })], {}, "a"),
+    );
+    const after = makeExport(
+      exportData([element("x", { status: "shadowed" })], {}, "b"),
+    );
+    const diff = makeDiff(diffData());
+    const result = compare(before, after, diff);
+    expect(
+      contradictions(result).some((c) =>
+        c.claim.includes("the diff records no status change"),
+      ),
+    ).toBe(true);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("flags a null diff side against a present unresolved element", () => {
+    const before = makeExport(
+      exportData([element("x", { status: null })], {}, "a"),
+    );
+    const after = makeExport(exportData([element("x")], {}, "b"));
+    const diff = makeDiff(
+      diffData({
+        effective: {
+          newlyEffective: 1,
+          noLongerEffective: 0,
+          activationChanged: 0,
+          statusChanges: [{ id: "x", from: null, to: "effective" }],
+        },
+      }),
+    );
+    const result = compare(before, after, diff);
+    expect(
+      contradictions(result).some((c) =>
+        c.claim.includes("contains the element with no resolved entry"),
+      ),
+    ).toBe(true);
+    expectEvidenceResolves(result, {
+      before: before.raw,
+      after: after.raw,
+      diff: diff.raw,
+    });
+  });
+
+  it("records raw CLI labels instead of sanitized source paths", () => {
+    const before = makeExport(exportData([], {}, "a"));
+    const after = makeExport(exportData([], {}, "b"));
+    const diff = makeDiff(diffData());
+    const result = compareDocuments({
+      before: before.doc,
+      after: after.doc,
+      diff: diff.doc,
+      labels: {
+        before: "weird\npath/a.json",
+        after: "b.json",
+        diff: "d.json",
+      },
+    });
+    expect(result.inputs.before.label).toBe("weird\npath/a.json");
+    expect(result.inputs.after.label).toBe("b.json");
+    expect(result.inputs.diff.label).toBe("d.json");
+  });
+});

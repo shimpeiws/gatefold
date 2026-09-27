@@ -450,33 +450,91 @@ export function reconcileDocuments(
           });
       }
       // A null side marks the element as absent on that side in the diff;
-      // an export that still carries a resolved status contradicts that.
-      if (statusChange.from === null && beforeElement?.resolved != null)
+      // an export that still carries the element — resolved or not —
+      // contradicts that.
+      if (statusChange.from === null && beforeElement !== null) {
+        if (beforeElement.resolved === null)
+          contradictions.push({
+            detail:
+              "diff records no before status but the before export contains the element with no resolved entry",
+            evidence: [
+              statusRef("from"),
+              {
+                source: "before",
+                pointer: `/data/elements/${bi}/id`,
+                elementId: id,
+              },
+            ],
+          });
+        else
+          contradictions.push({
+            detail: `diff records no before status but the before export resolves '${beforeElement.resolved.status}'`,
+            evidence: [
+              statusRef("from"),
+              {
+                source: "before",
+                pointer: `/data/elements/${bi}/resolved/status`,
+                elementId: id,
+              },
+            ],
+          });
+      }
+      if (statusChange.to === null && afterElement !== null) {
+        if (afterElement.resolved === null)
+          contradictions.push({
+            detail:
+              "diff records no after status but the after export contains the element with no resolved entry",
+            evidence: [
+              statusRef("to"),
+              {
+                source: "after",
+                pointer: `/data/elements/${ai}/id`,
+                elementId: id,
+              },
+            ],
+          });
+        else
+          contradictions.push({
+            detail: `diff records no after status but the after export resolves '${afterElement.resolved.status}'`,
+            evidence: [
+              statusRef("to"),
+              {
+                source: "after",
+                pointer: `/data/elements/${ai}/resolved/status`,
+                elementId: id,
+              },
+            ],
+          });
+      }
+    }
+    if (structural === "none" && statusChange === null) {
+      // A shared element whose resolved status differs between two
+      // complete exports changed state without the diff recording it.
+      if (
+        bi !== null &&
+        ai !== null &&
+        before.completeness === "complete" &&
+        after.completeness === "complete" &&
+        beforeElement?.resolved != null &&
+        afterElement?.resolved != null &&
+        beforeElement.resolved.status !== afterElement.resolved.status
+      )
         contradictions.push({
-          detail: `diff records no before status but the before export resolves '${beforeElement.resolved.status}'`,
+          detail: `the exports resolve '${beforeElement.resolved.status}' in A and '${afterElement.resolved.status}' in B but the diff records no status change`,
           evidence: [
-            statusRef("from"),
             {
               source: "before",
               pointer: `/data/elements/${bi}/resolved/status`,
               elementId: id,
             },
-          ],
-        });
-      if (statusChange.to === null && afterElement?.resolved != null)
-        contradictions.push({
-          detail: `diff records no after status but the after export resolves '${afterElement.resolved.status}'`,
-          evidence: [
-            statusRef("to"),
             {
               source: "after",
               pointer: `/data/elements/${ai}/resolved/status`,
               elementId: id,
             },
+            { source: "diff", pointer: "/data/effective/statusChanges" },
           ],
         });
-    }
-    if (structural === "none" && statusChange === null) {
       // The diff does not mention this id at all. When the opposite
       // export is complete, its provable absence makes the diff's
       // silence disagree with the side that carries the element; a

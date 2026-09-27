@@ -51,9 +51,12 @@ function exportMatchesSide(
   );
 }
 
-function exportInput(document: PflExportDocument): ComparisonExportInput {
+function exportInput(
+  document: PflExportDocument,
+  label?: string,
+): ComparisonExportInput {
   return {
-    label: document.sourcePath,
+    label: label ?? document.sourcePath,
     command: "export",
     pflVersion: document.pflVersion,
     observedSnapshotId: document.data.snapshot.observedSnapshotId,
@@ -66,9 +69,12 @@ function exportInput(document: PflExportDocument): ComparisonExportInput {
   };
 }
 
-function diffInput(document: PflDiffDocument): ComparisonDiffInput {
+function diffInput(
+  document: PflDiffDocument,
+  label?: string,
+): ComparisonDiffInput {
   return {
-    label: document.sourcePath,
+    label: label ?? document.sourcePath,
     command: "diff",
     pflVersion: document.pflVersion,
     observedSnapshotIdA: document.data.observedSnapshotIdA,
@@ -95,6 +101,12 @@ export function compareDocuments(input: {
   before: PflDocument;
   after: PflDocument;
   diff: PflDocument;
+  /**
+   * Raw CLI arguments recorded as the inputs' labels (the parser stores a
+   * sanitized sourcePath, which cannot represent the supplied path). When
+   * omitted, each document's sanitized sourcePath is used.
+   */
+  labels?: { before?: string; after?: string; diff?: string };
 }): ComparisonResult {
   const before = requireCommand(input.before, "export", "before");
   const after = requireCommand(input.after, "export", "after");
@@ -161,9 +173,9 @@ export function compareDocuments(input: {
     schemaVersion: COMPARISON_SCHEMA_VERSION,
     source: { command: "compare" },
     inputs: {
-      before: exportInput(before),
-      after: exportInput(after),
-      diff: diffInput(diff),
+      before: exportInput(before, input.labels?.before),
+      after: exportInput(after, input.labels?.after),
+      diff: diffInput(diff, input.labels?.diff),
     },
     claims,
   };

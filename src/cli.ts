@@ -6,6 +6,7 @@ import {
   PflExportError,
   readPflExport,
   readPflExportStdin,
+  STDIN_SOURCE,
 } from "./input/pfl-export.js";
 import { formatComparisonHuman, formatHuman } from "./output/human.js";
 import { formatJson } from "./output/json.js";
@@ -264,6 +265,11 @@ export async function runCli(args: readonly string[]): Promise<string> {
       before: await readCompareInput(compare.before),
       after: await readCompareInput(compare.after),
       diff: await readCompareInput(compare.diff),
+      labels: {
+        before: compare.before === "-" ? STDIN_SOURCE : compare.before,
+        after: compare.after === "-" ? STDIN_SOURCE : compare.after,
+        diff: compare.diff === "-" ? STDIN_SOURCE : compare.diff,
+      },
     });
     const filtered = filterClaims(result, options.minConfidence);
     return options.format === "json"
