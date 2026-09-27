@@ -179,8 +179,6 @@ async function verifyPatchEntry(
   realRunDir: string,
 ): Promise<{ state: ArtifactState; bytes?: number; content?: Buffer }> {
   const at = `artifacts[${entry.index}]`;
-  if (!SHA256_DIGEST.test(entry.digest)) return { state: "unverified" };
-
   const fullPath = join(runDir, entry.path);
   let real: string;
   try {
@@ -194,6 +192,8 @@ async function verifyPatchEntry(
     throw shapeError(
       `artifacts.json field ${at}.path resolves outside the run directory`,
     );
+  if (!SHA256_DIGEST.test(entry.digest)) return { state: "unverified" };
+
   let info;
   try {
     info = await stat(real);
