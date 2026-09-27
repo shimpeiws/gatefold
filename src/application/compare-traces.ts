@@ -19,7 +19,10 @@ import { TRACE_RULES } from "./trace-rules.js";
  * carried as the trace's raw subdocuments so option-level and provenance
  * drift stay auditable. Describes, never interprets.
  */
-function traceInput(trace: YuureiTrace, label?: string): TraceInputDescriptor {
+export function traceInput(
+  trace: YuureiTrace,
+  label?: string,
+): TraceInputDescriptor {
   const raw = trace.document as Readonly<Record<string, unknown>>;
   return {
     label: label ?? trace.sourcePath,
