@@ -173,10 +173,15 @@ describe("gatefold compare-traces", () => {
     expect(execution.claim).toContain("run B timed out");
     expect(execution.claim).toContain("'SIGKILL'");
     expect(execution.claim).not.toContain("B exited");
+    // `signal` is a required key present in every trace, so both sides cite
+    // it even when the value is null.
     const signalRefs = execution.evidence.filter(
       (e) => e.pointer === "/execution/signal",
     );
-    expect(signalRefs.map((e) => e.source)).toEqual(["afterTrace"]);
+    expect(signalRefs.map((e) => e.source)).toEqual([
+      "beforeTrace",
+      "afterTrace",
+    ]);
   });
 
   it("compares duration only when both sides record it", async () => {
@@ -645,5 +650,92 @@ describe("gatefold compare-traces review regressions", () => {
       "recorded the runtime version as unobserved",
     );
     expect(runtime.claim).not.toContain("did not record");
+  });
+
+  it("quotes a tiny usage value exactly instead of a rounded decimal", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    before.usage = { tiny: 1.234e-20 };
+    after.usage = { tiny: 1.234e-20 };
+    const [usage] = claimsOf(compareDocs(before, after), "trace-usage");
+    expect(usage.claim).toContain("1.234e-20");
+    expect(usage.claim).not.toContain("0.00000000000000000001");
+  });
+
+  it("quotes a tiny cost amount exactly instead of a rounded decimal", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    before.cost = { amount: 1.234e-20, currency: "USD" };
+    after.cost = { amount: 1.234e-20, currency: "USD" };
+    const [cost] = claimsOf(compareDocs(before, after), "trace-cost");
+    expect(cost.claim).toContain("1.234e-20");
+    expect(cost.claim).not.toContain("0.00000000000000000001");
+  });
+
+  it.each([
+    [
+      "usage",
+      (doc: any) => {
+        doc.usage = { tokens: 1e400 };
+      },
+    ],
+    [
+      "cost.amount",
+      (doc: any) => {
+        doc.cost = { amount: 1e400, currency: "USD" };
+      },
+    ],
+    [
+      "execution_options.runtime leaf",
+      (doc: any) => {
+        doc.execution_options = {
+          timeout_ms: 600000,
+          runtime: { max_turns: 1e400 },
+        };
+      },
+    ],
+    [
+      "execution.duration_ms",
+      (doc: any) => {
+        doc.execution = {
+          exit_code: 0,
+          signal: null,
+          duration_ms: 1e400,
+          timed_out: false,
+        };
+      },
+    ],
+  ])("rejects a non-finite %s as an input error", (_label, mutate) => {
+    const doc = docA();
+    mutate(doc);
+    expect(() => parseYuureiTrace(doc, "before.json")).toThrow(PflExportError);
+  });
+
+  it("states an overflowing recorded difference instead of quoting Infinity", () => {
+    const before = docA() as any;
+    const after = docB() as any;
+    before.usage = { span: -Number.MAX_VALUE };
+    after.usage = { span: Number.MAX_VALUE };
+    before.cost = { amount: -Number.MAX_VALUE, currency: "USD" };
+    after.cost = { amount: Number.MAX_VALUE, currency: "USD" };
+    before.execution = {
+      exit_code: 0,
+      signal: null,
+      duration_ms: -Number.MAX_VALUE,
+      timed_out: false,
+    };
+    after.execution = {
+      exit_code: 0,
+      signal: null,
+      duration_ms: Number.MAX_VALUE,
+      timed_out: false,
+    };
+    const result = compareDocs(before, after);
+    for (const ruleId of ["trace-usage", "trace-cost", "trace-duration"]) {
+      const [claimed] = claimsOf(result, ruleId);
+      expect(claimed.claim, ruleId).toContain("outside the finite range");
+      expect(claimed.claim, ruleId).not.toContain("Infinity");
+      expect(claimed.claim, ruleId).not.toContain("NaN");
+    }
   });
 });

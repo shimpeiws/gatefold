@@ -193,6 +193,8 @@ function nullableNumberField(
   const value = record[key];
   if (value === null) return null;
   if (typeof value !== "number") throw shapeError(path, "a number or null");
+  if (!Number.isFinite(value))
+    throw shapeError(path, "a finite number or null");
   return value;
 }
 
@@ -257,8 +259,11 @@ function checkRuntimeOptions(
       path,
       `a runtime option tree with at most ${MAX_RUNTIME_OPTION_NODES} nodes`,
     );
-  if (value === null || typeof value === "boolean" || typeof value === "number")
+  if (value === null || typeof value === "boolean") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw shapeError(path, "a finite number");
     return;
+  }
   if (typeof value === "string") {
     if (value.length > MAX_SCALAR_CHARS)
       throw shapeError(
@@ -314,6 +319,8 @@ function parseUsage(value: unknown): Readonly<Record<string, number | null>> {
     const entry = value[key];
     if (entry !== null && typeof entry !== "number")
       throw shapeError(`usage.${key}`, "a number or null");
+    if (typeof entry === "number" && !Number.isFinite(entry))
+      throw shapeError(`usage.${key}`, "a finite number or null");
     usage[key] = entry;
   }
   return usage;
@@ -324,6 +331,8 @@ function parseCost(value: unknown): YuureiTraceCost | null {
   if (!isRecord(value)) throw shapeError("cost", "an object or null");
   const amount = value.amount;
   if (typeof amount !== "number") throw shapeError("cost.amount", "a number");
+  if (!Number.isFinite(amount))
+    throw shapeError("cost.amount", "a finite number");
   return {
     amount,
     currency: stringField(value, "currency", "cost.currency"),

@@ -51,7 +51,10 @@ function plainNumber(value: number): string {
   if (!shortest.includes("e") && !shortest.includes("E")) return shortest;
   if (!Number.isFinite(value) || Math.abs(value) >= 1e21) return shortest;
   const fixed = value.toFixed(20).replace(/0+$/, "").replace(/\.$/, "");
-  if (fixed === "" || fixed === "-" || Number(fixed) === 0) return shortest;
+  // Only an exact expansion replaces exponent notation: toFixed rounds beyond
+  // twenty fractional places, which would quote a different number than the
+  // evidence holds.
+  if (fixed === "" || fixed === "-" || Number(fixed) !== value) return shortest;
   return fixed;
 }
 
@@ -87,6 +90,16 @@ function formatCostDelta(value: number): string {
   if (value === 0 || Number.isInteger(value)) return String(value);
   const rounded = Number(value.toFixed(6));
   return rounded === 0 ? plainNumber(value) : String(rounded);
+}
+
+/**
+ * The recorded A -> B difference, or null when two finite recorded values
+ * differ by an amount outside the finite range. Callers state the overflow
+ * instead of quoting an infinite or NaN difference.
+ */
+function finiteDelta(a: number, b: number): number | null {
+  const delta = b - a;
+  return Number.isFinite(delta) ? delta : null;
 }
 
 /** Escapes one usage key as an RFC 6901 pointer segment. */
@@ -302,17 +315,12 @@ export const TRACE_RULES: readonly TraceRule[] = [
       const { before, after } = view;
       const evidence: TraceEvidenceReference[] = [
         { source: "beforeTrace", pointer: "/execution/exit_code" },
+        { source: "beforeTrace", pointer: "/execution/signal" },
         { source: "beforeTrace", pointer: "/execution/timed_out" },
         { source: "afterTrace", pointer: "/execution/exit_code" },
+        { source: "afterTrace", pointer: "/execution/signal" },
         { source: "afterTrace", pointer: "/execution/timed_out" },
       ];
-      for (const [trace, source] of [
-        [before, "beforeTrace"],
-        [after, "afterTrace"],
-      ] as const) {
-        if (trace.execution.signal !== null)
-          evidence.push({ source, pointer: "/execution/signal" });
-      }
       const text =
         `${executionOutcome(before, "A")}; ${executionOutcome(after, "B")}. ` +
         `Exit status describes process termination, not answer quality.`;
@@ -330,12 +338,18 @@ export const TRACE_RULES: readonly TraceRule[] = [
       const a = before.execution.durationMs;
       const b = after.execution.durationMs;
       let text: string;
-      if (a !== null && b !== null)
+      if (a !== null && b !== null) {
+        const delta = finiteDelta(a, b);
         text =
-          `Run A recorded a duration of ${formatNumber(a)} ms and run B ` +
-          `${formatNumber(b)} ms, a recorded difference of ` +
-          `${formatNumberDelta(b - a)} ms.`;
-      else if (a === null && b === null)
+          delta === null
+            ? `Run A recorded a duration of ${formatNumber(a)} ms and run B ` +
+              `${formatNumber(b)} ms; the difference between the two recorded ` +
+              `durations is outside the finite range, so no difference is ` +
+              `computed.`
+            : `Run A recorded a duration of ${formatNumber(a)} ms and run B ` +
+              `${formatNumber(b)} ms, a recorded difference of ` +
+              `${formatNumberDelta(delta)} ms.`;
+      } else if (a === null && b === null)
         text = `Neither run recorded a duration; no difference is computed.`;
       else
         text =
@@ -374,12 +388,18 @@ export const TRACE_RULES: readonly TraceRule[] = [
         };
         const keyText = `usage key '${key}'`;
         if (aHas && bHas && a !== null && b !== null) {
+          const delta = finiteDelta(a, b);
           claims.push(
             claim(
               "trace-usage",
-              `Run A recorded ${formatNumber(a)} for ${keyText}; run B ` +
-                `recorded ${formatNumber(b)} (a recorded difference of ` +
-                `${formatNumberDelta(b - a)}).`,
+              delta === null
+                ? `Run A recorded ${formatNumber(a)} for ${keyText}; run B ` +
+                    `recorded ${formatNumber(b)}; the difference between the two ` +
+                    `recorded values is outside the finite range, so no ` +
+                    `difference is computed.`
+                : `Run A recorded ${formatNumber(a)} for ${keyText}; run B ` +
+                    `recorded ${formatNumber(b)} (a recorded difference of ` +
+                    `${formatNumberDelta(delta)}).`,
               [aPointer, bPointer],
             ),
           );
@@ -476,14 +496,19 @@ export const TRACE_RULES: readonly TraceRule[] = [
           `Run ${presentSide} recorded an estimated cost of ` +
           `${plainNumber(present!.amount)} ${present!.currency}; run ${absentSide} ` +
           `produced no cost estimate, so no difference is computed.`;
-      } else if (before.cost.currency === after.cost.currency)
+      } else if (before.cost.currency === after.cost.currency) {
+        const delta = finiteDelta(before.cost.amount, after.cost.amount);
         text =
           `Run A recorded an estimated cost of ${plainNumber(before.cost.amount)} ` +
           `${before.cost.currency} and run B an estimated ` +
-          `${plainNumber(after.cost.amount)} ${after.cost.currency} (a recorded ` +
-          `difference of ${formatCostDelta(after.cost.amount - before.cost.amount)} ` +
-          `${before.cost.currency}). Both amounts are estimates.`;
-      else
+          `${plainNumber(after.cost.amount)} ${after.cost.currency}` +
+          (delta === null
+            ? `; the difference between the two estimates is outside the ` +
+              `finite range, so no numeric difference is reported.`
+            : ` (a recorded difference of ${formatCostDelta(delta)} ` +
+              `${before.cost.currency}).`) +
+          ` Both amounts are estimates.`;
+      } else
         text =
           `Run A recorded an estimated cost of ${plainNumber(before.cost.amount)} ` +
           `${before.cost.currency} and run B an estimated ` +
