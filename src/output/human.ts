@@ -121,10 +121,16 @@ export function formatRunComparisonHuman(
             entry.lines === undefined
               ? ""
               : ` lines ${entry.lines.start}-${entry.lines.end}`;
+          const byteRange =
+            entry.bytes === undefined
+              ? ""
+              : ` bytes ${entry.bytes.start}-${entry.bytes.end}`;
+          const digest =
+            entry.digest === undefined ? "" : ` digest ${entry.digest}`;
           const detail = entry.elementId ?? entry.note;
           const suffix =
             detail === undefined ? "" : ` (${sanitizeText(detail)})`;
-          return `${entry.source}:${entry.pointer}${path}${range}${suffix}`;
+          return `${entry.source}:${entry.pointer}${path}${range}${byteRange}${digest}${suffix}`;
         })
         .join(", ");
       return [
