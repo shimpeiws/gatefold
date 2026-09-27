@@ -185,6 +185,22 @@ export function parsePatchDiff(
           pos += 1;
         }
       }
+      // Under a truncation allowance a block is evidence of a complete
+      // generated file only once its terminator is observed: the
+      // `\ No newline` marker was read, or a following line rules out a
+      // marker lost to the cut — a complete line, or a partial tail that
+      // cannot be the marker's start. An unsealed block reaching the end
+      // of the stored bytes (a partial content line, a header cut before
+      // its hunk, a hunk whose marker may be cut) belongs to the unknown
+      // tail, not to the recorded prefix.
+      const sealed =
+        !trailingNewline ||
+        (pos < lines.length &&
+          (pos < lines.length - 1 ||
+            !partialTail ||
+            !NO_NEWLINE.startsWith(lines[pos].text)));
+      if (!sealed && options.allowTruncatedTail)
+        return { files, complete: false };
       files.push({
         path,
         lines: content.map((line) => line.text),

@@ -1,5 +1,6 @@
 export { analyze } from "./application/analyze.js";
 export { compareDocuments } from "./application/compare.js";
+export { compareRuns } from "./application/compare-runs.js";
 export { compareTraces } from "./application/compare-traces.js";
 export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
 export {
@@ -11,6 +12,17 @@ export {
   type ComparisonExportInput,
   type ComparisonResult,
 } from "./domain/comparison.js";
+export {
+  RUN_COMPARISON_SCHEMA_VERSION,
+  type RunArtifactDescriptor,
+  type RunClaim,
+  type RunClaimProvenance,
+  type RunComparisonResult,
+  type RunEvidenceRange,
+  type RunEvidenceReference,
+  type RunEvidenceSource,
+  type RunInputDescriptor,
+} from "./domain/run-comparison.js";
 export {
   TRACE_COMPARISON_SCHEMA_VERSION,
   type TraceClaim,
@@ -57,6 +69,21 @@ export type {
   PflSnapshotResolved,
 } from "./input/pfl-export.js";
 export {
+  parsePatchDiff,
+  PatchParseError,
+  type ParsedPatch,
+  type PatchContentLine,
+  type PatchFile,
+} from "./input/yuurei-patch.js";
+export {
+  PATCH_ARTIFACT_PATH,
+  readYuureiRun,
+  type ArtifactState,
+  type ManifestEntry,
+  type PatchState,
+  type YuureiRun,
+} from "./input/yuurei-run.js";
+export {
   parseYuureiTrace,
   readYuureiTrace,
   readYuureiTraceStdin,
@@ -80,6 +107,7 @@ export type {
 export {
   formatComparisonHuman,
   formatHuman,
+  formatRunComparisonHuman,
   formatTraceComparisonHuman,
 } from "./output/human.js";
 export { formatJson } from "./output/json.js";

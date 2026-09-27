@@ -140,11 +140,20 @@ function parseManifest(value: unknown): RawEntry[] {
       "artifacts",
       `an array with at most ${MAX_MANIFEST_ENTRIES} items`,
     );
+  const seenPaths = new Set<string>();
   return artifacts.map((item, index) => {
     const at = `artifacts[${index}]`;
     if (!isRecord(item)) throw manifestShapeError(at, "an object");
     const path = manifestString(item, "path", `${at}.path`);
     assertConfinedPath(path, `${at}.path`);
+    // yuurei's collector records each artifact path once, so a repeated
+    // path is contradictory manifest data — not an ordering to pick from.
+    if (seenPaths.has(path))
+      throw manifestShapeError(
+        `${at}.path`,
+        "unique within the artifacts array",
+      );
+    seenPaths.add(path);
     const truncated = item.truncated;
     if (truncated !== undefined && typeof truncated !== "boolean")
       throw manifestShapeError(`${at}.truncated`, "a boolean when present");
@@ -281,12 +290,6 @@ export async function readYuureiRun(dirPath: string): Promise<YuureiRun> {
 
   for (const entry of raw) {
     if (entry.path !== PATCH_ARTIFACT_PATH) {
-      entries.push({ ...entry, state: "unverified" });
-      continue;
-    }
-    if (patchEntryIndex !== null) {
-      // A second entry naming patch.diff is preserved as a manifest fact
-      // without being treated as the run's patch.
       entries.push({ ...entry, state: "unverified" });
       continue;
     }

@@ -203,6 +203,43 @@ describe("compareRuns", () => {
     expectSchemaValid(result);
   });
 
+  it("never claims a file whose block ends at the truncation boundary", async () => {
+    const base = mkdtempSync(join(tmpdir(), "gatefold-runs-"));
+    try {
+      const trace = readFileSync(`${fixture("run-a")}/trace.json`, "utf8");
+      const make = async (name: string, patch: string, truncated: boolean) => {
+        const runDir = join(base, name);
+        mkdirSync(runDir);
+        writeFileSync(join(runDir, "trace.json"), trace);
+        writeFileSync(join(runDir, "patch.diff"), patch);
+        const digest = `sha256:${createHash("sha256").update(patch).digest("hex")}`;
+        writeFileSync(
+          join(runDir, "artifacts.json"),
+          JSON.stringify({
+            artifacts: [
+              { path: "patch.diff", kind: "patch", digest, truncated },
+            ],
+          }),
+        );
+        return readYuureiRun(runDir);
+      };
+      // B's stored bytes end right after b.txt's header — a.txt is a
+      // sealed record, b.txt is the unknown tail.
+      const full = "--- /dev/null\n+++ a.txt\n@@ -0,0 +1,1 @@\n+x\n";
+      const result = compareRuns({
+        before: await make("a", "", false),
+        after: await make("b", `${full}--- /dev/null\n+++ b.txt\n`, true),
+      });
+      const added = claimsByRule(result, "run-file-added");
+      expect(added.map((claim) => claim.claim)).toEqual([
+        expect.stringContaining("'a.txt'"),
+      ]);
+      expectSchemaValid(result);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("never claims a missing patch means no output", async () => {
     const result = await load("run-nopatch", "run-a");
     expect(result.inputs.beforeRun.patchState).toBe("not-recorded");

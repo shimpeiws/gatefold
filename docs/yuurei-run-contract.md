@@ -60,6 +60,11 @@ that is not an object, lacks the `artifacts` array, or carries an entry that
 is not an object with string `path`/`kind`/`digest` fields is rejected with
 `invalid-shape`.
 
+Each `path` appears on at most one entry: yuurei's collector records each
+artifact once, so a repeated path — of any kind, `patch.diff` included — is
+contradictory manifest data, and the run directory is rejected with
+`invalid-shape` rather than trusting whichever record happens to come first.
+
 ### Entry path confinement
 
 Every `path` must be a relative POSIX path confined to the run directory:
@@ -137,12 +142,18 @@ claimed absent from the workspace.
 
 When the manifest records `truncated: true`, an incomplete final block is
 accepted: the complete prefix is parsed and the cut tail is reported as
-unknown. When the entry is not marked truncated, bytes that violate the
-grammar make the patch `malformed`: verified bytes that Gatefold cannot
-interpret, so no file-level claims are emitted from it. A well-formed yuurei
-patch records each workspace path exactly once; a patch that repeats a
-`+++` path is `malformed` under either truncation marking — the duplicate is
-a grammar violation, not a cut tail.
+unknown. A block counts as part of that prefix only once its terminator is
+observed — the `\ No newline at end of file` marker was read, or a complete
+line follows the block. A block that reaches the end of the stored bytes
+without one belongs to the cut tail, not to the record: a `+++` header cut
+before its hunk is not an empty file, a satisfied hunk may have lost its
+marker, and a partial final line is unfinished content. Only such sealed
+blocks produce file-level claims. When the entry is not marked truncated,
+bytes that violate the grammar make the patch `malformed`: verified bytes
+that Gatefold cannot interpret, so no file-level claims are emitted from
+it. A well-formed yuurei patch records each workspace path exactly once; a
+patch that repeats a `+++` path is `malformed` under either truncation
+marking — the duplicate is a grammar violation, not a cut tail.
 
 ## Evidence locations
 

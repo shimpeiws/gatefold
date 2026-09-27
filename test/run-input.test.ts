@@ -301,6 +301,61 @@ describe("readYuureiRun", () => {
     }
   });
 
+  it.each([
+    ["patch.diff", "patch", "patch"],
+    ["an unread artifact", "stdout.log", "log"],
+  ])(
+    "rejects a manifest that lists %s on two entries",
+    async (_name, path, kind) => {
+      const base = tmp();
+      try {
+        const runDir = writeRun(base, {
+          manifest: {
+            artifacts: [
+              { path, kind, digest: sha256("first") },
+              { path, kind, digest: sha256("second") },
+            ],
+          },
+        });
+        await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+          code: "invalid-shape",
+        });
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("does not record a truncated patch's unsealed tail block as a file", async () => {
+    const base = tmp();
+    try {
+      // The stored bytes end right after b.txt's header: whether the file
+      // was empty or its hunk was cut is unknowable.
+      const patch =
+        "--- /dev/null\n+++ a.txt\n@@ -0,0 +1,1 @@\n+x\n" +
+        "--- /dev/null\n+++ b.txt\n";
+      const runDir = writeRun(base, {
+        patch,
+        manifest: {
+          artifacts: [
+            {
+              path: "patch.diff",
+              kind: "patch",
+              digest: sha256(patch),
+              truncated: true,
+            },
+          ],
+        },
+      });
+      const run = await readYuureiRun(runDir);
+      expect(run.patchState).toBe("verified-truncated");
+      expect(run.patch!.complete).toBe(false);
+      expect(run.patch!.files.map((file) => file.path)).toEqual(["a.txt"]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("marks a verified patch with duplicate file paths as malformed", async () => {
     const base = tmp();
     try {
