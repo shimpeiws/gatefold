@@ -16,7 +16,9 @@ The `evaluate-run` and `compare-evaluations` commands (v0.7) do not run
 these rules: they resolve each spec-declared criterion to a `pass`/`fail`/
 `unknown` verdict or an A → B transition instead of emitting rule claims —
 see [v0.7 scope](v0.7-scope.md) and `claim-result.v6.json`/
-`claim-result.v7.json`.
+`claim-result.v7.json`. The `audit-run` command (v0.8) runs no rules either:
+it emits the fixed fact list of [v0.8 scope](v0.8-scope.md) and
+`claim-result.v8.json` — record states, not claims or verdicts.
 
 ## `report` rules
 

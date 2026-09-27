@@ -1,4 +1,5 @@
 export { analyze } from "./application/analyze.js";
+export { auditRun } from "./application/audit-run.js";
 export { compareDocuments } from "./application/compare.js";
 export { compareEvaluations } from "./application/compare-evaluations.js";
 export { compareRuns } from "./application/compare-runs.js";
@@ -18,6 +19,19 @@ export {
   SINGLE_SOURCES,
   type SideSources,
 } from "./application/evaluate-run.js";
+export {
+  AUDIT_SCHEMA_VERSION,
+  type AuditCheckReportDescriptor,
+  type AuditCheckReportState,
+  type AuditCompleteness,
+  type AuditEvidenceRange,
+  type AuditEvidenceReference,
+  type AuditEvidenceSource,
+  type AuditFact,
+  type AuditFactState,
+  type AuditProvenance,
+  type AuditResult,
+} from "./domain/audit.js";
 export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
 export {
   COMPARISON_SCHEMA_VERSION,
@@ -127,6 +141,11 @@ export {
   type SeededPatchFile,
 } from "./input/yuurei-seeded-patch.js";
 export {
+  readAuditedRun,
+  type AuditedArtifactRecord,
+  type AuditedRun,
+} from "./input/yuurei-audit-run.js";
+export {
   BASELINE_MANIFEST_ARTIFACT_PATH,
   CHANGES_ARTIFACT_PATH,
   normalizeResultText,
@@ -183,6 +202,7 @@ export type {
   YuureiTraceTask,
 } from "./input/yuurei-trace.js";
 export {
+  formatAuditHuman,
   formatComparisonHuman,
   formatEvaluationComparisonHuman,
   formatEvaluationHuman,

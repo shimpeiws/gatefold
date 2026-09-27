@@ -31,6 +31,8 @@ human or JSON formatter                   ↓
 
 `src/domain/claim.ts`, `src/domain/comparison.ts`, `src/domain/trace-comparison.ts`, and `src/domain/run-comparison.ts` define the v2, v3, v4, and v5 result types; the matching `src/domain/validate*.ts` modules enforce the committed JSON Schema invariants — including evidence-pointer resolution for comparison results — at each analysis boundary.
 
+`src/application/evaluate-run.ts` and `src/application/compare-evaluations.ts` resolve task-spec criteria against a seeded run (schema v6) or two runs (schema v7), reading through `src/input/yuurei-seeded-run.ts`, `src/input/task-spec.ts`, and `src/input/check-report.ts`; `src/application/check-report-binding.ts` binds each supplied report to the run's declared subject digests. `src/application/audit-run.ts` (schema v8) audits one run directory without a spec: `src/input/yuurei-audit-run.ts` loads the same bounded records leniently — preserving states a strict reader would reject — and the application layer emits the fixed `docs/v0.8-scope.md` fact list, with `src/domain/audit.ts` defining the v8 types and `src/domain/validate-audit.ts` enforcing the result invariants and evidence resolution.
+
 `src/output/human.ts` and `src/output/json.ts` render an analysis or comparison result.
 
 The analysis modules do not read files or write to standard output. The CLI owns those effects.

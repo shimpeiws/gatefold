@@ -132,7 +132,8 @@ function checkVerdictEntry(
     fail(`${at}.confidence must be a number in [0, 1]`);
 }
 
-function checkRunDescriptor(input: unknown, at: string): void {
+/** Enforces the run-descriptor invariants shared by v6, v7, and v8. */
+export function checkRunDescriptor(input: unknown, at: string): void {
   const run = input as Record<string, unknown>;
   if (
     run.document !== "yuurei-run" ||

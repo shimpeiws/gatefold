@@ -1,10 +1,12 @@
 import { analyze } from "./application/analyze.js";
+import { auditRun } from "./application/audit-run.js";
 import { compareDocuments } from "./application/compare.js";
 import { compareEvaluations } from "./application/compare-evaluations.js";
 import { compareRuns } from "./application/compare-runs.js";
 import { compareTraces } from "./application/compare-traces.js";
 import { loadCheckReports } from "./application/check-report-binding.js";
 import { evaluateRun } from "./application/evaluate-run.js";
+import type { AuditResult } from "./domain/audit.js";
 import type { ComparisonResult } from "./domain/comparison.js";
 import type {
   EvaluationComparisonResult,
@@ -20,10 +22,12 @@ import {
   STDIN_SOURCE,
 } from "./input/pfl-export.js";
 import { readTaskSpec } from "./input/task-spec.js";
+import { readAuditedRun } from "./input/yuurei-audit-run.js";
 import { readEvaluatedRun } from "./input/yuurei-seeded-run.js";
 import { readYuureiRun } from "./input/yuurei-run.js";
 import { readYuureiTrace, readYuureiTraceStdin } from "./input/yuurei-trace.js";
 import {
+  formatAuditHuman,
   formatComparisonHuman,
   formatEvaluationComparisonHuman,
   formatEvaluationHuman,
@@ -77,6 +81,10 @@ interface CliOptions {
     beforeCheckReports: string[];
     afterCheckReports: string[];
   };
+  readonly auditRun?: {
+    run?: string;
+    checkReports: string[];
+  };
   readonly format: OutputFormat;
   readonly minConfidence: number;
   /** The --min-confidence token exactly as supplied, for display. */
@@ -107,6 +115,7 @@ function parseArgs(args: readonly string[]): CliOptions {
   let compareRuns: CliOptions["compareRuns"];
   let evaluateRun: CliOptions["evaluateRun"];
   let compareEvaluations: CliOptions["compareEvaluations"];
+  let auditRun: CliOptions["auditRun"];
   let format: OutputFormat = "human";
   let minConfidence = 0;
   let minConfidenceText = "0";
@@ -156,17 +165,21 @@ function parseArgs(args: readonly string[]): CliOptions {
     }
     if (
       !optionsDone &&
-      (evaluateRun !== undefined || compareEvaluations !== undefined) &&
+      (evaluateRun !== undefined ||
+        compareEvaluations !== undefined ||
+        auditRun !== undefined) &&
       argument.startsWith("--") &&
       (evaluateRun !== undefined
         ? ["run", "spec", "check-report"]
-        : [
-            "before",
-            "after",
-            "spec",
-            "before-check-report",
-            "after-check-report",
-          ]
+        : auditRun !== undefined
+          ? ["run", "check-report"]
+          : [
+              "before",
+              "after",
+              "spec",
+              "before-check-report",
+              "after-check-report",
+            ]
       ).includes(
         argument.slice(
           2,
@@ -190,6 +203,17 @@ function parseArgs(args: readonly string[]): CliOptions {
           if ((evaluateRun as Record<string, unknown>)[name] !== undefined)
             throw new CliError(`--${name} is already set`, EXIT_USAGE);
           evaluateRun = { ...evaluateRun, [name]: value };
+        }
+      } else if (auditRun !== undefined) {
+        if (name === "check-report")
+          auditRun = {
+            ...auditRun,
+            checkReports: [...auditRun.checkReports, value],
+          };
+        else {
+          if ((auditRun as Record<string, unknown>)[name] !== undefined)
+            throw new CliError(`--${name} is already set`, EXIT_USAGE);
+          auditRun = { ...auditRun, [name]: value };
         }
       } else if (compareEvaluations !== undefined) {
         if (name === "before-check-report")
@@ -277,6 +301,11 @@ function parseArgs(args: readonly string[]): CliOptions {
           "compare-evaluations inputs must be given with --before/--after/--spec; '-' is a flag value, not a positional",
           EXIT_USAGE,
         );
+      if (auditRun !== undefined)
+        throw new CliError(
+          "audit-run inputs must be given with --run/--check-report; '-' is a flag value, not a positional",
+          EXIT_USAGE,
+        );
       if (inputPath !== undefined)
         throw new CliError("only one input file is allowed", EXIT_USAGE);
       inputPath = argument;
@@ -295,17 +324,20 @@ function parseArgs(args: readonly string[]): CliOptions {
       compareRuns === undefined &&
       evaluateRun === undefined &&
       compareEvaluations === undefined &&
+      auditRun === undefined &&
       inputPath === undefined &&
       (argument === "compare" ||
         argument === "compare-traces" ||
         argument === "compare-runs" ||
         argument === "evaluate-run" ||
-        argument === "compare-evaluations")
+        argument === "compare-evaluations" ||
+        argument === "audit-run")
     ) {
       if (argument === "compare") compare = {};
       else if (argument === "compare-traces") compareTraces = {};
       else if (argument === "compare-runs") compareRuns = {};
       else if (argument === "evaluate-run") evaluateRun = { checkReports: [] };
+      else if (argument === "audit-run") auditRun = { checkReports: [] };
       else
         compareEvaluations = {
           beforeCheckReports: [],
@@ -336,6 +368,11 @@ function parseArgs(args: readonly string[]): CliOptions {
     if (compareEvaluations !== undefined)
       throw new CliError(
         "compare-evaluations takes no positional inputs; use --before/--after/--spec",
+        EXIT_USAGE,
+      );
+    if (auditRun !== undefined)
+      throw new CliError(
+        "audit-run takes no positional inputs; use --run/--check-report",
         EXIT_USAGE,
       );
     if (inputPath !== undefined)
@@ -435,6 +472,15 @@ function parseArgs(args: readonly string[]): CliOptions {
         EXIT_USAGE,
       );
   }
+  if (auditRun !== undefined) {
+    if (auditRun.run === undefined)
+      throw new CliError("audit-run requires --run (see --help)", EXIT_USAGE);
+    if (auditRun.run === "-" || auditRun.checkReports.includes("-"))
+      throw new CliError(
+        "audit-run reads run directories and report files; '-' for stdin is not supported",
+        EXIT_USAGE,
+      );
+  }
   return {
     inputPath,
     stdin,
@@ -443,6 +489,7 @@ function parseArgs(args: readonly string[]): CliOptions {
     compareRuns,
     evaluateRun,
     compareEvaluations,
+    auditRun,
     format,
     minConfidence,
     minConfidenceText,
@@ -467,6 +514,9 @@ function usage(): string {
     "                              --spec <task-spec.json>",
     "                              [--before-check-report <f>] [--after-check-report <f>] ...",
     "                              Compare two evaluated runs criterion by criterion",
+    "       gatefold audit-run --run <run-dir>",
+    "                              [--check-report <report.json>] ...",
+    "                              Audit one run's stored records for consistency",
     "",
     "Analyze a pfl report, export, or diff and print evidence-backed claims.",
     "The document's top-level 'command' field selects the reader.",
@@ -501,6 +551,13 @@ function usage(): string {
     "reports per-criterion A → B transitions. The runs must record the",
     "same task, baseline, and compatible run conditions; the profile may",
     "differ. No global score is emitted.",
+    "",
+    "audit-run reads one run directory and reports which recorded facts",
+    "can be verified against the bounded stored inputs, which records",
+    "contradict each other, and which evidence is unavailable. It needs",
+    "no task spec; --check-report is optional and repeatable. Facts are",
+    "states (verified/inconsistent/unverifiable/not-recorded) plus a",
+    "completeness, never verdicts or scores.",
     "",
     "Options:",
     "  --format <human|json>        Output format (default: human)",
@@ -588,6 +645,20 @@ export async function runCli(args: readonly string[]): Promise<string> {
           options.minConfidence,
           options.minConfidenceText,
         );
+  }
+  if (options.auditRun !== undefined) {
+    const auditArgs = options.auditRun as {
+      run: string;
+      checkReports: string[];
+    };
+    const result: AuditResult = auditRun({
+      run: await readAuditedRun(auditArgs.run),
+      checkReports: await loadCheckReports(auditArgs.checkReports),
+      labels: { run: auditArgs.run },
+    });
+    return options.format === "json"
+      ? formatJson(result)
+      : formatAuditHuman(result);
   }
   if (options.compareEvaluations !== undefined) {
     const compareEvalsArgs = options.compareEvaluations as {
