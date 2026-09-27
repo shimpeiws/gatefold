@@ -73,7 +73,10 @@ const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@$/;
 const NO_NEWLINE = "\\ No newline at end of file";
 
 /** Splits the stored bytes into LF-terminated lines, decoding each as UTF-8. */
-function splitLines(bytes: Buffer): { lines: RawLine[]; partialTail: boolean } {
+function splitLines(
+  bytes: Buffer,
+  allowTruncatedTail: boolean,
+): { lines: RawLine[]; partialTail: boolean } {
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const lines: RawLine[] = [];
   let start = 0;
@@ -83,7 +86,15 @@ function splitLines(bytes: Buffer): { lines: RawLine[]; partialTail: boolean } {
     start = i + 1;
   }
   const partialTail = start < bytes.length;
-  if (partialTail) lines.push(decodeLine(decoder, bytes, start, bytes.length));
+  if (partialTail) {
+    try {
+      lines.push(decodeLine(decoder, bytes, start, bytes.length));
+    } catch (error) {
+      // A truncated artifact may end in the middle of a UTF-8 code point.
+      // Keep all complete lines and leave that undecodable tail unknown.
+      if (!allowTruncatedTail) throw error;
+    }
+  }
   return { lines, partialTail };
 }
 
@@ -116,7 +127,7 @@ export function parseSeededPatchDiff(
   bytes: Buffer,
   options: { allowTruncatedTail: boolean },
 ): ParsedSeededPatch {
-  const { lines, partialTail } = splitLines(bytes);
+  const { lines, partialTail } = splitLines(bytes, options.allowTruncatedTail);
   const files: SeededPatchFile[] = [];
   const seenPaths = new Set<string>();
 

@@ -274,6 +274,22 @@ describe("parseSeededPatchDiff", () => {
     expect(parsed.files.map((f) => f.path)).toEqual(["a.ts"]);
   });
 
+  it("keeps the sealed prefix when the cut splits a UTF-8 code point", () => {
+    const bytes = Buffer.concat([
+      Buffer.from(
+        "--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+x\n" +
+          "--- b.ts\n+++ b.ts\n@@ -1,1 +1,1 @@\n-old\n+",
+      ),
+      Buffer.from([0xe3, 0x81]),
+    ]);
+    const parsed = parseSeededPatchDiff(bytes, { allowTruncatedTail: true });
+    expect(parsed.complete).toBe(false);
+    expect(parsed.files.map((f) => f.path)).toEqual(["a.ts"]);
+    expect(() =>
+      parseSeededPatchDiff(bytes, { allowTruncatedTail: false }),
+    ).toThrow(PatchParseError);
+  });
+
   it("fails a duplicate path even under a truncation allowance", () => {
     const patch =
       "--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+x\n--- /dev/null\n+++ a.ts\n@@ -0,0 +1,1 @@\n+y\n";
@@ -343,6 +359,14 @@ describe("readEvaluatedRun", () => {
       }
       const noMarker = writeRun(base, "r-none", { result: null });
       expect((await readEvaluatedRun(noMarker)).resultState).toBe(
+        "not-recorded",
+      );
+      // An unrelated diagnostic must not collide with the lookup table.
+      const protoKey = writeRun(base, "r-proto", {
+        trace: seededTrace({ diagnostics: ["toString"] }),
+        result: null,
+      });
+      expect((await readEvaluatedRun(protoKey)).resultState).toBe(
         "not-recorded",
       );
       // A listed result entry with no file behind it is 'missing'.
@@ -438,6 +462,14 @@ describe("readEvaluatedRun", () => {
       "requested-cell inputs_version 2 without a seed",
       legacyTrace({
         requested_cell: { digest: "sha256:cell", inputs_version: 2 },
+      }),
+      null,
+      "inputs_version",
+    ],
+    [
+      "an unknown workspace inputs_version without a seed",
+      legacyTrace({
+        requested_cell: { digest: "sha256:cell", inputs_version: 3 },
       }),
       null,
       "inputs_version",

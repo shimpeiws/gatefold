@@ -215,7 +215,7 @@ function checkSeedConsistency(trace: YuureiTrace): void {
         (seeded ? "seed record" : "absent seed record"),
     );
   const inputsVersion = trace.requestedCell?.inputsVersion;
-  if (inputsVersion !== undefined && (inputsVersion === 2) !== seeded)
+  if (inputsVersion !== undefined && inputsVersion !== (seeded ? 2 : 1))
     throw invalidShape(
       `requested_cell.inputs_version ${inputsVersion} contradicts the ` +
         `trace's ${seeded ? "seed record" : "absent seed record"}`,
@@ -417,8 +417,8 @@ export async function readEvaluatedRun(dirPath: string): Promise<EvaluatedRun> {
   checkSeedConsistency(trace);
 
   const diagnostics = trace.diagnostics;
-  const resultDiagnosticIndex = diagnostics.findIndex(
-    (item) => RESULT_DIAGNOSTIC_STATES[item] !== undefined,
+  const resultDiagnosticIndex = diagnostics.findIndex((item) =>
+    Object.hasOwn(RESULT_DIAGNOSTIC_STATES, item),
   );
   const patchOmissionIndex = diagnostics.findIndex((item) =>
     PATCH_OMISSION_DIAGNOSTIC.test(item),
