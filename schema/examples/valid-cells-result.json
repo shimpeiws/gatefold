@@ -3644,7 +3644,7 @@
       "id": "set.comparability",
       "state": "verified",
       "completeness": "complete",
-      "statement": "all 3 supplied runs record the same task.digest, runtime.id, model.requested, isolation.strategy, and execution options — the comparability conditions hold uniformly across the set",
+      "statement": "all 3 supplied runs record the same task.digest, runtime.id, model.requested, and isolation.strategy, and execution options, and the same requested_cell.inputs_version — the comparability conditions hold uniformly across the set",
       "evidence": [
         {
           "source": "run1Trace",
@@ -3932,7 +3932,7 @@
       "id": "set.element.el_b4b02de1fca70ae7",
       "state": "recorded",
       "completeness": "complete",
-      "statement": "element 'el_b4b02de1fca70ae7' is recorded in 1 of 3 eligible exports; no record in run1's complete export; no record in run2's complete export; the recorded forms are identical across the exports that record the element; resolved status 'effective' in all eligible exports",
+      "statement": "element 'el_b4b02de1fca70ae7' is recorded in 1 of 3 eligible exports; no record in run1's complete export; no record in run2's complete export; the recorded forms are identical across the exports that record the element; resolved status 'effective' in all exports that record the element",
       "evidence": [
         {
           "source": "run1Export",

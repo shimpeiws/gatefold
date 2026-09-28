@@ -446,22 +446,45 @@ function setLaneEntries(args: {
   );
 
   // set.comparability — the gate already ran; this states what held.
-  entries.push(
-    setEntry(
-      "set.comparability",
-      "verified",
-      "complete",
+  // A gate whose record is absent on some trace was not compared — the
+  // statement claims only the fields actually checked and names the
+  // unverifiable ones (the matching caveat carries the detail).
+  {
+    const unchecked = caveats
+      .map((caveat) => caveat.field)
+      .filter(
+        (field) =>
+          field === "requested_cell.inputs_version" ||
+          field === "execution_options",
+      );
+    const checked =
       `all ${n} supplied runs record the same task.digest, runtime.id, ` +
-        `model.requested, isolation.strategy, and execution options — the ` +
-        `comparability conditions hold uniformly across the set`,
-      ctxs.flatMap((ctx) => [
-        cellEv(ctx, "trace", "/task/digest"),
-        cellEv(ctx, "trace", "/runtime/id"),
-        cellEv(ctx, "trace", "/model/requested"),
-        cellEv(ctx, "trace", "/isolation/strategy"),
-      ]),
-    ),
-  );
+      `model.requested, and isolation.strategy` +
+      (unchecked.includes("execution_options")
+        ? ""
+        : `, and execution options`) +
+      (unchecked.includes("requested_cell.inputs_version")
+        ? ""
+        : `, and the same requested_cell.inputs_version`);
+    entries.push(
+      setEntry(
+        "set.comparability",
+        unchecked.length === 0 ? "verified" : "recorded",
+        unchecked.length === 0 ? "complete" : "partial",
+        unchecked.length === 0
+          ? `${checked} — the comparability conditions hold uniformly ` +
+              `across the set`
+          : `${checked}; the comparability of ${nameList(unchecked.map((f) => `'${f}'`))} ` +
+              `could not be verified for the whole set — see the matching caveat`,
+        ctxs.flatMap((ctx) => [
+          cellEv(ctx, "trace", "/task/digest"),
+          cellEv(ctx, "trace", "/runtime/id"),
+          cellEv(ctx, "trace", "/model/requested"),
+          cellEv(ctx, "trace", "/isolation/strategy"),
+        ]),
+      ),
+    );
+  }
   for (const caveat of caveats)
     entries.push(
       setEntry(
@@ -620,18 +643,26 @@ function setLaneEntries(args: {
         ? [exportSourceEv(ctx), exportSideEv(ctx, "/data/project/id")]
         : [traceFieldEv(ctx, "observation")]),
     ]);
-    const projectIds = [
-      ...new Set(eligible.map((run) => run.doc.data.project.id)),
-    ];
+    const projectGroups = new Map<string, string[]>();
+    for (const run of eligible)
+      (
+        projectGroups.get(run.doc.data.project.id) ??
+        projectGroups
+          .set(run.doc.data.project.id, [])
+          .get(run.doc.data.project.id)!
+      ).push(names[run.index]!);
     const projectPart =
       eligible.length === 0
         ? "no bound export records an observed cell-local project id"
-        : `the observed cell-local project ids are ${projectIds
-            .map((id, i) => `'${id}' (${names[eligible[i]!.index]!})`)
+        : `the observed cell-local project ids are ${[
+            ...projectGroups.entries(),
+          ]
+            .map(([id, group]) => `'${id}' (${nameList(group)})`)
             .join(", ")}` +
-          (projectIds.length === 1
+          (projectGroups.size === 1
             ? " — the same observed identity"
             : " — distinct observed identities, as expected for separately prepared cells");
+    const projectIds = [...projectGroups.keys()];
     let state: CellEntry["state"];
     let completeness: CellEntry["completeness"];
     let statement: string;
@@ -675,11 +706,19 @@ function setLaneEntries(args: {
   }
 
   // The configuration account needs ≥ 2 bound exports over one shared
-  // identity; anything less emits the availability marker only.
+  // identity; anything less emits the availability marker only. The v9
+  // pair rule, set-wide: a declared identity joins the set only when
+  // every bound run verifies it against its own trace and export —
+  // otherwise the bound exports' observed cell-local project ids must
+  // all be equal. A declared id some bound run cannot verify joins
+  // nothing.
   const projectIds = [
     ...new Set(eligible.map((run) => run.doc.data.project.id)),
   ];
-  const sharedIdentity = declaredId !== null || projectIds.length === 1;
+  const declaredVerified =
+    declaredId !== null &&
+    eligible.every((run) => sourceProjects[run.index] === "verified");
+  const sharedIdentity = declaredVerified || projectIds.length === 1;
   if (eligible.length < 2 || !sharedIdentity) {
     const reason =
       eligible.length < 2
@@ -711,11 +750,12 @@ function setLaneEntries(args: {
   const byId = new Map<string, RecordedForm[]>();
   for (const run of eligible)
     run.doc.data.elements.forEach((element, elementIndex) => {
-      (byId.get(element.id) ?? byId.set(element.id, []).get(element.id)!).push({
-        run,
-        element,
-        elementIndex,
-      });
+      const bucket =
+        byId.get(element.id) ?? byId.set(element.id, []).get(element.id)!;
+      // One element id counts a run once — a repeated id inside one
+      // export is still one export recording the element.
+      if (!bucket.some((form) => form.run === run))
+        bucket.push({ run, element, elementIndex });
     });
   const ids = [...byId.keys()].sort(compareBytes);
 
@@ -778,10 +818,17 @@ function setLaneEntries(args: {
       );
     }
     if (resolvedGroups.size === 1 && resolvedGroups.has(null))
-      parts.push("no resolved layer is recorded in any eligible export");
+      parts.push(
+        forms.length === e
+          ? "no resolved layer is recorded in any eligible export"
+          : "no resolved layer is recorded in the exports that record the element",
+      );
     else if (resolvedGroups.size === 1)
       parts.push(
-        `resolved status '${[...resolvedGroups.keys()][0]}' in all eligible exports`,
+        `resolved status '${[...resolvedGroups.keys()][0]}' in ` +
+          (forms.length === e
+            ? "all eligible exports"
+            : "all exports that record the element"),
       );
     else
       parts.push(
@@ -836,7 +883,9 @@ function setLaneEntries(args: {
         const key = relationKey(relation);
         const bucket =
           union.get(key) ?? union.set(key, { ...relation, runs: [] }).get(key)!;
-        bucket.runs.push(run);
+        // One record counts a run once — a repeated relation inside one
+        // export is still one export recording it.
+        if (!bucket.runs.includes(run)) bucket.runs.push(run);
       }
     const keys = [...union.entries()].sort(([a], [b]) => compareBytes(a, b));
     keys.forEach(([key, bucket], index) => {
@@ -890,7 +939,9 @@ function setLaneEntries(args: {
         const key = canonicalJson(finding);
         const bucket =
           union.get(key) ?? union.set(key, { finding, runs: [] }).get(key)!;
-        bucket.runs.push(run);
+        // One record counts a run once — a repeated finding inside one
+        // export is still one export recording it.
+        if (!bucket.runs.includes(run)) bucket.runs.push(run);
       }
     const entries_ = [...union.values()].sort((a, b) => {
       const fa = a.finding;
