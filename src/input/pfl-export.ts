@@ -5,6 +5,17 @@ import {
   readBounded,
   readBoundedStdin,
 } from "./bounded.js";
+import {
+  SOURCE_PROJECT_CONTRACT_VERSION,
+  SOURCE_PROJECT_CONTROL_CHARS_PATTERN,
+  SOURCE_PROJECT_HEAD_MAX_CHARS,
+  SOURCE_PROJECT_ID_PATTERN,
+  SOURCE_PROJECT_ID_PREFIXES,
+  SOURCE_PROJECT_ISSUER_MAX_CHARS,
+  SOURCE_PROJECT_KINDS,
+  SOURCE_PROJECT_REMOTE_MAX_CHARS,
+  type SourceProjectKind,
+} from "./source-project.js";
 
 export type PflExportErrorCode =
   | "unreadable-file"
@@ -133,6 +144,30 @@ export interface PflSnapshotRelation {
   readonly to: string;
 }
 
+/**
+ * The caller-declared source-project identity (pfl #217, snapshot schema 3):
+ * the `source_project` a caller such as yuurei declared for the
+ * observation through the `YUUREI_SOURCE_PROJECT_FILE` contract. Asserted
+ * provenance — recorded by pfl after validation, never verified — and
+ * deliberately separate from `data.project.id`, which stays the observed
+ * cell-local project identity. `id` is the `git-<hex16>`/`path-<hex16>`
+ * comparison key a consumer uses to recognize two cells of one source;
+ * `kind` names the derivation the caller claims, `issuer` who made the
+ * claim, `contractVersion` the declaration contract's version, and
+ * `remote`/`head` the declared remote and head when present (redacted by
+ * pfl at persistence and again at the document boundary). `null` on
+ * standalone runs, on malformed declarations, and on artifacts written
+ * before schema 3 — unknown, never a substituted value.
+ */
+export interface PflSourceProject {
+  readonly id: string;
+  readonly kind: SourceProjectKind;
+  readonly remote?: string;
+  readonly issuer: string;
+  readonly contractVersion: number;
+  readonly head?: string;
+}
+
 export interface PflSnapshotData {
   readonly project: {
     readonly id: string;
@@ -159,6 +194,15 @@ export interface PflSnapshotData {
      * non-null value is provenance to compare, not a verified property.
      */
     readonly cellId?: string | null;
+    /**
+     * pfl (post-v1.2.0, snapshot schema 3): the caller-declared
+     * source-project identity. `undefined` when the document does not
+     * carry the key (older pfl versions / schema-1 or schema-2
+     * artifacts), `null` when no valid declaration was recorded, and a
+     * validated object otherwise — a malformed non-null value fails
+     * closed like any other recorded field.
+     */
+    readonly sourceProject?: PflSourceProject | null;
   };
   readonly resolution: {
     readonly semanticsVersion: string;
@@ -950,6 +994,95 @@ function parseRelation(item: unknown, at: string): PflSnapshotRelation {
   };
 }
 
+/**
+ * `data.snapshot.sourceProject` (pfl #217): `null`, or the declared
+ * source-project identity held to the exact bounds pfl validates the
+ * declaration with — the `id` shape and its agreement with `kind`'s
+ * prefix, `remote` only on `git-remote`, the per-field character bounds,
+ * and the pinned `contractVersion`. A malformed non-null value fails
+ * closed: the field is part of the versioned contract, not free-form
+ * provenance, so an out-of-contract object is `invalid-shape` like any
+ * other wrongly-typed known field.
+ */
+function parseSourceProject(
+  value: unknown,
+  at: string,
+): PflSourceProject | null {
+  if (value === null) return null;
+  if (!isRecord(value)) throw shapeError(at, "an object or null");
+  const id = boundedStringField(value, "id", `${at}.id`);
+  if (!SOURCE_PROJECT_ID_PATTERN.test(id))
+    throw shapeError(
+      `${at}.id`,
+      "a '<git|path>-<16 lowercase hex>' identity string",
+    );
+  const kind = enumField(value, "kind", SOURCE_PROJECT_KINDS, `${at}.kind`);
+  if (!id.startsWith(SOURCE_PROJECT_ID_PREFIXES[kind]))
+    throw shapeError(
+      `${at}.id`,
+      `an id whose prefix agrees with kind '${kind}'`,
+    );
+  const remote = optionalBoundedStringField(
+    value,
+    "remote",
+    `${at}.remote`,
+    SOURCE_PROJECT_REMOTE_MAX_CHARS,
+  );
+  if (
+    remote !== undefined &&
+    (remote.length === 0 || SOURCE_PROJECT_CONTROL_CHARS_PATTERN.test(remote))
+  )
+    throw shapeError(
+      `${at}.remote`,
+      "a non-empty string without control or format characters",
+    );
+  if (kind !== "git-remote" && remote !== undefined)
+    throw shapeError(`${at}.remote`, "absent unless kind is 'git-remote'");
+  const contractVersion = nonNegativeIntField(
+    value,
+    "contractVersion",
+    `${at}.contractVersion`,
+  );
+  if (contractVersion !== SOURCE_PROJECT_CONTRACT_VERSION)
+    throw shapeError(
+      `${at}.contractVersion`,
+      `the supported declaration contract version ${SOURCE_PROJECT_CONTRACT_VERSION}`,
+    );
+  const issuer = boundedStringField(
+    value,
+    "issuer",
+    `${at}.issuer`,
+    SOURCE_PROJECT_ISSUER_MAX_CHARS,
+  );
+  if (SOURCE_PROJECT_CONTROL_CHARS_PATTERN.test(issuer))
+    throw shapeError(
+      `${at}.issuer`,
+      "a string without control or format characters",
+    );
+  const head = optionalBoundedStringField(
+    value,
+    "head",
+    `${at}.head`,
+    SOURCE_PROJECT_HEAD_MAX_CHARS,
+  );
+  if (
+    head !== undefined &&
+    (head.length === 0 || SOURCE_PROJECT_CONTROL_CHARS_PATTERN.test(head))
+  )
+    throw shapeError(
+      `${at}.head`,
+      "a non-empty string without control or format characters",
+    );
+  return {
+    id,
+    kind,
+    ...(remote === undefined ? {} : { remote }),
+    issuer,
+    contractVersion,
+    ...(head === undefined ? {} : { head }),
+  };
+}
+
 function parsePflSnapshotData(value: unknown): PflSnapshotData {
   if (!isRecord(value)) throw shapeError("data", "an object");
   const project = value.project;
@@ -1044,6 +1177,16 @@ function parsePflSnapshotData(value: unknown): PflSnapshotData {
               "cellId",
               "data.snapshot.cellId",
               MAX_METADATA_CHARS,
+            ),
+          }
+        : {}),
+      // `sourceProject` is additive (pfl #217, snapshot schema 3): absent
+      // (undefined), explicit null, or a validated declaration object.
+      ...("sourceProject" in snapshot
+        ? {
+            sourceProject: parseSourceProject(
+              snapshot.sourceProject,
+              "data.snapshot.sourceProject",
             ),
           }
         : {}),

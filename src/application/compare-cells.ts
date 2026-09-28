@@ -6,7 +6,11 @@ import {
   type CellEvidenceReference,
   type CellReportResult,
 } from "../domain/cell.js";
-import { PflExportError, type PflExportDocument } from "../input/pfl-export.js";
+import {
+  PflExportError,
+  type PflExportDocument,
+  type PflSourceProject,
+} from "../input/pfl-export.js";
 import type { SuppliedEvaluation } from "../input/cell-evaluation.js";
 import type { CellRun } from "../input/yuurei-cell.js";
 import type { OutputFile } from "../input/yuurei-seeded-run.js";
@@ -24,6 +28,7 @@ import {
   cellDocs,
   cellEntries,
   cellEntry,
+  cellEv,
   cellRunInput,
   cellSource,
   sortCellEntries,
@@ -111,6 +116,45 @@ function exportSideEv(
       : {}),
     ...(elementId === undefined ? {} : { elementId }),
   };
+}
+
+/**
+ * Evidence citing one side's trace seed source-project declaration:
+ * `/seed/source_project` when the raw document records it, `/seed` with a
+ * note when the seed exists but declares none, or the trace root when the
+ * seed record itself is absent.
+ */
+function traceSeedSourceEv(ctx: CellCtx): CellEvidenceReference {
+  const document = ctx.cell.run.trace.document;
+  const seed =
+    typeof document === "object" && document !== null
+      ? (document as Record<string, unknown>).seed
+      : undefined;
+  if (typeof seed !== "object" || seed === null)
+    return cellEv(ctx, "trace", "", { note: "no seed field" });
+  return Object.prototype.hasOwnProperty.call(seed, "source_project")
+    ? cellEv(ctx, "trace", "/seed/source_project")
+    : cellEv(ctx, "trace", "/seed", { note: "no source_project field" });
+}
+
+/**
+ * Evidence citing one side's export-carried source identity: the
+ * `/data/snapshot/sourceProject` field when the document records the key,
+ * otherwise `/data/snapshot` with a note naming the absent field.
+ * Only call where a verified export document exists.
+ */
+function exportSourceEv(ctx: CellCtx): CellEvidenceReference {
+  const snapshot = ctx.cell.observation.exportDocument?.data.snapshot;
+  const present =
+    typeof snapshot === "object" &&
+    snapshot !== null &&
+    Object.prototype.hasOwnProperty.call(snapshot, "sourceProject");
+  return present
+    ? exportSideEv(ctx, "/data/snapshot/sourceProject")
+    : {
+        ...exportSideEv(ctx, "/data/snapshot"),
+        note: "no sourceProject field",
+      };
 }
 
 /** Whether the supplied document records `inputs.<key>`. */
@@ -435,18 +479,33 @@ function comparisonEntries(
   // rather than computed from documents the run does not bind to.
   const exportA = before.observation.exportDocument;
   const exportB = after.observation.exportDocument;
-  const bindingA = associationEntries(beforeCtx).binding;
-  const bindingB = associationEntries(afterCtx).binding;
+  const assocA = associationEntries(beforeCtx);
+  const assocB = associationEntries(afterCtx);
+  const bindingA = assocA.binding;
+  const bindingB = assocB.binding;
   if (
     exportA !== null &&
     exportB !== null &&
     bindingA === "verified" &&
     bindingB === "verified"
   ) {
-    if (exportA.data.project.id !== exportB.data.project.id)
+    // A side's source identity is verified only when its own trace seed
+    // record and its bound export agree on the declared id (yuurei #214 /
+    // pfl #217). Anything less — absent, unbound, legacy, or contradictory
+    // provenance — is an unverified identity, never a match.
+    const sourceA =
+      assocA.sourceProject === "verified"
+        ? (exportA.data.snapshot.sourceProject ?? null)
+        : null;
+    const sourceB =
+      assocB.sourceProject === "verified"
+        ? (exportB.data.snapshot.sourceProject ?? null)
+        : null;
+    if (sourceA !== null && sourceB !== null && sourceA.id !== sourceB.id)
       throw mismatched(
-        `the retained exports describe different projects ` +
-          `('${exportA.data.project.id}' vs '${exportB.data.project.id}')`,
+        `the retained exports declare different source-project ` +
+          `identities ('${sourceA.id}' vs '${sourceB.id}') — the two cells ` +
+          `do not record the same source project`,
       );
     if (exportA.data.runtime.id !== exportB.data.runtime.id)
       throw mismatched(
@@ -454,135 +513,106 @@ function comparisonEntries(
           `('${exportA.data.runtime.id}' vs '${exportB.data.runtime.id}')`,
       );
 
-    const completeness =
-      exportA.completeness === "complete" && exportB.completeness === "complete"
-        ? "complete"
-        : exportA.completeness === "unknown" ||
-            exportB.completeness === "unknown"
-          ? "unknown"
-          : "partial";
-    const diff = diffCellExports(exportA, exportB);
-
+    // The pair's project identity facts, always stated: the declared
+    // source identity each side verified (or why not) and the two
+    // observed cell-local `data.project.id` values, which stay distinct
+    // facts even when a shared declared source rescues the comparison.
+    const projectA = exportA.data.project.id;
+    const projectB = exportB.data.project.id;
+    const account = (source: PflSourceProject | null, state: CellEntryState) =>
+      source !== null
+        ? `declares verified source-project identity '${source.id}'`
+        : state === "inconsistent"
+          ? "carries contradictory source-project records"
+          : state === "not-recorded"
+            ? "records no source-project identity"
+            : "declares a source-project identity that cannot be verified against its own records";
     entries.push(
       cmpEntry(
-        "comparison.elements",
-        "recorded",
-        completeness,
-        diff.addedIds.length === 0 &&
-          diff.removedIds.length === 0 &&
-          diff.changedIds.length === 0
-          ? "the two retained exports record identical element sets and contents"
-          : `between the retained exports, ${diff.addedIds.length} element id(s) ` +
-              `were added, ${diff.removedIds.length} removed, and ` +
-              `${diff.changedIds.length} changed`,
+        "comparison.source-identity",
+        sourceA !== null && sourceB !== null ? "verified" : "unverifiable",
+        sourceA !== null && sourceB !== null ? "complete" : "unknown",
+        sourceA !== null && sourceB !== null
+          ? `each side's trace seed record and retained export agree on ` +
+              `source-project identity '${sourceA.id}' (kind ` +
+              `'${sourceA.kind}'), so the pair records one declared source ` +
+              `project; the observed cell-local project ids are ` +
+              `'${projectA}' (A) and '${projectB}' (B)` +
+              (projectA === projectB
+                ? " — the same observed identity on both sides"
+                : " — distinct observed identities, as expected for separately prepared cells")
+          : `no verified shared source-project identity is recorded — ` +
+              `cell A ${account(sourceA, assocA.sourceProject)}; cell B ` +
+              `${account(sourceB, assocB.sourceProject)}; the observed ` +
+              `cell-local project ids are '${projectA}' (A) and ` +
+              `'${projectB}' (B)` +
+              (projectA === projectB
+                ? " — the same observed identity, which is what the comparison keys on"
+                : " — distinct observed identities, and whether they describe one source project is unverifiable"),
         [
-          exportSideEv(beforeCtx, "/data/elements"),
-          exportSideEv(afterCtx, "/data/elements"),
+          traceSeedSourceEv(beforeCtx),
+          traceSeedSourceEv(afterCtx),
+          exportSourceEv(beforeCtx),
+          exportSourceEv(afterCtx),
+          exportSideEv(beforeCtx, "/data/project/id"),
+          exportSideEv(afterCtx, "/data/project/id"),
         ],
       ),
     );
 
-    const beforeById = new Map(
-      exportA.data.elements.map((element) => [element.id, element]),
-    );
-    const afterById = new Map(
-      exportB.data.elements.map((element) => [element.id, element]),
-    );
-    for (const id of diff.addedIds)
+    // The element difference is computed when the pair records one source
+    // project — either a verified shared declared identity (same
+    // `source_project.id` on both sides) or, for pre-declaration records,
+    // the same observed cell-local project id. Differing observed ids with
+    // unverifiable provenance cannot be shown to describe one source
+    // project: the configuration difference is withheld — neither a false
+    // match nor a "mismatched" assertion the records cannot support.
+    const canDiff =
+      (sourceA !== null && sourceB !== null) || projectA === projectB;
+    if (!canDiff) {
       entries.push(
         cmpEntry(
-          `comparison.element-added.${id}`,
-          "recorded",
-          completeness,
-          `element '${id}' is present in B's export and not in A's`,
-          exportElementEvidence(afterCtx, elementIndex(after, id)!, id),
-        ),
-      );
-    for (const id of diff.removedIds)
-      entries.push(
-        cmpEntry(
-          `comparison.element-removed.${id}`,
-          "recorded",
-          completeness,
-          `element '${id}' is present in A's export and not in B's`,
-          exportElementEvidence(beforeCtx, elementIndex(before, id)!, id),
-        ),
-      );
-    for (const id of diff.changedIds) {
-      const a = beforeById.get(id)!;
-      const b = afterById.get(id)!;
-      const aspects: string[] = [];
-      if (a.observed.native.kind !== b.observed.native.kind)
-        aspects.push(
-          `kind '${a.observed.native.kind}' → '${b.observed.native.kind}'`,
-        );
-      if (a.observed.native.scope !== b.observed.native.scope)
-        aspects.push(
-          `scope '${a.observed.native.scope ?? "none"}' → '${b.observed.native.scope ?? "none"}'`,
-        );
-      if (a.observed.source.digest !== b.observed.source.digest)
-        aspects.push("content digest changed");
-      if (aspects.length === 0) aspects.push("metadata changed");
-      entries.push(
-        cmpEntry(
-          `comparison.element-changed.${id}`,
-          "recorded",
-          completeness,
-          `element '${id}' differs between the exports: ${aspects.join("; ")}`,
+          "comparison.config-unavailable",
+          "unverifiable",
+          "unknown",
+          `the configuration difference cannot be reported: the exports' ` +
+            `observed project identities differ ('${projectA}' vs ` +
+            `'${projectB}') and no verified shared source-project identity ` +
+            `is recorded; the configuration may or may not differ — this ` +
+            `is never 'no configuration change'`,
           [
-            ...exportElementEvidence(beforeCtx, elementIndex(before, id)!, id),
-            ...exportElementEvidence(afterCtx, elementIndex(after, id)!, id),
+            traceSeedSourceEv(beforeCtx),
+            traceSeedSourceEv(afterCtx),
+            exportSourceEv(beforeCtx),
+            exportSourceEv(afterCtx),
+            exportSideEv(beforeCtx, "/data/project/id"),
+            exportSideEv(afterCtx, "/data/project/id"),
           ],
         ),
       );
-    }
+    } else {
+      const completeness =
+        exportA.completeness === "complete" &&
+        exportB.completeness === "complete"
+          ? "complete"
+          : exportA.completeness === "unknown" ||
+              exportB.completeness === "unknown"
+            ? "unknown"
+            : "partial";
+      const diff = diffCellExports(exportA, exportB);
 
-    entries.push(
-      cmpEntry(
-        "comparison.effective",
-        "recorded",
-        completeness,
-        `resolved-layer transitions: ${diff.newlyEffective} element(s) newly ` +
-          `effective, ${diff.noLongerEffective} no longer effective, ` +
-          `${diff.activationChanged} activation change(s); an effective ` +
-          `status is a static fact, never evidence of runtime use`,
-        [
-          exportSideEv(beforeCtx, "/data/elements"),
-          exportSideEv(afterCtx, "/data/elements"),
-        ],
-      ),
-    );
-    for (const change of diff.statusChanges)
       entries.push(
         cmpEntry(
-          `comparison.status-change.${change.id}`,
+          "comparison.elements",
           "recorded",
           completeness,
-          `element '${change.id}' resolved status ` +
-            `'${change.from}' → '${change.to}'`,
-          [
-            ...exportElementEvidence(
-              beforeCtx,
-              elementIndex(before, change.id)!,
-              change.id,
-            ),
-            ...exportElementEvidence(
-              afterCtx,
-              elementIndex(after, change.id)!,
-              change.id,
-            ),
-          ],
-        ),
-      );
-
-    for (const [facet, delta] of Object.entries(diff.facetDeltas))
-      entries.push(
-        cmpEntry(
-          `comparison.facet.${facet}`,
-          "recorded",
-          completeness,
-          `interpretation facet '${facet}' count changed by ${delta} ` +
-            `between the two exports`,
+          diff.addedIds.length === 0 &&
+            diff.removedIds.length === 0 &&
+            diff.changedIds.length === 0
+            ? "the two retained exports record identical element sets and contents"
+            : `between the retained exports, ${diff.addedIds.length} element id(s) ` +
+                `were added, ${diff.removedIds.length} removed, and ` +
+                `${diff.changedIds.length} changed`,
           [
             exportSideEv(beforeCtx, "/data/elements"),
             exportSideEv(afterCtx, "/data/elements"),
@@ -590,68 +620,181 @@ function comparisonEntries(
         ),
       );
 
-    for (const [index, relation] of diff.relationsAdded.entries())
+      const beforeById = new Map(
+        exportA.data.elements.map((element) => [element.id, element]),
+      );
+      const afterById = new Map(
+        exportB.data.elements.map((element) => [element.id, element]),
+      );
+      for (const id of diff.addedIds)
+        entries.push(
+          cmpEntry(
+            `comparison.element-added.${id}`,
+            "recorded",
+            completeness,
+            `element '${id}' is present in B's export and not in A's`,
+            exportElementEvidence(afterCtx, elementIndex(after, id)!, id),
+          ),
+        );
+      for (const id of diff.removedIds)
+        entries.push(
+          cmpEntry(
+            `comparison.element-removed.${id}`,
+            "recorded",
+            completeness,
+            `element '${id}' is present in A's export and not in B's`,
+            exportElementEvidence(beforeCtx, elementIndex(before, id)!, id),
+          ),
+        );
+      for (const id of diff.changedIds) {
+        const a = beforeById.get(id)!;
+        const b = afterById.get(id)!;
+        const aspects: string[] = [];
+        if (a.observed.native.kind !== b.observed.native.kind)
+          aspects.push(
+            `kind '${a.observed.native.kind}' → '${b.observed.native.kind}'`,
+          );
+        if (a.observed.native.scope !== b.observed.native.scope)
+          aspects.push(
+            `scope '${a.observed.native.scope ?? "none"}' → '${b.observed.native.scope ?? "none"}'`,
+          );
+        if (a.observed.source.digest !== b.observed.source.digest)
+          aspects.push("content digest changed");
+        if (aspects.length === 0) aspects.push("metadata changed");
+        entries.push(
+          cmpEntry(
+            `comparison.element-changed.${id}`,
+            "recorded",
+            completeness,
+            `element '${id}' differs between the exports: ${aspects.join("; ")}`,
+            [
+              ...exportElementEvidence(
+                beforeCtx,
+                elementIndex(before, id)!,
+                id,
+              ),
+              ...exportElementEvidence(afterCtx, elementIndex(after, id)!, id),
+            ],
+          ),
+        );
+      }
+
       entries.push(
         cmpEntry(
-          `comparison.relation-added.${index}`,
+          "comparison.effective",
           "recorded",
           completeness,
-          `relation '${relation.type}' from '${relation.from}' to ` +
-            `'${relation.to}' is recorded in B's export and not in A's`,
-          [exportSideEv(afterCtx, "/data/relations")],
-        ),
-      );
-    for (const [index, relation] of diff.relationsRemoved.entries())
-      entries.push(
-        cmpEntry(
-          `comparison.relation-removed.${index}`,
-          "recorded",
-          completeness,
-          `relation '${relation.type}' from '${relation.from}' to ` +
-            `'${relation.to}' is recorded in A's export and not in B's`,
-          [exportSideEv(beforeCtx, "/data/relations")],
-        ),
-      );
-    for (const [index, finding] of diff.findingsAdded.entries())
-      entries.push(
-        cmpEntry(
-          `comparison.finding-added.${index}`,
-          "recorded",
-          completeness,
-          `finding '${finding.rule}' is recorded in B's export and not in ` +
-            `A's: ${finding.message}`,
-          [exportSideEv(afterCtx, "/data/findings")],
-        ),
-      );
-    for (const [index, finding] of diff.findingsRemoved.entries())
-      entries.push(
-        cmpEntry(
-          `comparison.finding-removed.${index}`,
-          "recorded",
-          completeness,
-          `finding '${finding.rule}' is recorded in A's export and not in ` +
-            `B's: ${finding.message}`,
-          [exportSideEv(beforeCtx, "/data/findings")],
-        ),
-      );
-    const NOTE_POINTER: Record<CellVersionNote["kind"], string> = {
-      classifier: "/data/interpretation",
-      runtime: "/data/runtime/version",
-      resolution: "/data/resolution/semanticsVersion",
-    };
-    for (const [index, note] of diff.versionNotes.entries())
-      entries.push(
-        cmpEntry(
-          `comparison.version-note.${index}`,
-          "recorded",
-          "complete",
-          `the exports' tooling versions differ — ${note.text}`,
+          `resolved-layer transitions: ${diff.newlyEffective} element(s) newly ` +
+            `effective, ${diff.noLongerEffective} no longer effective, ` +
+            `${diff.activationChanged} activation change(s); an effective ` +
+            `status is a static fact, never evidence of runtime use`,
           [
-            exportSideEv(beforeCtx, NOTE_POINTER[note.kind]),
-            exportSideEv(afterCtx, NOTE_POINTER[note.kind]),
+            exportSideEv(beforeCtx, "/data/elements"),
+            exportSideEv(afterCtx, "/data/elements"),
           ],
         ),
       );
+      for (const change of diff.statusChanges)
+        entries.push(
+          cmpEntry(
+            `comparison.status-change.${change.id}`,
+            "recorded",
+            completeness,
+            `element '${change.id}' resolved status ` +
+              `'${change.from}' → '${change.to}'`,
+            [
+              ...exportElementEvidence(
+                beforeCtx,
+                elementIndex(before, change.id)!,
+                change.id,
+              ),
+              ...exportElementEvidence(
+                afterCtx,
+                elementIndex(after, change.id)!,
+                change.id,
+              ),
+            ],
+          ),
+        );
+
+      for (const [facet, delta] of Object.entries(diff.facetDeltas))
+        entries.push(
+          cmpEntry(
+            `comparison.facet.${facet}`,
+            "recorded",
+            completeness,
+            `interpretation facet '${facet}' count changed by ${delta} ` +
+              `between the two exports`,
+            [
+              exportSideEv(beforeCtx, "/data/elements"),
+              exportSideEv(afterCtx, "/data/elements"),
+            ],
+          ),
+        );
+
+      for (const [index, relation] of diff.relationsAdded.entries())
+        entries.push(
+          cmpEntry(
+            `comparison.relation-added.${index}`,
+            "recorded",
+            completeness,
+            `relation '${relation.type}' from '${relation.from}' to ` +
+              `'${relation.to}' is recorded in B's export and not in A's`,
+            [exportSideEv(afterCtx, "/data/relations")],
+          ),
+        );
+      for (const [index, relation] of diff.relationsRemoved.entries())
+        entries.push(
+          cmpEntry(
+            `comparison.relation-removed.${index}`,
+            "recorded",
+            completeness,
+            `relation '${relation.type}' from '${relation.from}' to ` +
+              `'${relation.to}' is recorded in A's export and not in B's`,
+            [exportSideEv(beforeCtx, "/data/relations")],
+          ),
+        );
+      for (const [index, finding] of diff.findingsAdded.entries())
+        entries.push(
+          cmpEntry(
+            `comparison.finding-added.${index}`,
+            "recorded",
+            completeness,
+            `finding '${finding.rule}' is recorded in B's export and not in ` +
+              `A's: ${finding.message}`,
+            [exportSideEv(afterCtx, "/data/findings")],
+          ),
+        );
+      for (const [index, finding] of diff.findingsRemoved.entries())
+        entries.push(
+          cmpEntry(
+            `comparison.finding-removed.${index}`,
+            "recorded",
+            completeness,
+            `finding '${finding.rule}' is recorded in A's export and not in ` +
+              `B's: ${finding.message}`,
+            [exportSideEv(beforeCtx, "/data/findings")],
+          ),
+        );
+      const NOTE_POINTER: Record<CellVersionNote["kind"], string> = {
+        classifier: "/data/interpretation",
+        runtime: "/data/runtime/version",
+        resolution: "/data/resolution/semanticsVersion",
+      };
+      for (const [index, note] of diff.versionNotes.entries())
+        entries.push(
+          cmpEntry(
+            `comparison.version-note.${index}`,
+            "recorded",
+            "complete",
+            `the exports' tooling versions differ — ${note.text}`,
+            [
+              exportSideEv(beforeCtx, NOTE_POINTER[note.kind]),
+              exportSideEv(afterCtx, NOTE_POINTER[note.kind]),
+            ],
+          ),
+        );
+    }
   } else {
     const side = (
       name: string,

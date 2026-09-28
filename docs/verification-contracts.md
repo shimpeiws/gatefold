@@ -283,8 +283,12 @@ semantic distinctions. Most of the work here is naming and indexing that fact.
   E2E keeps truncated or unrecorded artifacts as caveats. Very strong.
 - **VC-G-04:** compare/trace/run tests reject mismatched subjects, and
   `test/cell.test.ts` validates cell/export binding and withholds comparison
-  when a side is unbound. Existing identities are strong; the real two-cell
-  source-project identity path remains #83.
+  when a side is unbound. Since #83, `cell-real-pair-a`/`cell-real-pair-b`
+  and `cell-real-other-source` exercise the real two-cell source-project
+  identity path end to end: a shared verified `sourceProject` admits a pair
+  whose cell-local `project.id` values differ, differing verified sources
+  reject, and unverifiable provenance yields `config-unavailable` rather
+  than a match or a rejection. Strong.
 - **VC-G-05:** `test/evaluation.test.ts` covers declared criteria, subject
   binding, unknown on rejected/missing/conflicting reports, and explicitly
   asserts that unverifiable evidence never produces a pass. E2E covers v6/v7
@@ -294,13 +298,14 @@ semantic distinctions. Most of the work here is naming and indexing that fact.
 
 No new generic Gatefold verification issue is needed.
 
-The one material system-level gap is already **#83**: demonstrate
-`compare-cells` on a real pair of independently prepared cells using the
-stable source-project identity supplied by yuurei #214 and pfl #217.
-
-That gap is important because it is exactly the kind of property an inner test
-cannot prove: the three repositories must preserve the same identity semantics
-across a real composed flow.
+The one material system-level gap — demonstrating `compare-cells` on a real
+pair of independently prepared cells — was **#83**, now implemented: real
+yuurei #214 + pfl #217 outputs exist as `cell-real-pair-a`/
+`cell-real-pair-b`/`cell-real-other-source`, and the same-source pair is
+accepted on its verified declared identity while the different-source pair
+rejects. What remains inherently unverifiable inside Gatefold is that the
+three repositories keep the identity semantics aligned across future
+versions — the contract documents record that dependency.
 
 ### Candidate de-emphasis during future test cleanup
 

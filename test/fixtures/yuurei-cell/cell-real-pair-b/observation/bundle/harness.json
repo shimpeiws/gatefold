@@ -1,0 +1,132 @@
+{
+  "project": {
+    "id": "path-a25ea8edc829502f",
+    "displayName": "workspace"
+  },
+  "runtime": {
+    "id": "claude-code",
+    "version": null,
+    "adapter": {
+      "id": "claude-code",
+      "runtimeCompatibility": "unverified",
+      "version": "1.2.0"
+    }
+  },
+  "snapshot": {
+    "observedSnapshotId": "obs_9746c2d3b582",
+    "resolvedSnapshotId": "res_41877e303625",
+    "capturedAt": "2026-09-28T12:37:17.611Z",
+    "schemaVersion": "3",
+    "cellId": "cell_20260928T123717Z-43f548a2",
+    "sourceProject": {
+      "contractVersion": 1,
+      "head": "f395491da0228418634a05394fea7ad7869179b8",
+      "id": "git-db9acfc85f531c03",
+      "issuer": "yuurei",
+      "kind": "git-remote",
+      "remote": "github.com/gatefold-fixture/demo"
+    },
+    "deadPath": false
+  },
+  "resolution": {
+    "confidence": "unverified-runtime-version",
+    "semanticsVersion": "2"
+  },
+  "elements": [
+    {
+      "id": "el_0fc92802d8f84176",
+      "observed": {
+        "id": "el_0fc92802d8f84176",
+        "inspectability": "observable",
+        "metadata": {
+          "format": "md"
+        },
+        "native": {
+          "kind": "instructions",
+          "origin": "project",
+          "scope": "project"
+        },
+        "source": {
+          "digest": "sha256:f65f9e4121af2e1d9ff194e24fe9727778b51a850c4fa592b79d45415d6c4ac0",
+          "path": "CLAUDE.md",
+          "sizeBytes": 33
+        },
+        "status": "observed"
+      },
+      "resolved": {
+        "activation": "always",
+        "applicability": {
+          "type": "project"
+        },
+        "id": "el_0fc92802d8f84176",
+        "resolution": {
+          "reason": "accumulates with the other layers",
+          "strategy": "accumulate"
+        },
+        "status": "effective"
+      },
+      "interpretation": {
+        "confidence": "high",
+        "elementId": "el_0fc92802d8f84176",
+        "facets": [
+          "instructions"
+        ],
+        "reason": "defines agent behavior"
+      }
+    },
+    {
+      "id": "el_e35b608c21faf5bf",
+      "observed": {
+        "id": "el_e35b608c21faf5bf",
+        "inspectability": "opaque",
+        "metadata": {},
+        "native": {
+          "kind": "runtime-provided-instructions",
+          "origin": "builtin",
+          "scope": null
+        },
+        "source": {
+          "path": "(builtin) claude-code instruction layers"
+        },
+        "status": "observed"
+      },
+      "resolved": {
+        "activation": "always",
+        "applicability": {
+          "type": "runtime-defined"
+        },
+        "id": "el_e35b608c21faf5bf",
+        "resolution": {
+          "reason": "runtime-defined layer",
+          "strategy": "runtime-defined"
+        },
+        "status": "effective"
+      },
+      "interpretation": {
+        "confidence": "unknown",
+        "elementId": "el_e35b608c21faf5bf",
+        "facets": [
+          "instructions"
+        ],
+        "reason": "runtime-provided layer; contents are opaque"
+      }
+    }
+  ],
+  "relations": [],
+  "findings": [
+    {
+      "elementIds": [
+        "el_e35b608c21faf5bf"
+      ],
+      "message": "1 runtime-provided instruction layer(s) are opaque",
+      "rule": "opaque-runtime-layer"
+    }
+  ],
+  "interpretation": {
+    "classifier": {
+      "id": "pfl-native",
+      "version": "5"
+    },
+    "origin": "stored"
+  }
+}

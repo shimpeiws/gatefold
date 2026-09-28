@@ -345,4 +345,93 @@ describe("yuurei trace reader contract", () => {
     const trace = parseYuureiTrace(validDoc(), "bad\tpath.json");
     expect(trace.sourcePath).toBe("bad\\u0009path.json");
   });
+
+  it("parses seed.source_project and keeps absence unknown", () => {
+    const seeded = (sourceProject?: unknown): Record<string, any> => {
+      const doc = validDoc();
+      doc.seed = {
+        policy: "git-tracked-files",
+        source: "/seed/x",
+        head: "0123456789abcdef0123456789abcdef01234567",
+        baseline: {
+          requested_digest: "sha256:b",
+          materialized_digest: "sha256:b",
+          files: 0,
+          bytes: 0,
+        },
+        ...(sourceProject === undefined
+          ? {}
+          : { source_project: sourceProject }),
+      };
+      return doc;
+    };
+
+    expect(
+      parseYuureiTrace(seeded(), "x.json").seed?.sourceProject,
+    ).toBeUndefined();
+
+    const declared = parseYuureiTrace(
+      seeded({
+        id: "git-0123456789abcdef",
+        kind: "git-remote",
+        remote: "github.com/owner/repo",
+      }),
+      "x.json",
+    );
+    expect(declared.seed?.sourceProject).toEqual({
+      id: "git-0123456789abcdef",
+      kind: "git-remote",
+      remote: "github.com/owner/repo",
+    });
+
+    const local = parseYuureiTrace(
+      seeded({ id: "path-0123456789abcdef", kind: "local-path" }),
+      "x.json",
+    );
+    expect(local.seed?.sourceProject).toEqual({
+      id: "path-0123456789abcdef",
+      kind: "local-path",
+    });
+
+    for (const [sourceProject, part] of [
+      ["not-an-object", "seed.source_project"],
+      [{ id: "bogus", kind: "git-remote" }, "seed.source_project.id"],
+      [
+        { id: "git-0123456789abcdef", kind: "local-path" },
+        "seed.source_project.id",
+      ],
+      [{ id: "git-0123456789abcdef" }, "seed.source_project.kind"],
+      [
+        {
+          id: "path-0123456789abcdef",
+          kind: "local-path",
+          remote: "github.com/owner/repo",
+        },
+        "seed.source_project.remote",
+      ],
+      [
+        { id: "git-0123456789abcdef", kind: "git-remote", remote: "" },
+        "seed.source_project.remote",
+      ],
+      [
+        {
+          id: "git-0123456789abcdef",
+          kind: "git-remote",
+          remote: "github.com/o/r\x1b[2J",
+        },
+        "seed.source_project.remote",
+      ],
+    ] as const) {
+      const error = (() => {
+        try {
+          parseYuureiTrace(seeded(sourceProject), "x.json");
+          return null;
+        } catch (e) {
+          return e as PflExportError;
+        }
+      })();
+      expect(error?.code, part).toBe("invalid-shape");
+      expect(error?.message, part).toContain(part);
+    }
+  });
 });

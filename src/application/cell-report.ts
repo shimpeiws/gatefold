@@ -399,6 +399,8 @@ function exportDocEvidence(ctx: CellCtx): CellEvidenceReference[] {
 export function associationEntries(ctx: CellCtx): {
   entries: CellEntry[];
   binding: CellEntryState;
+  /** State of the `association.export-source-project` check. */
+  sourceProject: CellEntryState;
 } {
   const trace = ctx.cell.run.trace;
   const observation = ctx.cell.observation;
@@ -857,6 +859,117 @@ export function associationEntries(ctx: CellCtx): {
     );
   }
 
+  // association.export-source-project — the declared source-project
+  // identity: the trace's `seed.source_project` versus the identity the
+  // retained export carries (yuurei #214, pfl #217). Both records are
+  // caller-declared provenance; their agreement binds one declared source
+  // identity to this cell's own records. `remote`/`head` are never
+  // compared — pfl redacts them at persistence, so the identity comparison
+  // keys on `id` and `kind` only.
+  {
+    const declared = trace.seed?.sourceProject;
+    const carried =
+      observation.exportDocument === null
+        ? undefined
+        : observation.exportDocument.data.snapshot.sourceProject;
+    let state: CellEntryState;
+    let completeness: CellCompleteness;
+    let statement: string;
+    if (!exportDeclared) {
+      state = "not-recorded";
+      completeness = "unknown";
+      statement = undeclaredStatement();
+    } else if (observation.exportDocument === null) {
+      state = noExportState(observation);
+      completeness = "unknown";
+      statement = `no interpretable export exists to compare: ${noExportReason(observation)}`;
+    } else if (
+      declared === undefined &&
+      carried !== undefined &&
+      carried !== null
+    ) {
+      state = "unverifiable";
+      completeness = "unknown";
+      statement =
+        `the export declares source-project identity '${carried.id}' ` +
+        `(issuer '${carried.issuer}') but the trace's seed record declares ` +
+        `none — the declaration cannot be cross-checked against this run's ` +
+        `seed record`;
+    } else if (declared === undefined) {
+      state = "not-recorded";
+      completeness = "unknown";
+      statement =
+        carried === null
+          ? "the export records no source-project declaration " +
+            "(sourceProject: null) and the trace's seed record declares " +
+            "none either — the observed cell's source identity is unknown, " +
+            "not absent"
+          : "neither the trace's seed record nor the export records a " +
+            "source-project identity — the observed cell's source identity " +
+            "is unknown";
+    } else if (carried === undefined) {
+      state = "unverifiable";
+      completeness = "unknown";
+      statement =
+        `the trace's seed record declares source-project identity ` +
+        `'${declared.id}' but the export does not carry ` +
+        `data.snapshot.sourceProject (a pfl from before the field existed, ` +
+        `or a pre-schema-3 artifact) — the declaration cannot be ` +
+        `cross-checked against the observation`;
+    } else if (carried === null) {
+      state = "unverifiable";
+      completeness = "unknown";
+      statement =
+        `the trace's seed record declares source-project identity ` +
+        `'${declared.id}' but the export records sourceProject: null — ` +
+        `no valid declaration reached the observation`;
+    } else if (declared.id === carried.id && declared.kind === carried.kind) {
+      state = "verified";
+      completeness = "complete";
+      statement =
+        `the trace's seed record and the retained export declare the same ` +
+        `source-project identity '${declared.id}' (kind '${declared.kind}') ` +
+        `— a recorded agreement between the run's seed record and the ` +
+        `caller-asserted provenance the observation carried, not proof the ` +
+        `source itself was observed`;
+    } else {
+      state = "inconsistent";
+      completeness = "complete";
+      statement =
+        declared.id !== carried.id
+          ? `the trace's seed record declares source-project identity ` +
+            `'${declared.id}' but the retained export carries ` +
+            `'${carried.id}'`
+          : `the records declare the same source-project id ` +
+            `'${declared.id}' under different kinds ('${declared.kind}' vs ` +
+            `'${carried.kind}')`;
+    }
+    const evidence: CellEvidenceReference[] = [
+      trace.seed === undefined
+        ? cellEv(ctx, "trace", "", { note: "no seed field" })
+        : traceNestedEv(ctx, "seed", "source_project"),
+    ];
+    if (record !== null)
+      evidence.push(
+        exportNestedEv(ctx, record, "/data/snapshot", "sourceProject"),
+      );
+    else
+      evidence.push(
+        cellEv(ctx, "manifest", "", { note: "no export manifest entry" }),
+      );
+    entries.push(
+      cellEntry(
+        ctx,
+        "association",
+        "association.export-source-project",
+        state,
+        completeness,
+        statement,
+        evidence,
+      ),
+    );
+  }
+
   // association.record-consistency — the record's own coherence.
   {
     const problems: string[] = [];
@@ -951,7 +1064,14 @@ export function associationEntries(ctx: CellCtx): {
   const bindingEntry = entries.find(
     (entry) => entry.id === "association.export-binding",
   )!;
-  return { entries, binding: bindingEntry.state };
+  const sourceProjectEntry = entries.find(
+    (entry) => entry.id === "association.export-source-project",
+  )!;
+  return {
+    entries,
+    binding: bindingEntry.state,
+    sourceProject: sourceProjectEntry.state,
+  };
 }
 
 // -- configuration lane -----------------------------------------------------
