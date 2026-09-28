@@ -2179,6 +2179,26 @@ describe("gatefold e2e: report-cell and compare-cells", () => {
       expect(run.stdout).not.toContain(word);
   });
 
+  it("rejects --min-confidence on the confidence-free cell commands", async () => {
+    for (const args of [
+      ["report-cell", "--run", cellFixture("cell-a"), "--min-confidence", "0"],
+      ["report-cell", "--run", cellFixture("cell-a"), "--min-confidence", "1"],
+      [
+        "compare-cells",
+        "--before",
+        cellFixture("cell-a"),
+        "--after",
+        cellFixture("cell-b"),
+        "--min-confidence=0.5",
+      ],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("--min-confidence does not apply");
+    }
+  });
+
   it("rejects report-cell missing flags and stdin with exit 2", async () => {
     for (const args of [
       ["report-cell"],

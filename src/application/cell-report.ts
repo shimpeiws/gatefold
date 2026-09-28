@@ -243,6 +243,31 @@ function noExportState(observation: CellObservation): CellEntryState {
     : "unverifiable";
 }
 
+/**
+ * Why no configuration is presented for one cell. A parsed export that is
+ * not bound to this cell is stated as *unbound*, never as a missing or
+ * uninterpretable document: the bytes exist and were read, and only the
+ * association failed.
+ */
+function availabilityReason(
+  observation: CellObservation,
+  binding: CellEntryState,
+): string {
+  if (binding === "not-recorded") return noExportReason(observation);
+  if (binding === "inconsistent")
+    return (
+      "the retained export records a different cell_id than the trace " +
+      "(see association.export-binding): the document exists and was read, " +
+      "but it is not bound to this cell"
+    );
+  if (observation.exportDocument !== null)
+    return (
+      "the retained export is not bound to this cell: its recorded cellId " +
+      "is null or the trace records none, so the association cannot be checked"
+    );
+  return noExportReason(observation);
+}
+
 function noExportReason(observation: CellObservation): string {
   if (observation.record === undefined)
     return "the trace records no observation record";
@@ -959,8 +984,8 @@ export function configurationEntries(
         state,
         "unknown",
         "no bound export is available: " +
-          `${noExportReason(observation)}; the pre-run configuration is ` +
-          `unknown, not absent or unchanged`,
+          `${availabilityReason(observation, binding)}; the pre-run ` +
+          `configuration is unknown, not absent or unchanged`,
         exportDocEvidence(ctx),
       ),
     ];

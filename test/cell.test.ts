@@ -871,8 +871,11 @@ describe("cell report review regressions", () => {
       expect(result.inputs.run?.cellId).toBe("cell_other");
       expect(result.inputs.run?.exportObservedSnapshotId).toBeNull();
       expect(result.inputs.run?.exportResolvedSnapshotId).toBeNull();
-      expect(entryAt(result, "configuration.availability").state).toBe(
-        "inconsistent",
+      const availability = entryAt(result, "configuration.availability");
+      expect(availability.state).toBe("inconsistent");
+      expect(availability.statement).toContain("not bound to this cell");
+      expect(availability.statement).not.toContain(
+        "no interpretable export document is retained",
       );
     } finally {
       rmSync(base, { recursive: true, force: true });

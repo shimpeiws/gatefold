@@ -104,6 +104,12 @@ interface CliOptions {
   readonly minConfidence: number;
   /** The --min-confidence token exactly as supplied, for display. */
   readonly minConfidenceText: string;
+  /**
+   * Whether the caller supplied `--min-confidence` at all. Commands whose
+   * entries carry no confidence reject the option rather than accepting a
+   * filter they cannot apply.
+   */
+  readonly minConfidenceSupplied: boolean;
   readonly help: boolean;
 }
 
@@ -136,6 +142,7 @@ function parseArgs(args: readonly string[]): CliOptions {
   let format: OutputFormat = "human";
   let minConfidence = 0;
   let minConfidenceText = "0";
+  let minConfidenceSupplied = false;
   let optionsDone = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -147,6 +154,7 @@ function parseArgs(args: readonly string[]): CliOptions {
         format,
         minConfidence,
         minConfidenceText,
+        minConfidenceSupplied,
         help: true,
       };
     if (!optionsDone && argument === "--") {
@@ -304,6 +312,7 @@ function parseArgs(args: readonly string[]): CliOptions {
         );
       minConfidence = parsed;
       minConfidenceText = value;
+      minConfidenceSupplied = true;
       continue;
     }
     if (!optionsDone && argument === "-") {
@@ -538,6 +547,14 @@ function parseArgs(args: readonly string[]): CliOptions {
         EXIT_USAGE,
       );
   }
+  if (
+    minConfidenceSupplied &&
+    (reportCell !== undefined || compareCells !== undefined)
+  )
+    throw new CliError(
+      "--min-confidence does not apply to report-cell or compare-cells: cell entries carry no confidence",
+      EXIT_USAGE,
+    );
   if (reportCell !== undefined) {
     if (reportCell.run === undefined)
       throw new CliError("report-cell requires --run (see --help)", EXIT_USAGE);
@@ -580,6 +597,7 @@ function parseArgs(args: readonly string[]): CliOptions {
     format,
     minConfidence,
     minConfidenceText,
+    minConfidenceSupplied,
     help: false,
   };
 }
