@@ -35,7 +35,7 @@ import {
   type CellCtx,
   type CellEmitCtx,
 } from "./cell-report.js";
-import { canonicalJson, relationKey } from "./cell-diff.js";
+import { byRelation, canonicalJson, relationKey } from "./cell-diff.js";
 import {
   exportSourceEv,
   exportSideEv,
@@ -549,31 +549,43 @@ function setLaneEntries(args: {
   }
 
   // set.profile — identity is the content digest; the name is provenance.
+  // A name attributed to a run must be the name that run recorded, so
+  // runs are grouped per (digest, name) pair, not per digest alone.
   {
-    const profiles = new Map<string, { name: string; runs: string[] }>();
+    const profiles = new Map<string, Map<string, string[]>>();
     for (const [index, cell] of cells.entries()) {
       const profile = cell.run.trace.profile;
-      const group = profiles.get(profile.digest) ?? {
-        name: profile.name,
-        runs: [],
-      };
-      group.runs.push(names[index]!);
-      profiles.set(profile.digest, group);
+      const byName =
+        profiles.get(profile.digest) ??
+        profiles.set(profile.digest, new Map()).get(profile.digest)!;
+      (
+        byName.get(profile.name) ??
+        byName.set(profile.name, []).get(profile.name)!
+      ).push(names[index]!);
     }
+    const named = (digest: string, byName: Map<string, string[]>) =>
+      [...byName.entries()]
+        .map(([name, runs]) => `'${name}' on ${nameList(runs)}`)
+        .join(", ") + ` (digest '${digest}')`;
+    const only = profiles.size === 1 ? [...profiles.values()][0]! : undefined;
     entries.push(
       setEntry(
         "set.profile",
         "recorded",
         "complete",
         profiles.size === 1
-          ? `all ${n} runs used profile '${[...profiles.values()][0]!.name}' ` +
+          ? only!.size === 1
+            ? `all ${n} runs used profile '${[...only!.keys()][0]}' ` +
               `(content digest '${[...profiles.keys()][0]}') — the same profile identity`
+            : `the runs record the same profile content digest ` +
+              `'${[...profiles.keys()][0]}' under different recorded ` +
+              `names (${[...only!.entries()]
+                .map(([name, runs]) => `'${name}' on ${nameList(runs)}`)
+                .join(", ")}) — a profile name is provenance, so the ` +
+              `profile identity is the same across the set`
           : `the runs record ${profiles.size} distinct profile identities: ` +
               [...profiles.entries()]
-                .map(
-                  ([digest, group]) =>
-                    `'${group.name}' (digest '${digest}') on ${nameList(group.runs)}`,
-                )
+                .map(([digest, byName]) => named(digest, byName))
                 .join("; ") +
               ` — a profile difference is stated as set context, never a defect`,
         ctxs.flatMap((ctx) => [
@@ -887,7 +899,12 @@ function setLaneEntries(args: {
         // export is still one export recording it.
         if (!bucket.runs.includes(run)) bucket.runs.push(run);
       }
-    const keys = [...union.entries()].sort(([a], [b]) => compareBytes(a, b));
+    // Numbered in v9's from/to/type order — the encoded relationKey is
+    // the membership key, not the display order, so `set.relation.<n>`
+    // follows the same ordering as the pair diff's relation entries.
+    const keys = [...union.entries()].sort(
+      ([aKey, a], [bKey, b]) => byRelation(a, b) || compareBytes(aKey, bKey),
+    );
     keys.forEach(([key, bucket], index) => {
       const absent = eligible.filter((run) => !bucket.runs.includes(run));
       const parts = [
@@ -962,7 +979,8 @@ function setLaneEntries(args: {
           (bucket.finding.elementIds.length === 0
             ? ""
             : ` on ${bucket.finding.elementIds.join(", ")}`) +
-          ` is recorded in ${bucket.runs.length} of ${e} eligible exports`,
+          ` is recorded in ${bucket.runs.length} of ${e} eligible ` +
+          `exports: ${bucket.finding.message}`,
       ];
       if (absent.length > 0) parts.push(absentPhrase(absent, names));
       if (unbound.length > 0)

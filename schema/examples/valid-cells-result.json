@@ -3998,7 +3998,7 @@
       "id": "set.finding.0",
       "state": "recorded",
       "completeness": "complete",
-      "statement": "finding 'opaque-runtime-layer' on el_e35b608c21faf5bf is recorded in 3 of 3 eligible exports",
+      "statement": "finding 'opaque-runtime-layer' on el_e35b608c21faf5bf is recorded in 3 of 3 eligible exports: 1 runtime-provided instruction layer(s) are opaque",
       "evidence": [
         {
           "source": "run1Export",

@@ -626,6 +626,104 @@ describe("report-cells", () => {
     }
   });
 
+  it("names each recorded finding message, so reworded findings stay distinct", async () => {
+    const reworded = patchedExport(cellFixture("cell-real-run-b"), (doc) => {
+      const data = doc.data as Record<string, unknown>;
+      const finding = (data.findings as Record<string, unknown>[])[0]!;
+      finding.message = "2 runtime-provided instruction layer(s) are opaque";
+    });
+    try {
+      const result = await reportCells({
+        cells: await Promise.all([
+          readCellRun(cellFixture("cell-real-run-a")),
+          readCellRun(reworded),
+        ]),
+      });
+      expectSchemaValid(result);
+      const findings = result.entries.filter((e) =>
+        e.id.startsWith("set.finding."),
+      );
+      expect(findings).toHaveLength(2);
+      const statements = findings.map((e) => e.statement);
+      expect(
+        statements.some((s) =>
+          s.includes("1 runtime-provided instruction layer(s) are opaque"),
+        ),
+      ).toBe(true);
+      expect(
+        statements.some((s) =>
+          s.includes("2 runtime-provided instruction layer(s) are opaque"),
+        ),
+      ).toBe(true);
+      expect(statements[0]).not.toBe(statements[1]);
+    } finally {
+      rmSync(reworded, { recursive: true, force: true });
+    }
+  });
+
+  it("attributes each profile name to the runs that record it under a shared digest", async () => {
+    const renamed = patchedTrace(cellFixture("cell-real-run-b"), (trace) => {
+      (trace.profile as Record<string, unknown>).name = "fixture-renamed";
+    });
+    try {
+      const result = await reportCells({
+        cells: await Promise.all([
+          readCellRun(cellFixture("cell-real-run-a")),
+          readCellRun(renamed),
+        ]),
+      });
+      expectSchemaValid(result);
+      const statement = entryAt(result, "set.profile").statement;
+      expect(statement).toContain("same profile content digest");
+      expect(statement).toContain("'fixture-claude' on run1");
+      expect(statement).toContain("'fixture-renamed' on run2");
+      expect(statement).not.toContain("all 2 runs used profile");
+    } finally {
+      rmSync(renamed, { recursive: true, force: true });
+    }
+  });
+
+  it("numbers set relations in the v9 from/to/type order, not key-byte order", async () => {
+    const withRelations = patchedExport(
+      cellFixture("cell-real-run-a"),
+      (doc) => {
+        // Type-first key order would place 'contains' first; the
+        // contracted from/to/type order places 'overrides' (from
+        // el_0fc…, the lexically smaller endpoint) first. Endpoints
+        // must be element ids the export records.
+        (doc.data as Record<string, unknown>).relations = [
+          {
+            type: "contains",
+            from: "el_e35b608c21faf5bf",
+            to: "el_0fc92802d8f84176",
+          },
+          {
+            type: "overrides",
+            from: "el_0fc92802d8f84176",
+            to: "el_e35b608c21faf5bf",
+          },
+        ];
+      },
+    );
+    try {
+      const result = await reportCells({
+        cells: await Promise.all([
+          readCellRun(withRelations),
+          readCellRun(cellFixture("cell-real-run-b")),
+        ]),
+      });
+      expectSchemaValid(result);
+      expect(entryAt(result, "set.relation.0").statement).toContain(
+        "'overrides' 'el_0fc92802d8f84176' → 'el_e35b608c21faf5bf'",
+      );
+      expect(entryAt(result, "set.relation.1").statement).toContain(
+        "'contains' 'el_e35b608c21faf5bf' → 'el_0fc92802d8f84176'",
+      );
+    } finally {
+      rmSync(withRelations, { recursive: true, force: true });
+    }
+  });
+
   it("rejects more than the bounded-set ceiling", async () => {
     const cell = await readCellRun(cellFixture("cell-real-run-a"));
     expect(() =>
