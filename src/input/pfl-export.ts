@@ -152,6 +152,13 @@ export interface PflSnapshotData {
     readonly resolvedSnapshotId: string;
     readonly capturedAt: string;
     readonly schemaVersion: string;
+    /**
+     * pfl v1.2.0+: the caller-asserted cell association copied from
+     * `--cell-id`. `undefined` when the document does not carry the key
+     * (older pfl versions), `null` when it records no association. A
+     * non-null value is provenance to compare, not a verified property.
+     */
+    readonly cellId?: string | null;
   };
   readonly resolution: {
     readonly semanticsVersion: string;
@@ -1027,6 +1034,19 @@ function parsePflSnapshotData(value: unknown): PflSnapshotData {
         "schemaVersion",
         "data.snapshot.schemaVersion",
       ),
+      // `cellId` is additive (pfl v1.2.0): absent, explicit null, or a
+      // bounded string — an empty or non-string value fails closed like
+      // any other recorded field.
+      ...("cellId" in snapshot
+        ? {
+            cellId: nullableStringField(
+              snapshot,
+              "cellId",
+              "data.snapshot.cellId",
+              MAX_METADATA_CHARS,
+            ),
+          }
+        : {}),
     },
     resolution: {
       semanticsVersion: boundedStringField(

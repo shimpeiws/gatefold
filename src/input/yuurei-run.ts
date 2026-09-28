@@ -120,6 +120,21 @@ function assertConfinedPath(path: string, at: string): void {
     if (part === "" || part === "." || part === "..") throw invalid();
 }
 
+/**
+ * Non-throwing confinement check used for paths declared inside the run's
+ * own records (v0.9: `observation.artifacts[].path`): the same lexical
+ * rule as the manifest, so an unsafe declaration is reportable rather
+ * than rejected at read time.
+ */
+export function isConfinedArtifactPath(path: string): boolean {
+  try {
+    assertConfinedPath(path, "path");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** A manifest entry after shape and confinement validation. */
 export interface RawEntry {
   readonly index: number;

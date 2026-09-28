@@ -85,6 +85,15 @@ export interface AuditedRun extends EvaluatedRun {
   readonly patchMalformed: boolean;
   readonly baselineManifest: AuditedArtifactRecord;
   readonly changes: AuditedArtifactRecord;
+  /**
+   * Additional manifest-listed records the caller asked to be verified
+   * and parsed (v0.9: the observation export path the trace declares),
+   * keyed by artifact path. Empty when none were requested. An
+   * interpreted-but-failed entry (missing, digest mismatch) still appears
+   * here with its state so the caller can report it; a path the manifest
+   * does not list is absent entirely.
+   */
+  readonly extraRecords: ReadonlyMap<string, AuditedArtifactRecord>;
 }
 
 /** Parses verified supplemental-record bytes into a JSON object. */
@@ -125,7 +134,22 @@ function parseRecordDocument(
  * unconfined paths, symlink escapes, size limits) still fail closed inside
  * the shared readers.
  */
-export async function readAuditedRun(dirPath: string): Promise<AuditedRun> {
+export interface ReadAuditedRunOptions {
+  /**
+   * Manifest paths beyond the built-in audit set that should also be
+   * verified and parsed into `extraRecords`. Paths must come from the
+   * caller's own contract (for v0.9, the paths the trace's observation
+   * record declares); paths the manifest does not list are silently
+   * absent from `extraRecords` — presence there, not request, is what
+   * makes bytes reachable.
+   */
+  readonly extraInterpretedPaths?: readonly string[];
+}
+
+export async function readAuditedRun(
+  dirPath: string,
+  options: ReadAuditedRunOptions = {},
+): Promise<AuditedRun> {
   const loaded = await loadRunDirectory(dirPath);
   const { display, realRunDir, trace, manifestDocument } = loaded;
   const seeded = trace.seed !== undefined;
@@ -158,18 +182,18 @@ export async function readAuditedRun(dirPath: string): Promise<AuditedRun> {
   let resultEntryState: ArtifactState | null = null;
   let baselineManifest = EMPTY_RECORD;
   let changes = EMPTY_RECORD;
+  const extraRecords = new Map<string, AuditedArtifactRecord>();
 
   // The records the audit interprets: patch.diff and result.txt on every
-  // run, plus the seeded run's two supplemental records. Everything else
-  // stays an unverified manifest fact and is never opened.
-  const interpretedPaths = seeded
-    ? new Set([
-        PATCH_ARTIFACT_PATH,
-        RESULT_ARTIFACT_PATH,
-        BASELINE_MANIFEST_ARTIFACT_PATH,
-        CHANGES_ARTIFACT_PATH,
-      ])
-    : new Set([PATCH_ARTIFACT_PATH, RESULT_ARTIFACT_PATH]);
+  // run, plus the seeded run's two supplemental records, plus any extra
+  // paths the caller declared. Everything else stays an unverified
+  // manifest fact and is never opened.
+  const interpretedPaths = new Set([
+    PATCH_ARTIFACT_PATH,
+    RESULT_ARTIFACT_PATH,
+    ...(seeded ? [BASELINE_MANIFEST_ARTIFACT_PATH, CHANGES_ARTIFACT_PATH] : []),
+    ...(options.extraInterpretedPaths ?? []),
+  ]);
 
   for (const entry of loaded.rawEntries) {
     if (!interpretedPaths.has(entry.path)) {
@@ -236,7 +260,8 @@ export async function readAuditedRun(dirPath: string): Promise<AuditedRun> {
       };
       if (entry.path === BASELINE_MANIFEST_ARTIFACT_PATH)
         baselineManifest = record;
-      else changes = record;
+      else if (entry.path === CHANGES_ARTIFACT_PATH) changes = record;
+      else extraRecords.set(entry.path, record);
     }
     entries.push({
       index: entry.index,
@@ -276,6 +301,7 @@ export async function readAuditedRun(dirPath: string): Promise<AuditedRun> {
     resultState,
     baselineManifest,
     changes,
+    extraRecords,
     resultDiagnosticIndex,
     patchOmissionIndex,
     patchFailureIndex,
