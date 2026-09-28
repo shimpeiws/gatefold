@@ -129,7 +129,12 @@ export const TRACE_RULES: readonly TraceRule[] = [
       let text =
         `Runs '${before.runId}' (A) and '${after.runId}' (B) requested the ` +
         `same task content (task.digest '${before.task.digest}'), runtime ` +
-        `'${before.runtime.id}', model '${before.model.requested}', and ` +
+        `'${before.runtime.id}', ` +
+        `${
+          before.model.requested === ""
+            ? "no model (model.requested is empty on both)"
+            : `model '${before.model.requested}'`
+        }, and ` +
         `isolation strategy '${before.isolation.strategy}'`;
       if (before.task.source !== after.task.source)
         text +=
@@ -293,9 +298,11 @@ export const TRACE_RULES: readonly TraceRule[] = [
             pointer: "/model/resolved_reason",
           });
       }
-      const text =
-        `Both runs requested model '${before.model.requested}': ` +
-        `${side(before, "A")}; ${side(after, "B")}.`;
+      const text = `${
+        before.model.requested === ""
+          ? "Both runs requested no model (model.requested is an empty string)"
+          : `Both runs requested model '${before.model.requested}'`
+      }: ${side(before, "A")}; ${side(after, "B")}.`;
       return [claim("trace-model", text, evidence)];
     },
   },

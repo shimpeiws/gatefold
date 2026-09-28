@@ -1217,7 +1217,11 @@ export function executionEntries(ctx: CellCtx): CellEntry[] {
       "execution.model",
       "recorded",
       "complete",
-      `the run requested model '${trace.model.requested}'` +
+      `${
+        trace.model.requested === ""
+          ? "the run requested no model (model.requested is an empty string)"
+          : `the run requested model '${trace.model.requested}'`
+      }` +
         (trace.model.resolved === null
           ? "; no resolved model is recorded"
           : ` and resolved '${trace.model.resolved}'` +

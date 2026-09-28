@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1",
+  "harnessDigest": "sha256:fcc814c902bd10c81ca1e15f176c69873e90fad49e46ab06194bac1496b47375",
+  "observedSnapshotId": "obs_868ebdd23fbd",
+  "resolvedSnapshotId": "res_8c469e44964c",
+  "createdAt": "2026-09-28T06:35:28.098Z",
+  "containsRawEvidence": false,
+  "evidence": [
+    {
+      "elementId": "el_27fe13eadde2a496",
+      "sourcePath": "~/.codex/AGENTS.md",
+      "status": "skipped",
+      "verified": false,
+      "reasonCode": "outside-project-scope"
+    },
+    {
+      "elementId": "el_6322e25439aa68e6",
+      "sourcePath": "~/.codex/config.toml#model",
+      "status": "skipped",
+      "verified": false,
+      "reasonCode": "outside-project-scope"
+    },
+    {
+      "elementId": "el_c5e2266231e25205",
+      "sourcePath": "(builtin) codex instruction layers",
+      "status": "missing",
+      "verified": false
+    }
+  ]
+}

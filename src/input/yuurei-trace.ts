@@ -256,6 +256,11 @@ function stringField(
 /**
  * Required string that may be empty. Provenance fields (a task source, a
  * profile name) describe where content came from and carry no identity.
+ *
+ * `model.requested` is also allowed to be empty: yuurei's `run` CLI defaults
+ * it to `''` when neither `--model` nor the run definition supplies one, so a
+ * shipped trace can record an empty request. Absence of a request is a
+ * recorded fact, not a malformed one.
  */
 function boundedStringField(
   record: Record<string, unknown>,
@@ -825,7 +830,7 @@ export function parseYuureiTrace(
       version: nullableStringField(runtime, "version", "runtime.version"),
     },
     model: {
-      requested: stringField(model, "requested", "model.requested"),
+      requested: boundedStringField(model, "requested", "model.requested"),
       resolved: nullableStringField(model, "resolved", "model.resolved"),
       ...(resolvedReason === undefined
         ? {}

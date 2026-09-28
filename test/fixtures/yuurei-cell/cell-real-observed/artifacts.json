@@ -1,0 +1,34 @@
+{
+  "artifacts": [
+    {
+      "path": "stdout.log",
+      "kind": "log",
+      "digest": "sha256:f8728c866ff1639cc685303509e63de7dbdfb83c76c08352610cd56ce54bd3fe"
+    },
+    {
+      "path": "stderr.log",
+      "kind": "log",
+      "digest": "sha256:73dc6701a3c44f3ea50009ee1061bb1f5d1b6a94399263d775d342709581359c"
+    },
+    {
+      "path": "patch.diff",
+      "kind": "patch",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "observation/export.json",
+      "kind": "file",
+      "digest": "sha256:c876ce0f0e1da4aab388dc51aecab034dd02b964793266c071e8bbcb02621c8c"
+    },
+    {
+      "path": "observation/bundle/harness.json",
+      "kind": "file",
+      "digest": "sha256:fcc814c902bd10c81ca1e15f176c69873e90fad49e46ab06194bac1496b47375"
+    },
+    {
+      "path": "observation/bundle/manifest.json",
+      "kind": "file",
+      "digest": "sha256:eccca8a6abda4d4ef7865b6b00010f74a49b26f0f8cdc114afe73d8f66cece41"
+    }
+  ]
+}

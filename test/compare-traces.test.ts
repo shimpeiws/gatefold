@@ -389,6 +389,46 @@ describe("gatefold compare-traces", () => {
     },
   );
 
+  it("states an empty requested model as no model requested", () => {
+    // yuurei records model.requested as '' when no model was requested. Both
+    // sides carry the same recorded value, so the pair stays comparable and
+    // the statements name the absent request instead of quoting a model ''.
+    const a = docA() as Record<string, any>;
+    const b = docB() as Record<string, any>;
+    a.model.requested = "";
+    b.model.requested = "";
+    const result = compareDocs(a, b);
+    const inputs = claimsOf(result, "trace-inputs")[0]!;
+    expect(inputs.claim).toContain(
+      "no model (model.requested is empty on both)",
+    );
+    expect(inputs.claim).not.toContain("model ''");
+    const model = claimsOf(result, "trace-model")[0]!;
+    expect(model.claim).toContain("requested no model");
+    expect(model.claim).not.toContain("model ''");
+    // the evidence pointers still resolve to the recorded field
+    expect(model.evidence.map((e) => `${e.source}:${e.pointer}`)).toContain(
+      "beforeTrace:/model/requested",
+    );
+  });
+
+  it("names an absent request when one side records an empty model", () => {
+    const b = docB() as Record<string, any>;
+    b.model.requested = "";
+    const error = (() => {
+      try {
+        compareDocs(docA(), b);
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })() as PflExportError;
+    expect(error.code).toBe("mismatched-inputs");
+    expect(error.message).toContain("model.requested");
+    // the empty side is described, not rendered as a pair of quotes
+    expect(error.message).toContain("none (an empty string)");
+  });
+
   it("rejects a task-mismatched fixture pair", async () => {
     await expect(
       Promise.resolve().then(() =>

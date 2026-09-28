@@ -28,6 +28,17 @@ function mismatched(message: string): PflExportError {
 }
 
 /**
+ * Renders a recorded `model.requested` value for a rejection or claim.
+ *
+ * yuurei's `run` CLI defaults the field to an empty string when neither
+ * `--model` nor the run definition supplies one, so an empty value means "no
+ * model was requested" — described as such rather than quoted as `''`.
+ */
+function describeRequestedModel(value: string): string {
+  return value === "" ? "none (an empty string)" : `'${value}'`;
+}
+
+/**
  * Deep JSON equality for `execution_options.runtime` records: object key
  * order is not significant at any depth; array element order is.
  */
@@ -133,7 +144,8 @@ export function checkTraceComparability(
   if (before.model.requested !== after.model.requested)
     throw mismatched(
       `the traces record different model.requested values ` +
-        `('${before.model.requested}' vs '${after.model.requested}')`,
+        `(${describeRequestedModel(before.model.requested)} vs ` +
+        `${describeRequestedModel(after.model.requested)})`,
     );
   if (before.isolation.strategy !== after.isolation.strategy)
     throw mismatched(

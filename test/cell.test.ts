@@ -731,6 +731,50 @@ describe("report-cell", () => {
       "partial",
     );
   });
+
+  it("reads a whole real yuurei v1.2.0 observed run end to end", async () => {
+    // test/fixtures/yuurei-cell/cell-real-observed is a genuine
+    // `yuurei run probe --observe` directory under level1: trace.json,
+    // artifacts.json, the logs, patch.diff, observation/export.json and the
+    // observation bundle are all upstream output, and every manifest digest
+    // is taken over those bytes. It records model.requested as "" and a
+    // failed execution (codex exited 1 with no credentials), so it also
+    // pins the reader against a real `status: "recorded"` run rather than a
+    // contract-shaped authored one. See docs/v0.9-scope.md#fixtures.
+    const runDir = fileURLToPath(
+      new URL("./fixtures/yuurei-cell/cell-real-observed", import.meta.url),
+    );
+    const result = await report(runDir);
+    expectSchemaValid(result);
+    expect(entryAt(result, "association.cell-id").state).toBe("recorded");
+    for (const id of [
+      "association.export-retained",
+      "association.export-document",
+      "association.export-binding",
+      "association.export-snapshots",
+      "association.export-runtime",
+      "association.export-completeness",
+      "association.record-consistency",
+    ])
+      expect(entryAt(result, id).state).toBe("verified");
+    // the observer's own export supplies the configuration lane
+    const elements = entriesWith(result, "configuration.element.");
+    expect(elements.length).toBeGreaterThan(0);
+    for (const entry of elements) {
+      expect(entry.state).toBe("recorded");
+      expect(entry.evidence[0]?.digest).toBeDefined();
+    }
+    expect(
+      entriesWith(result, "configuration.finding.").length,
+    ).toBeGreaterThan(0);
+    // an empty requested model is an absent request, never a model named ''
+    const model = entryAt(result, "execution.model");
+    expect(model.statement).toContain("requested no model");
+    expect(model.statement).not.toContain("model ''");
+    // the run's own execution record is restated; no success is claimed
+    const outcome = entryAt(result, "execution.outcome");
+    expect(outcome.statement).toContain("exit_code '1'");
+  });
 });
 
 describe("cell report review regressions", () => {
