@@ -391,6 +391,36 @@ function comparisonEntries(
     );
   }
 
+  // The cells' profile identities. In a cell comparison the profile is the
+  // compared variable, so a difference is the subject of the comparison and
+  // never a defect; it is stated here rather than left to the two per-side
+  // execution entries, which describe each run without relating them.
+  {
+    const profileA = before.run.trace.profile;
+    const profileB = after.run.trace.profile;
+    const same =
+      profileA.name === profileB.name && profileA.digest === profileB.digest;
+    entries.push(
+      cmpEntry(
+        "comparison.profile",
+        "recorded",
+        "complete",
+        same
+          ? `both cells used profile '${profileA.name}' (content digest '${profileA.digest}') — the profile identity is the same on both sides`
+          : `the cells used different profiles: A '${profileA.name}' ` +
+              `(content digest '${profileA.digest}') vs B '${profileB.name}' ` +
+              `(content digest '${profileB.digest}'); a profile identity ` +
+              `difference is the subject of this comparison, not a defect`,
+        [
+          { source: "beforeTrace", pointer: "/profile/name" },
+          { source: "beforeTrace", pointer: "/profile/digest" },
+          { source: "afterTrace", pointer: "/profile/name" },
+          { source: "afterTrace", pointer: "/profile/digest" },
+        ],
+      ),
+    );
+  }
+
   // The configuration difference requires a *bound* export on each side:
   // a parsed document whose recorded cellId equals its own trace's
   // cell_id. A side whose association is unverifiable or contradicted has

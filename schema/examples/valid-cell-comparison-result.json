@@ -2449,7 +2449,7 @@
       "id": "comparison.cell-ids",
       "state": "recorded",
       "completeness": "complete",
-      "statement": "cell A records cell_id 'cell_20260920-a1'; cell B records cell_id 'cell_20260920-b2' — the two prepared cells are distinct instances",
+      "statement": "cell A records cell_id 'cell_20260920-a1'; cell B records cell_id 'cell_20260920-b2' — the records name distinct prepared cell instances",
       "evidence": [
         {
           "source": "beforeTrace",
@@ -2487,6 +2487,37 @@
         "transform": [
           "compare-cells",
           "entry:comparison.requested-cell"
+        ]
+      }
+    },
+    {
+      "lane": "comparison",
+      "id": "comparison.profile",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "both cells used profile 'p' (content digest 'sha256:p') — the profile identity is the same on both sides",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/profile/digest"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/profile/digest"
+        },
+        {
+          "source": "beforeTrace",
+          "pointer": "/profile/name"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/profile/name"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-cells",
+          "entry:comparison.profile"
         ]
       }
     },
