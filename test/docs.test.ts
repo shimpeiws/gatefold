@@ -192,7 +192,9 @@ describe("release documentation", () => {
   it("every relative markdown link in README and docs resolves", async () => {
     for (const file of [
       "README.md",
-      ...(await readdir(`${root}docs`)).map((f) => `docs/${f}`),
+      ...(await readdir(`${root}docs`))
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => `docs/${f}`),
     ]) {
       const text = await readFile(`${root}${file}`, "utf8");
       const linkPattern =
