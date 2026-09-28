@@ -307,6 +307,80 @@ function rewriteManifestEntry(
   writeFileSync(file, JSON.stringify(manifest));
 }
 
+/** A conforming v6 `evaluate-run` result document, bound to one run. */
+function v6Document(
+  runId: string,
+  taskDigest = "sha256:task-x",
+): Record<string, unknown> {
+  return {
+    schemaVersion: 6,
+    source: { command: "evaluate-run" },
+    inputs: {
+      run: {
+        label: "run",
+        document: "yuurei-run",
+        trace: { runId, taskDigest },
+      },
+      spec: { label: "spec", document: "task-spec", specVersion: "1" },
+      checkReports: [],
+    },
+    context: { execution: {}, model: {}, usage: {}, cost: null },
+    evaluations: [
+      {
+        criterionId: "c1",
+        kind: "check",
+        verdict: "pass",
+        confidence: 1,
+        reason: "r",
+        evidence: [{ source: "spec", pointer: "/criteria/0" }],
+        provenance: { transform: ["evaluate-run"] },
+      },
+    ],
+  };
+}
+
+/** A conforming v7 `compare-evaluations` result document for two runs. */
+function v7Document(
+  beforeRunId: string,
+  afterRunId: string,
+  taskDigest = "sha256:task-x",
+): Record<string, unknown> {
+  return {
+    schemaVersion: 7,
+    source: { command: "compare-evaluations" },
+    inputs: {
+      beforeRun: {
+        label: "a",
+        document: "yuurei-run",
+        trace: { runId: beforeRunId, taskDigest },
+      },
+      afterRun: {
+        label: "b",
+        document: "yuurei-run",
+        trace: { runId: afterRunId, taskDigest },
+      },
+      spec: { label: "spec", document: "task-spec", specVersion: "1" },
+      beforeCheckReports: [],
+      afterCheckReports: [],
+    },
+    context: { execution: {}, model: {}, usage: {}, cost: null },
+    transitions: [
+      {
+        criterionId: "c1",
+        kind: "check",
+        before: "pass",
+        after: "fail",
+        changed: true,
+        confidence: 1,
+        reason: "r",
+        evidence: [{ source: "spec", pointer: "/criteria/0" }],
+        provenance: { transform: ["compare-evaluations"] },
+      },
+    ],
+    caveats: [],
+  };
+}
+
 async function report(
   runDir: string,
   evaluationPath?: string,
@@ -711,30 +785,7 @@ describe("cell report review regressions", () => {
     const base = tmp();
     try {
       const v7 = join(base, "v7.json");
-      writeFileSync(
-        v7,
-        JSON.stringify({
-          schemaVersion: 7,
-          source: { command: "compare-evaluations" },
-          inputs: {
-            beforeRun: {
-              trace: { runId: "run-cell-1", taskDigest: "sha256:task-x" },
-            },
-            afterRun: {
-              trace: { runId: "run-cell-2", taskDigest: "sha256:task-x" },
-            },
-          },
-          transitions: [
-            {
-              criterionId: "c1",
-              kind: "check",
-              before: "pass",
-              after: "fail",
-              reason: "r",
-            },
-          ],
-        }),
-      );
+      writeFileSync(v7, JSON.stringify(v7Document("run-cell-1", "run-cell-2")));
       const result = await report(writeCellRun(base, "run"), v7);
       expectSchemaValid(result);
       const binding = entryAt(result, "evaluation.binding");
@@ -742,6 +793,66 @@ describe("cell report review regressions", () => {
       expect(binding.statement).toContain("v7");
       expect(binding.statement).toContain("v6");
       expect(entriesWith(result, "evaluation.eval-")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("does not present an incomplete supplied result as evaluation context", async () => {
+    const base = tmp();
+    try {
+      // The reviewer's example: the identity and verdict fields are there,
+      // but a conforming v6 result also records the spec, the run context,
+      // and per-criterion evidence and provenance.
+      const v6 = join(base, "v6.json");
+      writeFileSync(
+        v6,
+        JSON.stringify({
+          schemaVersion: 6,
+          source: { command: "evaluate-run" },
+          inputs: {
+            run: {
+              trace: { runId: "run-cell-1", taskDigest: "sha256:task-x" },
+            },
+          },
+          evaluations: [
+            { criterionId: "c", kind: "check", verdict: "pass", reason: "ok" },
+          ],
+        }),
+      );
+      const result = await report(writeCellRun(base, "run"), v6);
+      expectSchemaValid(result);
+      expect(entryAt(result, "evaluation.supplied").state).toBe("unverifiable");
+      expect(entryAt(result, "evaluation.binding").state).toBe("unverifiable");
+      expect(entriesWith(result, "evaluation.eval-")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("does not read an export no observation record declares", async () => {
+    const base = tmp();
+    try {
+      // The manifest retains a matching export, but the trace records no
+      // observation at all: the artifact belongs to no cell record and is
+      // never published as this run's observed configuration.
+      const trace = cellTrace();
+      delete trace.observation;
+      const runDir = writeCellRun(base, "run", { trace });
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      for (const id of [
+        "association.export-retained",
+        "association.export-document",
+        "association.export-binding",
+        "association.export-runtime",
+      ])
+        expect(entryAt(result, id).state, id).toBe("not-recorded");
+      expect(entryAt(result, "configuration.availability").state).toBe(
+        "not-recorded",
+      );
+      expect(entriesWith(result, "configuration.element.")).toEqual([]);
+      expect(entriesWith(result, "configuration.relation.")).toEqual([]);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -826,34 +937,6 @@ describe("cell report review regressions", () => {
       );
       expect(evidence).toHaveLength(1);
       expect(evidence[0]?.pointer).toBe("/artifacts/0");
-    } finally {
-      rmSync(base, { recursive: true, force: true });
-    }
-  });
-
-  it("does not read an export no observation record declares", async () => {
-    const base = tmp();
-    try {
-      // The manifest retains a matching export, but the trace records no
-      // observation at all: the artifact belongs to no cell record and is
-      // never published as this run's observed configuration.
-      const trace = cellTrace();
-      delete trace.observation;
-      const runDir = writeCellRun(base, "run", { trace });
-      const result = await report(runDir);
-      expectSchemaValid(result);
-      for (const id of [
-        "association.export-retained",
-        "association.export-document",
-        "association.export-binding",
-        "association.export-runtime",
-      ])
-        expect(entryAt(result, id).state, id).toBe("not-recorded");
-      expect(entryAt(result, "configuration.availability").state).toBe(
-        "not-recorded",
-      );
-      expect(entriesWith(result, "configuration.element.")).toEqual([]);
-      expect(entriesWith(result, "configuration.relation.")).toEqual([]);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -1359,30 +1442,7 @@ describe("compare-cells", () => {
     const base = tmp();
     try {
       const v7 = join(base, "v7.json");
-      writeFileSync(
-        v7,
-        JSON.stringify({
-          schemaVersion: 7,
-          source: { command: "compare-evaluations" },
-          inputs: {
-            beforeRun: {
-              trace: { runId: "run-cell-1", taskDigest: "sha256:task-x" },
-            },
-            afterRun: {
-              trace: { runId: "run-cell-2", taskDigest: "sha256:task-x" },
-            },
-          },
-          transitions: [
-            {
-              criterionId: "c1",
-              kind: "check",
-              before: "pass",
-              after: "fail",
-              reason: "r",
-            },
-          ],
-        }),
-      );
+      writeFileSync(v7, JSON.stringify(v7Document("run-cell-1", "run-cell-2")));
       const result = await compare(
         writeCellRun(base, "a"),
         writeCellRun(base, "b", {
@@ -1414,26 +1474,7 @@ describe("compare-cells", () => {
     const base = tmp();
     try {
       const v6 = join(base, "v6.json");
-      writeFileSync(
-        v6,
-        JSON.stringify({
-          schemaVersion: 6,
-          source: { command: "evaluate-run" },
-          inputs: {
-            run: {
-              trace: { runId: "run-cell-1", taskDigest: "sha256:task-x" },
-            },
-          },
-          evaluations: [
-            {
-              criterionId: "c1",
-              kind: "check",
-              verdict: "pass",
-              reason: "r",
-            },
-          ],
-        }),
-      );
+      writeFileSync(v6, JSON.stringify(v6Document("run-cell-1")));
       const result = await compare(
         writeCellRun(base, "a"),
         writeCellRun(base, "b", {

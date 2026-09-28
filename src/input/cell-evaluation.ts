@@ -51,6 +51,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const VERDICTS = ["pass", "fail", "unknown"] as const;
 
+/** Whether `value` is one conforming evidence reference. */
+function isEvidenceArray(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.source === "string" &&
+        typeof item.pointer === "string",
+    )
+  );
+}
+
+/** Whether `value` is one conforming `provenance` record. */
+function isProvenance(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.transform) &&
+    value.transform.length > 0 &&
+    value.transform.every((item) => typeof item === "string")
+  );
+}
+
 function traceBinding(
   value: unknown,
 ): { runId: string; taskDigest: string } | null {
@@ -124,6 +148,12 @@ export async function readCellEvaluation(
     const run = traceBinding(value.inputs.run);
     if (run === null)
       return invalid("inputs.run does not record a bound trace", value, path);
+    if (!isRecord(value.context))
+      return invalid(
+        "context is not an object; a gatefold v6 result records the run context",
+        value,
+        path,
+      );
     if (!Array.isArray(value.evaluations))
       return invalid("evaluations is not an array", value, path);
     const verdicts: SuppliedEvaluationVerdict[] = [];
@@ -137,7 +167,20 @@ export async function readCellEvaluation(
         typeof item.reason !== "string"
       )
         return invalid(
-          `evaluations[${index}] is not a criterion evaluation`,
+          `evaluations[${index}] is not a complete criterion evaluation: ` +
+            "criterionId, kind, verdict, reason, confidence, evidence and " +
+            "provenance are all required",
+          value,
+          path,
+        );
+      if (
+        typeof item.confidence !== "number" ||
+        !isEvidenceArray(item.evidence) ||
+        !isProvenance(item.provenance)
+      )
+        return invalid(
+          `evaluations[${index}] is not a complete criterion evaluation: ` +
+            "confidence, a non-empty evidence list and provenance are required",
           value,
           path,
         );
@@ -172,6 +215,14 @@ export async function readCellEvaluation(
         value,
         path,
       );
+    if (!isRecord(value.context))
+      return invalid(
+        "context is not an object; a gatefold v7 result records the run context",
+        value,
+        path,
+      );
+    if (!Array.isArray(value.caveats))
+      return invalid("caveats is not an array", value, path);
     if (!Array.isArray(value.transitions))
       return invalid("transitions is not an array", value, path);
     const verdicts: SuppliedEvaluationVerdict[] = [];
@@ -185,7 +236,22 @@ export async function readCellEvaluation(
         !(VERDICTS as readonly string[]).includes(item.after as string)
       )
         return invalid(
-          `transitions[${index}] is not a criterion transition`,
+          `transitions[${index}] is not a complete criterion transition: ` +
+            "criterionId, kind, before, after, changed, reason, confidence, " +
+            "evidence and provenance are all required",
+          value,
+          path,
+        );
+      if (
+        typeof item.changed !== "boolean" ||
+        typeof item.confidence !== "number" ||
+        !isEvidenceArray(item.evidence) ||
+        !isProvenance(item.provenance)
+      )
+        return invalid(
+          `transitions[${index}] is not a complete criterion transition: ` +
+            "changed, confidence, a non-empty evidence list and provenance " +
+            "are required",
           value,
           path,
         );

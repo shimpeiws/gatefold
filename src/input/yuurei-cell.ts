@@ -69,11 +69,14 @@ export interface CellRun {
 
 /**
  * Loads one cell: the audit-level run records plus the observation export
- * the trace declares. The export path is always interpreted when the
- * manifest lists it — the trace's declaration is the *association* claim,
- * so a manifest-listed-but-undeclared export is itself reportable. Only
- * the fixed contract path is ever opened; other declared observation
- * paths are classified for the report without touching their bytes.
+ * the trace declares. Only a declared export is interpreted: when the
+ * trace records no `observation`, or its record does not declare the
+ * fixed path, the manifest-listed entry is neither opened nor verified —
+ * it stays a reportable manifest fact and a `record-consistency`
+ * contradiction, so a broken artifact at that path cannot fail the whole
+ * report. Only the fixed contract path is ever opened, and only for a run
+ * whose own record declares it; other declared observation paths are
+ * classified for the report without touching their bytes.
  */
 export async function readCellRun(dirPath: string): Promise<CellRun> {
   const run = await readAuditedRun(dirPath, {
