@@ -315,10 +315,7 @@ describe("report-cells", () => {
     const truncated = tmp();
     cpSync(cellFixture("cell-real-run-a"), truncated, { recursive: true });
     const exportPath = join(truncated, "observation", "export.json");
-    writeFileSync(
-      exportPath,
-      readFileSync(exportPath, "utf8").slice(0, 200),
-    );
+    writeFileSync(exportPath, readFileSync(exportPath, "utf8").slice(0, 200));
     try {
       const result = await reportCells({
         cells: await Promise.all([
