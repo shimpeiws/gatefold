@@ -1,5 +1,7 @@
 # Gatefold
 
+![Gatefold ghost reading an open record sleeve on a sofa at night](docs/assets/gatefold-top.jpg)
+
 Gatefold is an evidence-backed judgement layer for coding-agent harnesses.
 It reads a [`pfl`](docs/pfl-export-contract.md) JSON document — a
 `pfl report --json` aggregate, a `pfl export --json` full snapshot, or a
