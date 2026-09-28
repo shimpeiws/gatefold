@@ -1417,6 +1417,92 @@ describe("compare-cells", () => {
     }
   });
 
+  it("states a shared profile identity in the comparison", async () => {
+    const base = tmp();
+    try {
+      const before = writeCellRun(base, "a");
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2" }),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const entry = entryAt(result, "comparison.profile");
+      expect(entry.state).toBe("recorded");
+      expect(entry.statement).toContain("both cells used profile 'p'");
+      expect(entry.statement).toContain("'sha256:p'");
+      expect(entry.statement).toContain("same on both sides");
+      expect(entry.evidence.map((e) => `${e.source}:${e.pointer}`)).toEqual([
+        "beforeTrace:/profile/digest",
+        "afterTrace:/profile/digest",
+        "beforeTrace:/profile/name",
+        "afterTrace:/profile/name",
+      ]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("treats a renamed profile with the same content digest as the same identity", async () => {
+    // The content digest is the profile's identity and the name is
+    // provenance (docs/yuurei-trace-contract.md), so a rename that leaves the
+    // contents alone is not an identity difference.
+    const base = tmp();
+    try {
+      const before = writeCellRun(base, "a");
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({
+          run_id: "run-cell-2",
+          profile: { name: "renamed", digest: "sha256:p" },
+        }),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const entry = entryAt(result, "comparison.profile");
+      expect(entry.statement).toContain(
+        "same profile content digest 'sha256:p'",
+      );
+      expect(entry.statement).toContain("A 'p'");
+      expect(entry.statement).toContain("B 'renamed'");
+      expect(entry.statement).toContain("a profile name is provenance");
+      expect(entry.statement).toContain("the profile identity is the same");
+      expect(entry.statement).not.toContain("different profiles");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("states a differing profile identity as the subject, not a defect", async () => {
+    // The profile is the compared variable of a cell comparison, so a
+    // difference must be stated in the comparison lane rather than left to
+    // the two per-side execution entries — and must never reject the pair.
+    const base = tmp();
+    try {
+      const before = writeCellRun(base, "a");
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({
+          run_id: "run-cell-2",
+          profile: { name: "q", digest: "sha256:q" },
+        }),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const entry = entryAt(result, "comparison.profile");
+      expect(entry.state).toBe("recorded");
+      expect(entry.statement).toContain("different profiles");
+      expect(entry.statement).toContain("A 'p'");
+      expect(entry.statement).toContain("'sha256:p'");
+      expect(entry.statement).toContain("B 'q'");
+      expect(entry.statement).toContain("'sha256:q'");
+      expect(entry.statement).toContain("not a defect");
+      // the pair stayed comparable: the configuration lane is still emitted
+      expect(entryAt(result, "comparison.comparability").state).toBe(
+        "verified",
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("keeps a facet named __proto__ in the comparison", async () => {
     const base = tmp();
     try {
