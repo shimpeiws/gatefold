@@ -152,6 +152,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.9 scope and cell-report contract](docs/v0.9-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
+- [Verification contract cards](docs/verification-contracts.md)
 - [pfl export contract](docs/pfl-export-contract.md)
 - [yuurei trace contract](docs/yuurei-trace-contract.md)
 - [yuurei run-directory contract](docs/yuurei-run-contract.md)
