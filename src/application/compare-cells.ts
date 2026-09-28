@@ -395,22 +395,29 @@ function comparisonEntries(
   // compared variable, so a difference is the subject of the comparison and
   // never a defect; it is stated here rather than left to the two per-side
   // execution entries, which describe each run without relating them.
+  //
+  // Identity is the content digest; the name is provenance. A renamed profile
+  // whose content digest is unchanged is the same profile, so only a digest
+  // difference is an identity difference.
   {
     const profileA = before.run.trace.profile;
     const profileB = after.run.trace.profile;
-    const same =
-      profileA.name === profileB.name && profileA.digest === profileB.digest;
+    const sameDigest = profileA.digest === profileB.digest;
+    const sameName = profileA.name === profileB.name;
     entries.push(
       cmpEntry(
         "comparison.profile",
         "recorded",
         "complete",
-        same
-          ? `both cells used profile '${profileA.name}' (content digest '${profileA.digest}') — the profile identity is the same on both sides`
+        sameDigest
+          ? sameName
+            ? `both cells used profile '${profileA.name}' (content digest '${profileA.digest}') — the profile identity is the same on both sides`
+            : `the cells record the same profile content digest '${profileA.digest}' under different names (A '${profileA.name}', B '${profileB.name}'); a profile name is provenance, so the profile identity is the same on both sides`
           : `the cells used different profiles: A '${profileA.name}' ` +
               `(content digest '${profileA.digest}') vs B '${profileB.name}' ` +
-              `(content digest '${profileB.digest}'); a profile identity ` +
-              `difference is the subject of this comparison, not a defect`,
+              `(content digest '${profileB.digest}'); the content digests ` +
+              `differ, and a profile identity difference is the subject of ` +
+              `this comparison, not a defect`,
         [
           { source: "beforeTrace", pointer: "/profile/name" },
           { source: "beforeTrace", pointer: "/profile/digest" },
