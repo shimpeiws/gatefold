@@ -9,12 +9,19 @@
  */
 export const CELL_SCHEMA_VERSION = 9;
 
-/** The CLI commands that emit this result shape. */
+/** The CLI commands that emit the v9 result shape. */
 export type CellCommand = "report-cell" | "compare-cells";
 
 /**
+ * A run label inside a v10 `report-cells` result: `run1`…`runN` in the
+ * order the directories were supplied.
+ */
+export type CellsRunName = `run${number}`;
+
+/**
  * The named record family an entry reports. Fixed set; extended only
- * additively.
+ * additively. `set` is the v10 repeated-set lane — v9 results never
+ * carry it.
  */
 export type CellLane =
   | "association"
@@ -22,7 +29,8 @@ export type CellLane =
   | "execution"
   | "audit"
   | "evaluation"
-  | "comparison";
+  | "comparison"
+  | "set";
 
 /**
  * The entry's outcome. `verified`, `inconsistent`, `unverifiable`, and
@@ -66,7 +74,23 @@ export type CellEvidenceSource =
   | "afterResult"
   | "afterBaselineManifest"
   | "afterChanges"
-  | "afterEvaluation";
+  | "afterEvaluation"
+  | CellsEvidenceSource;
+
+/**
+ * v10 run-indexed evidence sources: the per-run base names prefixed with
+ * the run's label — `run1Trace`, `run3Export`, `run2BaselineManifest`, …
+ * (a run-indexed `evaluation` source does not exist: `report-cells`
+ * accepts no supplied evaluation).
+ */
+export type CellsEvidenceSource =
+  | `${CellsRunName}Trace`
+  | `${CellsRunName}Manifest`
+  | `${CellsRunName}Export`
+  | `${CellsRunName}Patch`
+  | `${CellsRunName}Result`
+  | `${CellsRunName}BaselineManifest`
+  | `${CellsRunName}Changes`;
 
 /**
  * One resolvable pointer into a named input. `pointer` is a JSON Pointer
@@ -95,10 +119,11 @@ export interface CellProvenance {
 export interface CellEntry {
   readonly lane: CellLane;
   /**
-   * `compare-cells` only: the cell side the entry describes. Absent on
-   * `comparison` entries and in single-cell results.
+   * Which run the entry describes: `"before"`/`"after"` in a v9
+   * comparison, `run1`…`runN` in a v10 repeated-set report. Absent on
+   * `comparison`/`set` entries and in single-cell results.
    */
-  readonly subject?: "before" | "after";
+  readonly subject?: "before" | "after" | CellsRunName;
   readonly id: string;
   readonly state: CellEntryState;
   readonly completeness: CellCompleteness;

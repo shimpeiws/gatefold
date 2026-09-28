@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v10.json",
+  "title": "Gatefold repeated-cell report",
+  "description": "Machine-readable repeated-cell report emitted by gatefold report-cells --format json. Version 10 describes a bounded set of comparable yuurei cells: every supplied run's trace/manifest/export/audit lanes under a runN subject, plus a set lane stating which configuration records each run observed, which differed, and which could not be checked — counts over eligible (bound-export) observations only. This is a descriptive evidence report: no stability verdict, no causal attribution, no ranking, and no generalization beyond the supplied runs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "inputs",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 10,
+      "description": "Version of this result schema. Additive changes keep the version; structural changes bump it."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "description": "Identifies this result's command form.",
+      "properties": {
+        "command": {
+          "type": "string",
+          "enum": ["report-cells"]
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runs"],
+      "description": "Descriptors of the supplied runs, labelled run1..runN in argument order.",
+      "properties": {
+        "runs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/cellsInput" }
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/cellEntry" },
+      "description": "Every statement of the report in contract order: by subject (run1..runN, then subject-less set entries), then lane (association, configuration, execution, audit, set), then each lane's stable ordering."
+    }
+  },
+  "$defs": {
+    "cellsInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "label",
+        "runId",
+        "cellId",
+        "taskDigest",
+        "profileName",
+        "profileDigest",
+        "runtimeId",
+        "requestedCellDigest",
+        "observationStatus",
+        "exportObservedSnapshotId",
+        "exportResolvedSnapshotId"
+      ],
+      "description": "Descriptor of one supplied run: the run directory plus the identities needed to reconcile the report.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^run[1-9][0-9]*$",
+          "description": "The run's label in this report — run1..runN in --run argument order."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run directory argument as supplied."
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "trace.run_id — the retained run's identity."
+        },
+        "cellId": {
+          "type": ["string", "null"],
+          "description": "trace.cell_id — the prepared cell instance id, or null when the trace does not record one. Not the same as run_id, requested_cell.digest, or the pfl snapshot ids."
+        },
+        "taskDigest": { "type": "string", "minLength": 1 },
+        "profileName": { "type": "string" },
+        "profileDigest": { "type": "string", "minLength": 1 },
+        "runtimeId": { "type": "string", "minLength": 1 },
+        "requestedCellDigest": {
+          "type": ["string", "null"],
+          "description": "trace.requested_cell.digest — the requested input set, or null when the trace does not record it."
+        },
+        "observationStatus": {
+          "type": ["string", "null"],
+          "enum": ["recorded", "partial", "unavailable", null],
+          "description": "The trace's observation.status, or null when no observation record exists."
+        },
+        "exportObservedSnapshotId": {
+          "type": ["string", "null"],
+          "description": "data.snapshot.observedSnapshotId of the bound export, or null when none was bound."
+        },
+        "exportResolvedSnapshotId": {
+          "type": ["string", "null"],
+          "description": "data.snapshot.resolvedSnapshotId of the bound export, or null when none was bound."
+        }
+      }
+    },
+    "cellEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lane",
+        "id",
+        "state",
+        "completeness",
+        "statement",
+        "evidence",
+        "provenance"
+      ],
+      "properties": {
+        "lane": {
+          "type": "string",
+          "enum": [
+            "association",
+            "configuration",
+            "execution",
+            "audit",
+            "set"
+          ],
+          "description": "The record family the entry reports: association (trace/export cross-checks), configuration (bound pfl export content), execution (yuurei run records), audit (v0.8 facts), set (repeated-observation statements over the supplied set)."
+        },
+        "subject": {
+          "type": "string",
+          "pattern": "^run[1-9][0-9]*$",
+          "description": "The run the entry describes — run1..runN matching inputs.runs[].name; absent on set entries."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable dot-separated entry identifier from docs/v0.10-scope.md (e.g. 'association.export-binding', 'configuration.element.<id>', 'set.element.<id>')."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "recorded",
+            "verified",
+            "inconsistent",
+            "unverifiable",
+            "not-recorded"
+          ],
+          "description": "recorded: a document declares this (content restated, no independent check). verified: the records affirmatively establish the check. inconsistent: two well-formed records contradict each other. unverifiable: a needed record is missing, mismatched, truncated, or uninterpretable. not-recorded: the record the entry reports was never produced — absence reported as absence."
+        },
+        "completeness": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"],
+          "description": "How complete the evidence behind the entry is — separate from state: a bound export declaring completeness 'partial' yields 'partial' entries; an unbound run leaves the set account 'partial'; an unverifiable or absent record is 'unknown'."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A descriptive account of what the records declare or what the check established — set statements carry an explicit eligible-observation denominator. Never a causal claim, a stability verdict, or a judgement."
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceReference" },
+          "description": "References into the supplied runs' documents that support the entry; every pointer resolves inside its document."
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "pointer"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "pattern": "^run[1-9][0-9]*(Trace|Manifest|Export|Patch|Result|BaselineManifest|Changes)$",
+          "description": "Which supplied run's document the reference resolves against: the run label run<N> (matching inputs.runs[N-1]) plus the v9 base document name. 'Export' is the digest-verified pfl export artifact declared by that run's observation record."
+        },
+        "pointer": {
+          "type": "string",
+          "pattern": "^$|^(?:/(?:[^/~]|~0|~1)*)*$",
+          "description": "JSON Pointer (RFC 6901) into the document named by source. For Patch/Result it is the artifact's manifest pointer (/artifacts/<i>) with path/lines/bytes locating inside verified bytes; for Manifest it names the manifest entry. The empty string references the whole document."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Verified-byte evidence only: the manifest-recorded digest of the stored bytes the reference locates into — for 'Export' it binds the citation to the retained artifact bytes."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Patch evidence only: the workspace-relative file path whose block the range locates inside the stored patch bytes."
+        },
+        "lines": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: an inclusive 1-based line range inside the verified stored bytes."
+        },
+        "bytes": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: an inclusive 0-based byte range inside the verified stored bytes."
+        },
+        "elementId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Export evidence only: the pfl element id the reference is about."
+        },
+        "note": {
+          "type": "string",
+          "description": "A short clarifier, e.g. naming an absent field when the pointer references a document root."
+        }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transform"],
+      "properties": {
+        "transform": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "The build path that produced the entry, e.g. ['report-cells', 'entry:set.element.<id>'] or ['report-cells', 'audit-run', 'fact:patch.stored']."
+        }
+      }
+    }
+  }
+}

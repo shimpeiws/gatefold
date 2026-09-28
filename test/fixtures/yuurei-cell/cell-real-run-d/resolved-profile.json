@@ -1,0 +1,8 @@
+{
+  "name": "fixture-claude",
+  "digest": "sha256:0000",
+  "profileYaml": {
+    "runtime": "claude-code"
+  },
+  "configFiles": {}
+}

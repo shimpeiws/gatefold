@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1",
+  "harnessDigest": "sha256:fc777842a3af4d4caaa38adfcdb5e82b67dc3a9d036542bbb9ca155521d2f8b4",
+  "observedSnapshotId": "obs_7dd9e1e890a4",
+  "resolvedSnapshotId": "res_a6a3fe7613f9",
+  "createdAt": "2026-09-28T19:23:43.089Z",
+  "containsRawEvidence": false,
+  "evidence": [
+    {
+      "elementId": "el_0fc92802d8f84176",
+      "sourcePath": "CLAUDE.md",
+      "status": "included",
+      "verified": true,
+      "actualDigest": "sha256:c8d62256a032b0a6c1e0814166320b19b66b26cbe2bd215e7d2bb27600e47a0d",
+      "sizeBytes": 43,
+      "expectedDigest": "sha256:c8d62256a032b0a6c1e0814166320b19b66b26cbe2bd215e7d2bb27600e47a0d"
+    },
+    {
+      "elementId": "el_b4b02de1fca70ae7",
+      "sourcePath": ".claude/settings.json#permissions",
+      "status": "included",
+      "verified": false,
+      "actualDigest": "sha256:0a138a3e4372f973f37da12a94e65a04723edfd2eb9adbe4b6b3f9d7674cfb38",
+      "sizeBytes": 55
+    },
+    {
+      "elementId": "el_e35b608c21faf5bf",
+      "sourcePath": "(builtin) claude-code instruction layers",
+      "status": "missing",
+      "verified": false
+    }
+  ]
+}

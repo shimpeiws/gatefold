@@ -59,6 +59,18 @@ function fail(message: string): never {
 function checkEvidence(evidence: CellEvidenceReference, at: string): void {
   if (typeof evidence.source !== "string" || !SOURCES.includes(evidence.source))
     fail(`${at}.source must be a known cell evidence source`);
+  checkEvidenceFields(evidence, at);
+}
+
+/**
+ * The shape checks every cell evidence reference carries — pointer
+ * syntax, digest form, range sanity — independent of which document
+ * family `source` names (the source enum differs between v9 and v10).
+ */
+export function checkEvidenceFields(
+  evidence: CellEvidenceReference,
+  at: string,
+): void {
   if (
     typeof evidence.pointer !== "string" ||
     !POINTER_PATTERN.test(evidence.pointer)
@@ -294,6 +306,86 @@ function checkRecordEvidence(
 }
 
 /**
+ * Checks one evidence reference against one run's bound documents —
+ * shared by the v9 (`assertCellEvidenceResolves`) and v10
+ * (`assertCellsEvidenceResolves`) resolution passes. `base` is the
+ * side-prefix-stripped source name; `evaluation` is the supplied
+ * evaluation document or null.
+ */
+export function checkCellSideEvidence(
+  evidence: CellEvidenceReference,
+  base: string,
+  side: CellSideDocs,
+  evaluation: unknown,
+  at: string,
+): void {
+  switch (base) {
+    case "trace":
+      if (!resolvePointer(side.traceDocument, evidence.pointer).found)
+        fail(`${at} pointer does not resolve in the trace document`);
+      break;
+    case "manifest":
+      if (!resolvePointer(side.manifestDocument, evidence.pointer).found)
+        fail(`${at} pointer does not resolve in the manifest document`);
+      break;
+    case "export":
+      if (side.exportRecord === null || side.exportDocument === null)
+        fail(`${at} cites an export no verified document exists for`);
+      else {
+        const expectedDigest =
+          side.exportRecord.digest !== null &&
+          SHA256_DIGEST.test(side.exportRecord.digest)
+            ? side.exportRecord.digest
+            : undefined;
+        if (evidence.digest !== expectedDigest)
+          fail(`${at} digest does not match the export's verified digest`);
+        if (!resolvePointer(side.exportDocument, evidence.pointer).found)
+          fail(`${at} pointer does not resolve in the export document`);
+      }
+      break;
+    case "patch":
+      checkStoredByteEvidence(
+        evidence,
+        side.patchEntryIndex,
+        side.patchEntryDigest,
+        side.patchBytes,
+        side.patchPaths,
+        at,
+      );
+      break;
+    case "result":
+      checkStoredByteEvidence(
+        evidence,
+        side.resultEntryIndex,
+        side.resultEntryDigest,
+        side.resultBytes,
+        null,
+        at,
+      );
+      break;
+    case "baselineManifest":
+      checkRecordEvidence(
+        evidence,
+        side.baselineManifest,
+        "baselineManifest",
+        at,
+      );
+      break;
+    case "changes":
+      checkRecordEvidence(evidence, side.changes, "changes", at);
+      break;
+    case "evaluation":
+      if (evaluation === null || evaluation === undefined)
+        fail(`${at} cites an evaluation no document was supplied for`);
+      else if (!resolvePointer(evaluation, evidence.pointer).found)
+        fail(`${at} pointer does not resolve in the evaluation document`);
+      break;
+    default:
+      fail(`${at}.source '${evidence.source}' is not a cell evidence source`);
+  }
+}
+
+/**
  * Enforces the v9 evidence contract against the loaded inputs: trace and
  * manifest pointers resolve inside each side's documents; patch/result
  * evidence cites the artifact's manifest entry, repeats its recorded
@@ -309,70 +401,13 @@ export function assertCellEvidenceResolves(
     for (const [ei, evidence] of entry.evidence.entries()) {
       const at = `entries[${index}].evidence[${ei}]`;
       const side = sideDocs(docs, evidence.source);
-      switch (baseSource(evidence.source)) {
-        case "trace":
-          if (!resolvePointer(side.traceDocument, evidence.pointer).found)
-            fail(`${at} pointer does not resolve in the trace document`);
-          break;
-        case "manifest":
-          if (!resolvePointer(side.manifestDocument, evidence.pointer).found)
-            fail(`${at} pointer does not resolve in the manifest document`);
-          break;
-        case "export":
-          if (side.exportRecord === null || side.exportDocument === null)
-            fail(`${at} cites an export no verified document exists for`);
-          else {
-            const expectedDigest =
-              side.exportRecord.digest !== null &&
-              SHA256_DIGEST.test(side.exportRecord.digest)
-                ? side.exportRecord.digest
-                : undefined;
-            if (evidence.digest !== expectedDigest)
-              fail(`${at} digest does not match the export's verified digest`);
-            if (!resolvePointer(side.exportDocument, evidence.pointer).found)
-              fail(`${at} pointer does not resolve in the export document`);
-          }
-          break;
-        case "patch":
-          checkStoredByteEvidence(
-            evidence,
-            side.patchEntryIndex,
-            side.patchEntryDigest,
-            side.patchBytes,
-            side.patchPaths,
-            at,
-          );
-          break;
-        case "result":
-          checkStoredByteEvidence(
-            evidence,
-            side.resultEntryIndex,
-            side.resultEntryDigest,
-            side.resultBytes,
-            null,
-            at,
-          );
-          break;
-        case "baselineManifest":
-          checkRecordEvidence(
-            evidence,
-            side.baselineManifest,
-            "baselineManifest",
-            at,
-          );
-          break;
-        case "changes":
-          checkRecordEvidence(evidence, side.changes, "changes", at);
-          break;
-        case "evaluation":
-          if (docs.evaluation === null || docs.evaluation === undefined)
-            fail(`${at} cites an evaluation no document was supplied for`);
-          else if (!resolvePointer(docs.evaluation, evidence.pointer).found)
-            fail(`${at} pointer does not resolve in the evaluation document`);
-          break;
-        default:
-          fail(`${at}.source '${evidence.source}' is not a v9 evidence source`);
-      }
+      checkCellSideEvidence(
+        evidence,
+        baseSource(evidence.source),
+        side,
+        docs.evaluation,
+        at,
+      );
     }
   }
 }

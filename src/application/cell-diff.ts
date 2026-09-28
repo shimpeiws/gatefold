@@ -49,7 +49,7 @@ export interface CellExportDiff {
 }
 
 /** Canonical JSON: object keys sorted recursively, code-unit order. */
-function canonicalJson(value: unknown): string {
+export function canonicalJson(value: unknown): string {
   return JSON.stringify(sortKeysDeep(value));
 }
 
@@ -66,7 +66,10 @@ function sortKeysDeep(value: unknown): unknown {
   return value;
 }
 
-function sameElement(a: PflSnapshotElement, b: PflSnapshotElement): boolean {
+export function sameElement(
+  a: PflSnapshotElement,
+  b: PflSnapshotElement,
+): boolean {
   return (
     a.observed.native.kind === b.observed.native.kind &&
     a.observed.native.scope === b.observed.native.scope &&

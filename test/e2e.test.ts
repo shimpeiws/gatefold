@@ -993,6 +993,23 @@ describe("gatefold e2e (real process)", () => {
         ]);
         expect(auditLegacy.code, auditLegacy.stderr).toBe(0);
         expect(auditLegacy.stdout).toContain("patch.stored: verified");
+        const cellsResult = await installed([
+          "report-cells",
+          "--run",
+          cellFixture("cell-real-run-a"),
+          "--run",
+          cellFixture("cell-real-run-b"),
+          "--format",
+          "json",
+        ]);
+        expect(cellsResult.code, cellsResult.stderr).toBe(0);
+        const cellsReport = JSON.parse(cellsResult.stdout);
+        expect(
+          validateCells(cellsReport),
+          JSON.stringify(validateCells.errors),
+        ).toBe(true);
+        expect(cellsReport.schemaVersion).toBe(10);
+        expect(cellsReport.entries.length).toBeGreaterThan(0);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -1057,6 +1074,10 @@ const cellSchema = JSON.parse(
   readFileSync(`${root}schema/claim-result.v9.json`, "utf8"),
 );
 const validateCell = new Ajv2020().compile(cellSchema);
+const cellsSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v10.json`, "utf8"),
+);
+const validateCells = new Ajv2020().compile(cellsSchema);
 const cellFixture = (name: string): string =>
   `${root}test/fixtures/yuurei-cell/${name}`;
 
@@ -2322,5 +2343,137 @@ describe("gatefold e2e: report-cell and compare-cells", () => {
       expect(run.stdout).toBe("");
       expect(run.stderr).toContain("gatefold:");
     }
+  });
+});
+
+describe("gatefold e2e: report-cells", () => {
+  const entryMap = (result: {
+    entries: { id: string; state: string }[];
+  }): Map<string, string> =>
+    new Map(result.entries.map((e) => [e.id, e.state]));
+
+  it("reports a genuine four-run set with one unbound run", async () => {
+    const run = await gatefold([
+      "report-cells",
+      "--run",
+      cellFixture("cell-real-run-a"),
+      "--run",
+      cellFixture("cell-real-run-b"),
+      "--run",
+      cellFixture("cell-real-run-c"),
+      "--run",
+      cellFixture("cell-real-run-d"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateCells(result), JSON.stringify(validateCells.errors)).toBe(
+      true,
+    );
+    expect(result.schemaVersion).toBe(10);
+    expect(result.source.command).toBe("report-cells");
+    expect(result.inputs.runs.map((r: { name: string }) => r.name)).toEqual([
+      "run1",
+      "run2",
+      "run3",
+      "run4",
+    ]);
+    const states = entryMap(result);
+    expect(states.get("set.comparability")).toBe("verified");
+    expect(states.get("set.source-identity")).toBe("verified");
+    expect(states.get("set.elements")).toBe("recorded");
+    const inputs = result.entries.find(
+      (e: { id: string }) => e.id === "set.inputs",
+    );
+    expect(inputs.statement).toContain("3 of them bind an export");
+    for (const entry of result.entries)
+      expect(entry.evidence.length).toBeGreaterThan(0);
+  });
+
+  it("preserves caller-supplied run order in the labels", async () => {
+    const run = await gatefold([
+      "report-cells",
+      "--run",
+      cellFixture("cell-real-run-d"),
+      "--run",
+      cellFixture("cell-real-run-a"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(result.inputs.runs[0].label).toContain("cell-real-run-d");
+    expect(result.inputs.runs[0].name).toBe("run1");
+    // run1 (the unbound run) is excluded from every denominator.
+    expect(entryMap(result).get("set.config-unavailable")).toBe("unverifiable");
+  });
+
+  it("emits human-readable lanes by default", async () => {
+    const run = await gatefold([
+      "report-cells",
+      "--run",
+      cellFixture("cell-real-run-a"),
+      "--run",
+      cellFixture("cell-real-run-b"),
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toContain("set.elements:");
+    expect(run.stdout).toContain("run1:");
+    expect(run.stdout).toContain("run2:");
+    expect(run.stdout).toContain("evidence:");
+    for (const word of ["[pass]", "[fail]", "criterion", "score"])
+      expect(run.stdout).not.toContain(word);
+  });
+
+  it("rejects single-run, duplicate, stdin, and --min-confidence with exit 2", async () => {
+    for (const args of [
+      ["report-cells"],
+      ["report-cells", "--run", cellFixture("cell-a")],
+      [
+        "report-cells",
+        "--run",
+        cellFixture("cell-real-run-a"),
+        "--run",
+        cellFixture("cell-real-run-a"),
+      ],
+      ["report-cells", "--run", "-", "--run", cellFixture("cell-a")],
+      [
+        "report-cells",
+        "--run",
+        cellFixture("cell-a"),
+        "--run",
+        cellFixture("cell-b"),
+        "--min-confidence",
+        "0",
+      ],
+      ["report-cells", "--run"],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+    }
+  });
+
+  it("rejects incompatible runs and differing declared sources with exit 3", async () => {
+    const incompatible = await gatefold([
+      "report-cells",
+      "--run",
+      cellFixture("cell-real-run-a"),
+      "--run",
+      cellFixture("cell-incompatible"),
+    ]);
+    expect(incompatible.code).toBe(3);
+    expect(incompatible.stdout).toBe("");
+    const otherSource = await gatefold([
+      "report-cells",
+      "--run",
+      cellFixture("cell-real-pair-a"),
+      "--run",
+      cellFixture("cell-real-other-source"),
+    ]);
+    expect(otherSource.code).toBe(3);
+    expect(otherSource.stdout).toBe("");
   });
 });

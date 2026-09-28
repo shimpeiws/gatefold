@@ -11,7 +11,9 @@ import {
   type CellLane,
   type CellReportResult,
   type CellRunInputDescriptor,
+  type CellsRunName,
 } from "../domain/cell.js";
+import type { CellsCommand } from "../domain/cells.js";
 import { sanitizeText } from "../domain/sanitize.js";
 import {
   assertCellEvidenceResolves,
@@ -31,21 +33,22 @@ import { byFinding, byRelation } from "./cell-diff.js";
 import { MAX_EMITTED_CLAIMS, MAX_EVIDENCE_REFERENCES } from "./limits.js";
 
 /**
- * The emit context for one entry: which cell side it describes
- * (undefined for single-cell results and for comparison entries) — the
- * side prefixes every evidence source name so pointers stay bound to the
- * run they cite.
+ * The emit context for one entry: which supplied run it describes
+ * (`"before"`/`"after"` in a v9 comparison, `run1`…`runN` in a v10
+ * set report; undefined for single-cell results and for set/comparison
+ * entries) — the label prefixes every evidence source name so pointers
+ * stay bound to the run they cite.
  */
 export interface CellCtx {
   readonly cell: CellRun;
-  readonly subject?: "before" | "after";
-  readonly command: CellCommand;
+  readonly subject?: "before" | "after" | CellsRunName;
+  readonly command: CellCommand | CellsCommand;
 }
 
 /** The subset of emit context entry formatting needs. */
 export interface CellEmitCtx {
-  readonly subject?: "before" | "after";
-  readonly command: CellCommand;
+  readonly subject?: "before" | "after" | CellsRunName;
+  readonly command: CellCommand | CellsCommand;
 }
 
 type BaseSource =
@@ -65,9 +68,15 @@ const LANE_ORDER: Record<CellLane, number> = {
   audit: 3,
   evaluation: 4,
   comparison: 5,
+  set: 6,
 };
 
-const SOURCE_ORDER: Record<CellEvidenceSource, number> = {
+/**
+ * The base-document order inside one run's evidence. v9's `before*`/
+ * `after*` source names carry this same order with the side prefix
+ * stripped; v10's `run<N>*` names sort by run index first, then base.
+ */
+const BASE_SOURCE_ORDER: Record<string, number> = {
   trace: 0,
   manifest: 1,
   export: 2,
@@ -76,23 +85,27 @@ const SOURCE_ORDER: Record<CellEvidenceSource, number> = {
   baselineManifest: 5,
   changes: 6,
   evaluation: 7,
-  beforeTrace: 0,
-  beforeManifest: 1,
-  beforeExport: 2,
-  beforePatch: 3,
-  beforeResult: 4,
-  beforeBaselineManifest: 5,
-  beforeChanges: 6,
-  beforeEvaluation: 7,
-  afterTrace: 0,
-  afterManifest: 1,
-  afterExport: 2,
-  afterPatch: 3,
-  afterResult: 4,
-  afterBaselineManifest: 5,
-  afterChanges: 6,
-  afterEvaluation: 7,
 };
+
+/**
+ * Decodes an evidence source into its ordering key: `[run index, base
+ * order]`. `before*`/`after*` and bare v9 names keep rank 0 — the two
+ * sides tie on base order and resolve by pointer, exactly as the v9
+ * fixed table sorted them. `run<N>*` names rank by the run's position.
+ */
+function sourceOrderKey(source: CellEvidenceSource): [number, number] {
+  const run = /^run([1-9][0-9]*)([A-Z].*)$/.exec(source);
+  if (run !== null) {
+    const base = run[2]![0]!.toLowerCase() + run[2]!.slice(1);
+    return [Number(run[1]), BASE_SOURCE_ORDER[base] ?? -1];
+  }
+  const side = /^(before|after)([A-Z].*)$/.exec(source);
+  if (side !== null) {
+    const base = side[2]![0]!.toLowerCase() + side[2]!.slice(1);
+    return [0, BASE_SOURCE_ORDER[base] ?? -1];
+  }
+  return [0, BASE_SOURCE_ORDER[source] ?? -1];
+}
 
 /** Maps one cell-side base source onto the result's evidence vocabulary. */
 export function cellSource(
@@ -117,15 +130,20 @@ export function cellEv(
   };
 }
 
-/** Sorts evidence per contract: fixed source order, then pointer bytes. */
+/** Sorts evidence per contract: run order, base source order, pointer bytes. */
 export function sortCellEvidence(
   evidence: readonly CellEvidenceReference[],
 ): CellEvidenceReference[] {
-  return [...evidence].sort(
-    (a, b) =>
-      SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] ||
-      compareBytes(a.pointer, b.pointer),
-  );
+  const key = (entry: CellEvidenceReference) => sourceOrderKey(entry.source);
+  return [...evidence]
+    .map((entry) => ({ entry, key: key(entry) }))
+    .sort(
+      (a, b) =>
+        a.key[0] - b.key[0] ||
+        a.key[1] - b.key[1] ||
+        compareBytes(a.entry.pointer, b.entry.pointer),
+    )
+    .map(({ entry }) => entry);
 }
 
 export function cellEntry(
@@ -216,7 +234,7 @@ function exportEntryEv(
   });
 }
 
-function exportDocEv(
+export function exportDocEv(
   ctx: CellCtx,
   record: AuditedArtifactRecord,
   pointer: string,
@@ -249,7 +267,7 @@ function noExportState(observation: CellObservation): CellEntryState {
  * uninterpretable document: the bytes exist and were read, and only the
  * association failed.
  */
-function availabilityReason(
+export function availabilityReason(
   observation: CellObservation,
   binding: CellEntryState,
 ): string {
@@ -271,7 +289,7 @@ function availabilityReason(
   return noExportReason(observation);
 }
 
-function noExportReason(observation: CellObservation): string {
+export function noExportReason(observation: CellObservation): string {
   if (observation.record === undefined)
     return "the trace records no observation record";
   if (observation.exportRecord === null)
@@ -300,7 +318,10 @@ function traceHasField(ctx: CellCtx, field: string): boolean {
  * document records it, otherwise the document root with a note — so the
  * reference always resolves and still says which field was absent.
  */
-function traceFieldEv(ctx: CellCtx, field: string): CellEvidenceReference {
+export function traceFieldEv(
+  ctx: CellCtx,
+  field: string,
+): CellEvidenceReference {
   return traceHasField(ctx, field)
     ? cellEv(ctx, "trace", `/${field}`)
     : cellEv(ctx, "trace", "", { note: `no ${field} field` });
@@ -311,7 +332,7 @@ function traceFieldEv(ctx: CellCtx, field: string): CellEvidenceReference {
  * the nested pointer when the raw document records it, otherwise the
  * parent object pointer with a note.
  */
-function traceNestedEv(
+export function traceNestedEv(
   ctx: CellCtx,
   parent: string,
   field: string,
@@ -373,7 +394,7 @@ function exportNestedEv(
     : exportRefEv(ctx, record, parent, undefined, `no ${field} field`);
 }
 
-function exportDocEvidence(ctx: CellCtx): CellEvidenceReference[] {
+export function exportDocEvidence(ctx: CellCtx): CellEvidenceReference[] {
   const record = ctx.cell.observation.exportRecord;
   const evidence: CellEvidenceReference[] = [
     ctx.cell.observation.record === undefined
@@ -1259,9 +1280,12 @@ function storedByteEv(
   const verified =
     entry.state === "verified" || entry.state === "verified-truncated";
   if (verified)
-    return cellEv(ctx, base, `/artifacts/${index}`, {
-      ...(entry.digest === null ? {} : { digest: entry.digest }),
-    });
+    return cellEv(
+      ctx,
+      base,
+      `/artifacts/${index}`,
+      entry.digest === null ? {} : { digest: entry.digest },
+    );
   return cellEv(ctx, "manifest", `/artifacts/${index}`, {
     note: `the stored bytes are '${entry.state}'`,
   });
@@ -1691,7 +1715,9 @@ export function cellDocs(cell: CellRun): CellSideDocs {
   };
 }
 
-function checkCellLimits(result: CellReportResult): void {
+export function checkCellLimits(result: {
+  readonly entries: readonly CellEntry[];
+}): void {
   if (result.entries.length > MAX_EMITTED_CLAIMS)
     throw new PflExportError(
       "invalid-shape",

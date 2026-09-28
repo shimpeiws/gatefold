@@ -1,5 +1,6 @@
 import type { AuditResult } from "../domain/audit.js";
 import type { CellReportResult } from "../domain/cell.js";
+import type { CellsReportResult } from "../domain/cells.js";
 import type { AnalysisResult } from "../domain/claim.js";
 import type { ComparisonResult } from "../domain/comparison.js";
 import type {
@@ -18,7 +19,8 @@ export function formatJson(
     | EvaluationResult
     | EvaluationComparisonResult
     | AuditResult
-    | CellReportResult,
+    | CellReportResult
+    | CellsReportResult,
 ): string {
   return JSON.stringify(result, null, 2);
 }

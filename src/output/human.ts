@@ -1,9 +1,11 @@
 import type { AuditEvidenceReference, AuditResult } from "../domain/audit.js";
 import type {
+  CellEntry,
   CellEvidenceReference,
   CellReportResult,
   CellRunInputDescriptor,
 } from "../domain/cell.js";
+import type { CellsReportResult } from "../domain/cells.js";
 import type { AnalysisResult } from "../domain/claim.js";
 import type { ComparisonResult } from "../domain/comparison.js";
 import type {
@@ -333,13 +335,31 @@ export function formatCellHuman(result: CellReportResult): string {
     lines.push(
       `  evaluation: ${sanitizeText(result.inputs.evaluation.label)} (schema v${result.inputs.evaluation.schemaVersion})`,
     );
-  for (const entry of result.entries) {
-    const subject = entry.subject === undefined ? "" : ` [${entry.subject}]`;
-    lines.push(
-      `${entry.id}${subject}: ${entry.state}; ${entry.completeness}`,
-      `   ${sanitizeText(entry.statement)}`,
-      `   evidence: ${formatCellEvidence(entry.evidence)}`,
-    );
-  }
+  for (const entry of result.entries) lines.push(...formatCellEntry(entry));
+  return lines.join("\n") + "\n";
+}
+
+function formatCellEntry(entry: CellEntry): string[] {
+  const subject = entry.subject === undefined ? "" : ` [${entry.subject}]`;
+  return [
+    `${entry.id}${subject}: ${entry.state}; ${entry.completeness}`,
+    `   ${sanitizeText(entry.statement)}`,
+    `   evidence: ${formatCellEvidence(entry.evidence)}`,
+  ];
+}
+
+/**
+ * Human output for `report-cells` (docs/v0.10-scope.md): one header per
+ * supplied run under its `run<N>` label, then every entry in contract
+ * order — per-run lanes first, the set lane last. Same verdict-free
+ * vocabulary as the v9 cell reports.
+ */
+export function formatCellsHuman(result: CellsReportResult): string {
+  const lines: string[] = [
+    `Cell set report of ${result.inputs.runs.length} supplied runs`,
+  ];
+  for (const run of result.inputs.runs)
+    lines.push(`  ${run.name}: ${formatCellInput(run)}`);
+  for (const entry of result.entries) lines.push(...formatCellEntry(entry));
   return lines.join("\n") + "\n";
 }

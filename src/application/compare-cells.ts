@@ -100,7 +100,7 @@ function entryDigest(
  * manifest-recorded digest so the citation binds to the verified bytes.
  * Only call where a verified export document exists.
  */
-function exportSideEv(
+export function exportSideEv(
   ctx: CellCtx,
   pointer: string,
   elementId?: string,
@@ -124,7 +124,7 @@ function exportSideEv(
  * note when the seed exists but declares none, or the trace root when the
  * seed record itself is absent.
  */
-function traceSeedSourceEv(ctx: CellCtx): CellEvidenceReference {
+export function traceSeedSourceEv(ctx: CellCtx): CellEvidenceReference {
   const document = ctx.cell.run.trace.document;
   const seed =
     typeof document === "object" && document !== null
@@ -143,7 +143,7 @@ function traceSeedSourceEv(ctx: CellCtx): CellEvidenceReference {
  * otherwise `/data/snapshot` with a note naming the absent field.
  * Only call where a verified export document exists.
  */
-function exportSourceEv(ctx: CellCtx): CellEvidenceReference {
+export function exportSourceEv(ctx: CellCtx): CellEvidenceReference {
   const snapshot = ctx.cell.observation.exportDocument?.data.snapshot;
   const present =
     typeof snapshot === "object" &&
