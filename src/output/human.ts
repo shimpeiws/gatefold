@@ -1,4 +1,9 @@
 import type { AuditEvidenceReference, AuditResult } from "../domain/audit.js";
+import type {
+  CellEvidenceReference,
+  CellReportResult,
+  CellRunInputDescriptor,
+} from "../domain/cell.js";
 import type { AnalysisResult } from "../domain/claim.js";
 import type { ComparisonResult } from "../domain/comparison.js";
 import type {
@@ -264,6 +269,76 @@ export function formatAuditHuman(result: AuditResult): string {
       `${entry.id}${subject}: ${entry.state}; ${entry.completeness}`,
       `   ${entry.reason}`,
       `   evidence: ${formatAuditEvidence(entry.evidence)}`,
+    );
+  }
+  return lines.join("\n") + "\n";
+}
+
+function formatCellEvidence(
+  evidence: readonly CellEvidenceReference[],
+): string {
+  return evidence
+    .map((entry) => {
+      const path =
+        entry.path === undefined ? "" : ` '${sanitizeText(entry.path)}'`;
+      const range =
+        entry.lines === undefined
+          ? ""
+          : ` lines ${entry.lines.start}-${entry.lines.end}`;
+      const byteRange =
+        entry.bytes === undefined
+          ? ""
+          : ` bytes ${entry.bytes.start}-${entry.bytes.end}`;
+      const digest =
+        entry.digest === undefined ? "" : ` digest ${entry.digest}`;
+      const detail = entry.elementId ?? entry.note;
+      const suffix = detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+      return `${entry.source}:${entry.pointer}${path}${range}${byteRange}${digest}${suffix}`;
+    })
+    .join(", ");
+}
+
+function formatCellInput(descriptor: CellRunInputDescriptor): string {
+  const cell = descriptor.cellId ?? "not recorded";
+  const observation = descriptor.observationStatus ?? "absent";
+  return (
+    `${sanitizeText(descriptor.label)}: run ${descriptor.runId},` +
+    ` cell ${sanitizeText(cell)}, observation ${observation}`
+  );
+}
+
+/**
+ * Human output for `report-cell`/`compare-cells` (docs/v0.9-scope.md): a
+ * factual, lane-grouped evidence report. Deliberately free of verdict or
+ * ranking vocabulary — every row is a record or check state plus a
+ * completeness, never a score.
+ */
+export function formatCellHuman(result: CellReportResult): string {
+  const lines: string[] = [];
+  if (result.source.command === "report-cell") {
+    const run = result.inputs.run;
+    lines.push(`Cell report of ${sanitizeText(run?.label ?? "")}`);
+    if (run !== undefined) lines.push(`  ${formatCellInput(run)}`);
+  } else {
+    const before = result.inputs.before;
+    const after = result.inputs.after;
+    lines.push(
+      `Cell comparison of ${sanitizeText(before?.label ?? "")} → ${sanitizeText(after?.label ?? "")}`,
+    );
+    if (before !== undefined)
+      lines.push(`  before: ${formatCellInput(before)}`);
+    if (after !== undefined) lines.push(`  after: ${formatCellInput(after)}`);
+  }
+  if (result.inputs.evaluation !== undefined)
+    lines.push(
+      `  evaluation: ${sanitizeText(result.inputs.evaluation.label)} (schema v${result.inputs.evaluation.schemaVersion})`,
+    );
+  for (const entry of result.entries) {
+    const subject = entry.subject === undefined ? "" : ` [${entry.subject}]`;
+    lines.push(
+      `${entry.id}${subject}: ${entry.state}; ${entry.completeness}`,
+      `   ${sanitizeText(entry.statement)}`,
+      `   evidence: ${formatCellEvidence(entry.evidence)}`,
     );
   }
   return lines.join("\n") + "\n";

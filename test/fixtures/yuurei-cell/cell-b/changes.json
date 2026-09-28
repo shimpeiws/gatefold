@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "baseline_digest": "sha256:base-1",
+  "added": [
+    "src/new.ts",
+    "src/extra.ts"
+  ],
+  "modified": [],
+  "deleted": []
+}

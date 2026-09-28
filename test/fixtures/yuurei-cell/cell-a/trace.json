@@ -1,0 +1,88 @@
+{
+  "schema_version": "0.3",
+  "run_id": "run-cell-a",
+  "yuurei_version": "0.3.0",
+  "started_at": "2026-09-20T10:00:00Z",
+  "finished_at": "2026-09-20T10:00:12Z",
+  "runtime": {
+    "id": "claude-code",
+    "version": "2.1.272"
+  },
+  "model": {
+    "requested": "m",
+    "resolved": "m-1",
+    "resolved_reason": "observed"
+  },
+  "profile": {
+    "name": "p",
+    "digest": "sha256:p"
+  },
+  "task": {
+    "source": "t",
+    "digest": "sha256:task-x"
+  },
+  "requested_cell": {
+    "digest": "sha256:req-cell",
+    "inputs_version": 2
+  },
+  "cell_id": "cell_20260920-a1",
+  "observation": {
+    "observer": {
+      "id": "pfl",
+      "version": "1.2.0"
+    },
+    "status": "recorded",
+    "reason": null,
+    "completeness": "complete",
+    "snapshot_ids": {
+      "observed": "obs_0123456789ab",
+      "resolved": "res_0123456789ab"
+    },
+    "artifacts": [
+      {
+        "path": "observation/export.json",
+        "kind": "export"
+      }
+    ]
+  },
+  "seed": {
+    "policy": "git-tracked-files",
+    "source": "/seed/x",
+    "head": "0123456789abcdef0123456789abcdef01234567",
+    "baseline": {
+      "requested_digest": "sha256:base-1",
+      "materialized_digest": "sha256:base-1",
+      "files": 1,
+      "bytes": 1
+    },
+    "changes": {
+      "added": 1,
+      "modified": 0,
+      "deleted": 0
+    }
+  },
+  "patch": {
+    "base": "seeded",
+    "state": "complete"
+  },
+  "isolation": {
+    "strategy": "cell",
+    "verified": true
+  },
+  "execution": {
+    "exit_code": 0,
+    "signal": null,
+    "duration_ms": 10,
+    "timed_out": false
+  },
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 10
+  },
+  "cost": {
+    "amount": 0.01,
+    "currency": "USD"
+  },
+  "artifacts": [],
+  "diagnostics": []
+}

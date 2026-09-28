@@ -1,0 +1,136 @@
+{
+  "pflVersion": "1.2.0",
+  "command": "export",
+  "ok": true,
+  "completeness": "complete",
+  "diagnostics": [],
+  "data": {
+    "project": {
+      "id": "path-0123456789abcdef",
+      "displayName": "owner/repo"
+    },
+    "runtime": {
+      "id": "claude-code",
+      "version": "2.1.272",
+      "adapter": {
+        "id": "claude-code",
+        "version": "0.1.1",
+        "runtimeCompatibility": "verified"
+      }
+    },
+    "snapshot": {
+      "observedSnapshotId": "obs_0123456789ab",
+      "resolvedSnapshotId": "res_0123456789ab",
+      "capturedAt": "2026-09-20T09:59:00.000Z",
+      "schemaVersion": "2",
+      "cellId": "cell_20260920-a1"
+    },
+    "resolution": {
+      "semanticsVersion": "2",
+      "confidence": "verified"
+    },
+    "elements": [
+      {
+        "id": "el_aaa",
+        "observed": {
+          "id": "el_aaa",
+          "native": {
+            "kind": "instructions",
+            "origin": "project",
+            "scope": "project"
+          },
+          "source": {
+            "path": "el_aaa.md",
+            "digest": "sha256:eed606b7af1b7bbfaf6295b710963ef792493f31e1d6e5aa4d93b3f7a6cf2b40",
+            "sizeBytes": 12
+          },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el_aaa",
+          "status": "effective",
+          "activation": "always",
+          "applicability": {
+            "type": "project"
+          },
+          "resolution": {
+            "strategy": "accumulate",
+            "reason": "in scope"
+          }
+        },
+        "interpretation": {
+          "elementId": "el_aaa",
+          "facets": [
+            "instructions"
+          ],
+          "confidence": "high",
+          "reason": "defines behavior"
+        }
+      },
+      {
+        "id": "el_bbb",
+        "observed": {
+          "id": "el_bbb",
+          "native": {
+            "kind": "instructions",
+            "origin": "project",
+            "scope": "project"
+          },
+          "source": {
+            "path": "el_bbb.md",
+            "digest": "sha256:05dc939936995c1a34153af725724c2d6de1d69447e2f664c1d79f6702c1be5d",
+            "sizeBytes": 12
+          },
+          "inspectability": "observable",
+          "metadata": {},
+          "status": "observed"
+        },
+        "resolved": {
+          "id": "el_bbb",
+          "status": "effective",
+          "activation": "always",
+          "applicability": {
+            "type": "project"
+          },
+          "resolution": {
+            "strategy": "accumulate",
+            "reason": "in scope"
+          }
+        },
+        "interpretation": {
+          "elementId": "el_bbb",
+          "facets": [
+            "instructions"
+          ],
+          "confidence": "high",
+          "reason": "defines behavior"
+        }
+      }
+    ],
+    "relations": [
+      {
+        "type": "accumulates-with",
+        "from": "el_aaa",
+        "to": "el_bbb"
+      }
+    ],
+    "findings": [
+      {
+        "rule": "opaque-runtime-layer",
+        "message": "element el_aaa could not be fully inspected",
+        "elementIds": [
+          "el_aaa"
+        ]
+      }
+    ],
+    "interpretation": {
+      "classifier": {
+        "id": "pfl-native",
+        "version": "5"
+      },
+      "origin": "stored"
+    }
+  }
+}

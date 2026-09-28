@@ -1053,6 +1053,13 @@ const auditSchema = JSON.parse(
 );
 const validateAudit = new Ajv2020().compile(auditSchema);
 
+const cellSchema = JSON.parse(
+  readFileSync(`${root}schema/claim-result.v9.json`, "utf8"),
+);
+const validateCell = new Ajv2020().compile(cellSchema);
+const cellFixture = (name: string): string =>
+  `${root}test/fixtures/yuurei-cell/${name}`;
+
 describe("gatefold compare e2e (real process)", () => {
   const before = compareFixture("before.json");
   const after = compareFixture("after.json");
@@ -2078,6 +2085,183 @@ describe("gatefold e2e: audit-run", () => {
       expect(run.stderr).toContain("gatefold:");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("gatefold e2e: report-cell and compare-cells", () => {
+  const entryMap = (result: {
+    entries: { id: string; state: string }[];
+  }): Map<string, string> =>
+    new Map(result.entries.map((e) => [e.id, e.state]));
+
+  it("report-cell emits a schema-valid v9 report for an observed cell", async () => {
+    const run = await gatefold([
+      "report-cell",
+      "--run",
+      cellFixture("cell-a"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateCell(result), JSON.stringify(validateCell.errors)).toBe(
+      true,
+    );
+    expect(result.schemaVersion).toBe(9);
+    expect(result.source.command).toBe("report-cell");
+    expect(result.inputs.run.cellId).toBe("cell_20260920-a1");
+    const states = entryMap(result);
+    for (const id of [
+      "association.cell-id",
+      "association.export-retained",
+      "association.export-document",
+      "association.export-binding",
+      "association.export-snapshots",
+      "configuration.snapshot",
+      "execution.outcome",
+      "audit.run.trace",
+    ])
+      expect(states.get(id), id).not.toBe("unverifiable");
+    for (const entry of result.entries)
+      expect(entry.evidence.length).toBeGreaterThan(0);
+  });
+
+  it("report-cell reports an unobserved run without inventing configuration", async () => {
+    const run = await gatefold([
+      "report-cell",
+      "--run",
+      cellFixture("cell-unobserved"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateCell(result), JSON.stringify(validateCell.errors)).toBe(
+      true,
+    );
+    const states = entryMap(result);
+    expect(states.get("association.cell-id")).toBe("not-recorded");
+    expect(states.get("configuration.availability")).toBe("not-recorded");
+    for (const entry of result.entries)
+      if (entry.lane === "configuration")
+        expect(entry.id.startsWith("configuration.element."), entry.id).toBe(
+          false,
+        );
+  });
+
+  it("report-cell preserves an observer failure distinctly", async () => {
+    const run = await gatefold([
+      "report-cell",
+      "--run",
+      cellFixture("cell-observation-unavailable"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateCell(result), JSON.stringify(validateCell.errors)).toBe(
+      true,
+    );
+    const states = entryMap(result);
+    expect(states.get("association.cell-id")).toBe("recorded");
+    expect(states.get("association.observation")).toBe("recorded");
+    expect(states.get("configuration.availability")).toBe("not-recorded");
+  });
+
+  it("report-cell emits human-readable lanes by default", async () => {
+    const run = await gatefold(["report-cell", "--run", cellFixture("cell-a")]);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toContain("association.export-binding:");
+    expect(run.stdout).toContain("execution.outcome:");
+    expect(run.stdout).toContain("evidence:");
+    for (const word of ["[pass]", "[fail]", "criterion", "score"])
+      expect(run.stdout).not.toContain(word);
+  });
+
+  it("rejects report-cell missing flags and stdin with exit 2", async () => {
+    for (const args of [
+      ["report-cell"],
+      ["report-cell", "--run", "-"],
+      ["report-cell", "some-positional", "--run", cellFixture("cell-a")],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
+    }
+  });
+
+  it("compare-cells emits a schema-valid directional A → B comparison", async () => {
+    const run = await gatefold([
+      "compare-cells",
+      "--before",
+      cellFixture("cell-a"),
+      "--after",
+      cellFixture("cell-b"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateCell(result), JSON.stringify(validateCell.errors)).toBe(
+      true,
+    );
+    expect(result.schemaVersion).toBe(9);
+    expect(result.source.command).toBe("compare-cells");
+    const ids = result.entries.map((e: { id: string }) => e.id);
+    expect(ids).toContain("comparison.element-added.el_ccc");
+    expect(ids).toContain("comparison.element-removed.el_aaa");
+    expect(ids).toContain("comparison.element-changed.el_bbb");
+    expect(ids).not.toContain("comparison.config-unavailable");
+  });
+
+  it("compare-cells never concludes 'no configuration change' when a side lacks an export", async () => {
+    const run = await gatefold([
+      "compare-cells",
+      "--before",
+      cellFixture("cell-a"),
+      "--after",
+      cellFixture("cell-unobserved"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateCell(result), JSON.stringify(validateCell.errors)).toBe(
+      true,
+    );
+    const states = entryMap(result);
+    expect(states.get("comparison.config-unavailable")).toBe("unverifiable");
+    const ids = result.entries.map((e: { id: string }) => e.id);
+    expect(
+      ids.some((id: string) => id.startsWith("comparison.element-added.")),
+    ).toBe(false);
+  });
+
+  it("compare-cells rejects incompatible runs with exit 3", async () => {
+    const run = await gatefold([
+      "compare-cells",
+      "--before",
+      cellFixture("cell-a"),
+      "--after",
+      cellFixture("cell-incompatible"),
+    ]);
+    expect(run.code).toBe(3);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("gatefold:");
+  });
+
+  it("rejects compare-cells missing flags and stdin with exit 2", async () => {
+    for (const args of [
+      ["compare-cells"],
+      ["compare-cells", "--before", cellFixture("cell-a")],
+      ["compare-cells", "--before", "-", "--after", cellFixture("cell-b")],
+    ]) {
+      const run = await gatefold(args);
+      expect(run.code, args.join(" ")).toBe(2);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("gatefold:");
     }
   });
 });

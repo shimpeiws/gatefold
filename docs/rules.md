@@ -18,7 +18,12 @@ these rules: they resolve each spec-declared criterion to a `pass`/`fail`/
 see [v0.7 scope](v0.7-scope.md) and `claim-result.v6.json`/
 `claim-result.v7.json`. The `audit-run` command (v0.8) runs no rules either:
 it emits the fixed fact list of [v0.8 scope](v0.8-scope.md) and
-`claim-result.v8.json` — record states, not claims or verdicts.
+`claim-result.v8.json` — record states, not claims or verdicts. The
+`report-cell` and `compare-cells` commands (v0.9) likewise run no rules:
+they emit the fixed lane/entry list of [v0.9 scope](v0.9-scope.md) and
+`claim-result.v9.json` — association, configuration, execution, audit,
+evaluation, and comparison records with states and completeness markers,
+never claims, verdicts, or confidence scores.
 
 ## `report` rules
 
