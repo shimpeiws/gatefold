@@ -149,6 +149,13 @@ export interface CellRunInputDescriptor {
   readonly requestedCellDigest: string | null;
   /** The recorded observation status, or null when observation is absent. */
   readonly observationStatus: "recorded" | "partial" | "unavailable" | null;
+  /**
+   * The recorded observation failure reason (yuurei ADR-0022), or null
+   * when the record carries none or observation is absent. Echoed
+   * verbatim so a consumer can classify an `unavailable` observation
+   * without reopening the trace document.
+   */
+  readonly observationReason: string | null;
   /** The bound export's snapshot ids, or null when none was bound. */
   readonly exportObservedSnapshotId: string | null;
   readonly exportResolvedSnapshotId: string | null;

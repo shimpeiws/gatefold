@@ -302,7 +302,12 @@ function formatCellEvidence(
 
 function formatCellInput(descriptor: CellRunInputDescriptor): string {
   const cell = descriptor.cellId ?? "not recorded";
-  const observation = descriptor.observationStatus ?? "absent";
+  const observation =
+    descriptor.observationStatus === null
+      ? "absent"
+      : descriptor.observationReason === null
+        ? descriptor.observationStatus
+        : `${descriptor.observationStatus} (reason '${sanitizeText(descriptor.observationReason)}')`;
   return (
     `${sanitizeText(descriptor.label)}: run ${descriptor.runId},` +
     ` cell ${sanitizeText(cell)}, observation ${observation}`

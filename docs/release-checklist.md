@@ -1,7 +1,8 @@
 # Release checklist
 
-Reproducible steps to cut the current release (v0.9). Every step must pass in
-order.
+Reproducible steps to cut the current release. Every step must pass in
+order. The 1.0 release additionally requires the gate in
+[the 1.0 contract](1.0-contract.md).
 
 ## 1. Clean install
 
@@ -21,7 +22,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.9 scope](v0.9-scope.md).
+release gate in [the 1.0 contract](1.0-contract.md).
 
 ## 3. Package validation
 
@@ -33,10 +34,10 @@ npm pack --dry-run --json
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
 `.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
-`claim-result.v9.json`, including `schema/examples/` and the v4
+`claim-result.v10.json`, including `schema/examples/` and the v4
 trace-comparison, v5 run-comparison, v6 evaluation, v7
-evaluation-comparison, v8 audit, v9 cell, and v9 cell-comparison
-examples), `README.md`,
+evaluation-comparison, v8 audit, v9 cell, v9 cell-comparison, and v10
+repeated-cells examples), `README.md`,
 and `package.json`. All of `docs/` is shipped intentionally — keep only
 public-facing documentation in that directory. The tarball must not contain
 `test/`, `node_modules/`, `src/`, or any agent or review artifacts.
@@ -72,14 +73,15 @@ gatefold pfl-diff.json --format json      # diff document
 gatefold compare   --before export-a.json   --after export-b.json   --diff diff.json --format json          # three-document comparison (v3)
 gatefold compare-traces --before trace-a.json --after trace-b.json --format json                          # two-trace comparison (v4)
 gatefold compare-runs --before run-a-dir --after run-b-dir --format json                                     # two-run-directory comparison (v5)
-gatefold evaluate-run --run run-dir --spec task-spec.json --format json                                      # criterion evaluation (v6)
-gatefold evaluate-run --run run-dir --spec task-spec.json --check-report check-report.json --format json    # evaluation with an external check report
-gatefold compare-evaluations --before run-a-dir --after run-b-dir --spec task-spec.json --format json        # evaluation comparison (v7)
+gatefold evaluate-run --run run-dir --spec task-spec.json --format json                                      # deprecated criterion evaluation (v6, frozen)
+gatefold evaluate-run --run run-dir --spec task-spec.json --check-report check-report.json --format json    # deprecated: evaluation with an external check report
+gatefold compare-evaluations --before run-a-dir --after run-b-dir --spec task-spec.json --format json        # deprecated evaluation comparison (v7, frozen)
 gatefold audit-run --run run-dir --format json                                                              # single-run evidence audit (v8)
 gatefold audit-run --run run-dir --check-report check-report.json --format json                             # audit with an external check report
 gatefold report-cell --run run-dir --format json                                                            # single-cell evidence account (v9)
 gatefold report-cell --run run-dir --evaluation evaluation-result.json --format json                        # cell report with an evaluation
 gatefold compare-cells --before a-run-dir --after b-run-dir --format json                                    # A → B cell comparison (v9)
+gatefold report-cells --run a-run-dir --run b-run-dir --format json                                          # repeated-cells account (v10)
 pfl report --json | gatefold -            # stdin transport
 pfl export --json | gatefold -            # stdin transport
 pfl diff --json | gatefold -              # stdin transport
@@ -112,7 +114,11 @@ the named document. For the v9 cell results, confirm `schemaVersion` is 9,
 `state`, a `completeness`, and evidence whose `source` and `pointer`
 resolve inside the named run's trace, manifest, or verified stored bytes —
 with the manifest-recorded digest attached to every citation of stored
-bytes.
+bytes. For the v10 repeated-cells result, confirm `schemaVersion` is 10,
+`inputs.runs` records one descriptor per supplied directory labelled
+`run1`…`runN`, and `set` lane entries state the supplied/bound/eligible
+counts — unbound runs named as unchecked, never counted as absent
+records.
 
 ## 6. Tag and publish
 

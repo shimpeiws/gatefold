@@ -16,6 +16,7 @@
         "runtimeId": "claude-code",
         "requestedCellDigest": "sha256:826925f4971619f1dd7d0b961f3301af9b301ed6d98b68e500490d2a336cf825",
         "observationStatus": "recorded",
+        "observationReason": null,
         "exportObservedSnapshotId": "obs_96c8c3c142c5",
         "exportResolvedSnapshotId": "res_7aa8f3eaa36d"
       },
@@ -30,6 +31,7 @@
         "runtimeId": "claude-code",
         "requestedCellDigest": "sha256:826925f4971619f1dd7d0b961f3301af9b301ed6d98b68e500490d2a336cf825",
         "observationStatus": "recorded",
+        "observationReason": null,
         "exportObservedSnapshotId": "obs_68ae20c59b46",
         "exportResolvedSnapshotId": "res_d05b18be3493"
       },
@@ -44,6 +46,7 @@
         "runtimeId": "claude-code",
         "requestedCellDigest": "sha256:960c8ad0a2e126b92adb8fbea496a9f17b44464ca8f9d65d8b10f90499468a02",
         "observationStatus": "recorded",
+        "observationReason": null,
         "exportObservedSnapshotId": "obs_7dd9e1e890a4",
         "exportResolvedSnapshotId": "res_a6a3fe7613f9"
       }

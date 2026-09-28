@@ -770,6 +770,18 @@ describe("report-cell", () => {
     }
   });
 
+  it("prints the recorded observation reason in the human input line", async () => {
+    const runDir = fileURLToPath(
+      new URL(
+        "./fixtures/yuurei-cell/cell-observation-unavailable",
+        import.meta.url,
+      ),
+    );
+    const result = await report(runDir);
+    const human = formatCellHuman(result);
+    expect(human).toContain("observation unavailable (reason 'export-failed')");
+  });
+
   it("reads a real pfl v1.2.0 export a run directory retains", async () => {
     // test/fixtures/yuurei-cell/cell-real-pfl/observation/export.json is
     // genuine pfl v1.2.0 output (`pfl export --cell-id ... --json`, schema
