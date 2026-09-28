@@ -259,3 +259,40 @@ A Gatefold check should answer at least one of these questions:
 
 If a check cannot answer any of them, it is probably implementation coupling or
 maintenance scaffolding rather than a semantic contract.
+
+## Concrete evidence inventory
+
+Gatefold is the clearest example of an existing suite already organized around
+semantic distinctions. Most of the work here is naming and indexing that fact.
+
+| Proposition | Existing evidence | Assessment |
+| --- | --- | --- |
+| VC-G-01 | `test/rules.test.ts` requires evidence, provenance and stable rule ids; `test/schema.test.ts` rejects claims without evidence; E2E resolves emitted evidence pointers | Strong at generation, schema, and process boundaries. |
+| VC-G-02 | `test/rules.test.ts` explicitly checks neutral phrasing such as "never as improvement" and avoids proving harness change from rewording; `test/audit.test.ts` and `test/cell.test.ts` keep verdict vocabulary out of descriptive reports | Strong. The distinction between description and evaluation is enforced in output behavior. |
+| VC-G-03 | `test/audit.test.ts` has extensive unverifiable / inconsistent / not-recorded / partial cases; `test/cell.test.ts` checks missing observation and observer failure never become "no configuration change"; E2E keeps truncated/unrecorded artifacts as caveats | Very strong. This is one of the most thoroughly tested semantics in the repository. |
+| VC-G-04 | compare / trace / run tests reject mismatched subjects; `test/cell.test.ts` validates cell/export binding and withholds comparison when a side is unbound | Strong for existing identities. The real two-cell source-project identity path remains blocked by upstream work and is already tracked by #83. |
+| VC-G-05 | `test/evaluation.test.ts` covers declared criteria, subject binding, unknown on rejected/missing/conflicting reports, and explicitly asserts "never produces a pass from unverifiable evidence"; E2E covers v6/v7 CLI paths | Strong across criterion evaluation and process boundary. |
+
+### Gaps / active work
+
+No new generic Gatefold verification issue is needed.
+
+The one material system-level gap is already **#83**: demonstrate
+`compare-cells` on a real pair of independently prepared cells using the
+stable source-project identity supplied by yuurei #214 and pfl #217.
+
+That gap is important because it is exactly the kind of property an inner test
+cannot prove: the three repositories must preserve the same identity semantics
+across a real composed flow.
+
+### Candidate de-emphasis during future test cleanup
+
+Gatefold has many valuable adversarial and schema tests. During cleanup, avoid
+counting multiple fixtures that exercise the same semantic transition as
+independent contracts. A better inventory unit is:
+
+`verification proposition × distinct failure mode / observation boundary`.
+
+For example, several malformed-input cases support VC-G-03, but the unique
+evidence classes are more useful to track: missing, partial, corrupt,
+contradictory, unbound, and verified.
