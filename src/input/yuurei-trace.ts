@@ -6,6 +6,14 @@ import {
   readBoundedStdin,
 } from "./bounded.js";
 import { PflExportError, STDIN_SOURCE } from "./pfl-export.js";
+import {
+  SOURCE_PROJECT_CONTROL_CHARS_PATTERN,
+  SOURCE_PROJECT_ID_PATTERN,
+  SOURCE_PROJECT_ID_PREFIXES,
+  SOURCE_PROJECT_KINDS,
+  SOURCE_PROJECT_REMOTE_MAX_CHARS,
+  type SourceProjectKind,
+} from "./source-project.js";
 
 /** The only accepted trace compatibility token (docs/yuurei-trace-contract.md). */
 export const TRACE_SCHEMA_VERSION = "0.3";
@@ -97,6 +105,19 @@ export interface YuureiSeedChanges {
 }
 
 /**
+ * The declared source-project identity (yuurei #214,
+ * docs/yuurei-seeded-run-contract.md): stable across cells prepared from
+ * the same source repository and derived from it — never from the
+ * temporary cell path. Absent on traces written before the field existed
+ * and on unseeded runs; absence means unknown, never "same".
+ */
+export interface YuureiSourceProject {
+  readonly id: string;
+  readonly kind: SourceProjectKind;
+  readonly remote?: string;
+}
+
+/**
  * Seeded-workspace provenance (docs/yuurei-seeded-run-contract.md): the
  * identity of the tree materialized into the cell before execution. A trace
  * carrying `seed` is a seeded run; one without it is a legacy
@@ -108,6 +129,7 @@ export interface YuureiTraceSeed {
   readonly head: string;
   readonly baseline: YuureiSeedBaseline;
   readonly changes?: YuureiSeedChanges;
+  readonly sourceProject?: YuureiSourceProject;
 }
 
 export type YuureiPatchBase = "empty" | "seeded";
@@ -553,6 +575,66 @@ function parseSeedChanges(
   };
 }
 
+/**
+ * The declared source-project identity inside `seed` (yuurei #214). The
+ * `id` is held to the declared-identity shape and must agree with `kind`'s
+ * prefix, matching the rule pfl holds the same declaration to — a record
+ * whose two halves disagree is self-contradictory, not a different
+ * project.
+ */
+function parseSeedSourceProject(
+  value: Record<string, unknown>,
+): YuureiSourceProject | undefined {
+  const record = value.source_project;
+  if (record === undefined) return undefined;
+  if (!isRecord(record)) throw shapeError("seed.source_project", "an object");
+  const kind = record.kind;
+  if (
+    typeof kind !== "string" ||
+    !(SOURCE_PROJECT_KINDS as readonly string[]).includes(kind)
+  )
+    throw shapeError(
+      "seed.source_project.kind",
+      `one of ${SOURCE_PROJECT_KINDS.map((s) => `"${s}"`).join(", ")}`,
+    );
+  const id = stringField(record, "id", "seed.source_project.id");
+  if (!SOURCE_PROJECT_ID_PATTERN.test(id))
+    throw shapeError(
+      "seed.source_project.id",
+      "a '<git|path>-<16 lowercase hex>' identity string",
+    );
+  if (!id.startsWith(SOURCE_PROJECT_ID_PREFIXES[kind as SourceProjectKind]))
+    throw shapeError(
+      "seed.source_project.id",
+      `an id whose prefix agrees with kind '${kind}'`,
+    );
+  const remote = record.remote;
+  if (remote !== undefined) {
+    if (
+      typeof remote !== "string" ||
+      remote.length === 0 ||
+      remote.length > SOURCE_PROJECT_REMOTE_MAX_CHARS ||
+      SOURCE_PROJECT_CONTROL_CHARS_PATTERN.test(remote)
+    )
+      throw shapeError(
+        "seed.source_project.remote",
+        `a non-empty string of at most ${SOURCE_PROJECT_REMOTE_MAX_CHARS} characters without control or format characters`,
+      );
+    // `remote` describes the derivation `git-remote` claims; a `local-path`
+    // declaration carrying one is self-contradictory.
+    if (kind !== "git-remote")
+      throw shapeError(
+        "seed.source_project.remote",
+        "absent unless kind is 'git-remote'",
+      );
+  }
+  return {
+    id,
+    kind: kind as SourceProjectKind,
+    ...(remote === undefined ? {} : { remote }),
+  };
+}
+
 function parseSeed(value: unknown): YuureiTraceSeed | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value)) throw shapeError("seed", "an object");
@@ -561,6 +643,7 @@ function parseSeed(value: unknown): YuureiTraceSeed | undefined {
     throw shapeError("seed.policy", `"${SEED_POLICY}"`);
   const baseline = requiredRecord(value, "baseline", "seed.baseline");
   const changes = parseSeedChanges(value);
+  const sourceProject = parseSeedSourceProject(value);
   return {
     policy,
     source: stringField(value, "source", "seed.source"),
@@ -580,6 +663,7 @@ function parseSeed(value: unknown): YuureiTraceSeed | undefined {
       bytes: nonNegativeIntField(baseline, "bytes", "seed.baseline.bytes"),
     },
     ...(changes === undefined ? {} : { changes }),
+    ...(sourceProject === undefined ? {} : { sourceProject }),
   };
 }
 

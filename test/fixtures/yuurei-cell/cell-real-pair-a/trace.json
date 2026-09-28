@@ -1,0 +1,130 @@
+{
+  "schema_version": "0.3",
+  "yuurei_version": "1.2.0",
+  "run_id": "20260928T123716Z-2c2a",
+  "cell_id": "cell_20260928T123716Z-34bcd6f1",
+  "started_at": "2026-09-28T12:37:17.395Z",
+  "finished_at": "2026-09-28T12:37:17.395Z",
+  "runtime": {
+    "id": "claude-code",
+    "version": null
+  },
+  "model": {
+    "requested": "",
+    "resolved": null
+  },
+  "profile": {
+    "name": "fixture-claude",
+    "digest": "sha256:0000"
+  },
+  "task": {
+    "source": "/var/folders/b2/78mzqz1109j_lylk0r5mzz_h0000gn/T/srcid-runs-DoX6fV/task.md",
+    "digest": "sha256:03f634b4c29abcb6bcfb781859c43982ddf747447930fe60b47a4bbc29aa6220"
+  },
+  "requested_cell": {
+    "digest": "sha256:58f980ce681ceca57f6d60a07594e276e509f0be0b07e56279ad61c7f1a1d9d7",
+    "inputs_version": 2
+  },
+  "isolation": {
+    "strategy": "level1",
+    "verified": true
+  },
+  "execution_options": {
+    "timeout_ms": null,
+    "runtime": {}
+  },
+  "seed": {
+    "policy": "git-tracked-files",
+    "source": "/private/var/folders/b2/78mzqz1109j_lylk0r5mzz_h0000gn/T/srcid-repo-geudIf",
+    "head": "f395491da0228418634a05394fea7ad7869179b8",
+    "baseline": {
+      "requested_digest": "sha256:68a766c3d6be8e1de4cfa1a15680971a920810bf7ca80ae643b33051fbc374d9",
+      "materialized_digest": "sha256:68a766c3d6be8e1de4cfa1a15680971a920810bf7ca80ae643b33051fbc374d9",
+      "files": 2,
+      "bytes": 38
+    },
+    "source_project": {
+      "id": "git-db9acfc85f531c03",
+      "kind": "git-remote",
+      "remote": "github.com/gatefold-fixture/demo"
+    },
+    "changes": {
+      "added": 0,
+      "modified": 0,
+      "deleted": 0
+    }
+  },
+  "patch": {
+    "base": "seeded",
+    "state": "complete"
+  },
+  "execution": {
+    "exit_code": 0,
+    "signal": null,
+    "duration_ms": 0,
+    "timed_out": false
+  },
+  "usage": {},
+  "cost": null,
+  "artifacts": [
+    {
+      "path": "stdout.log",
+      "kind": "log"
+    },
+    {
+      "path": "stderr.log",
+      "kind": "log"
+    },
+    {
+      "path": "patch.diff",
+      "kind": "patch"
+    },
+    {
+      "path": "baseline-manifest.json",
+      "kind": "file"
+    },
+    {
+      "path": "changes.json",
+      "kind": "file"
+    },
+    {
+      "path": "observation/export.json",
+      "kind": "file"
+    },
+    {
+      "path": "observation/bundle/harness.json",
+      "kind": "file"
+    },
+    {
+      "path": "observation/bundle/manifest.json",
+      "kind": "file"
+    }
+  ],
+  "observation": {
+    "observer": {
+      "id": "pfl",
+      "version": "1.2.0"
+    },
+    "status": "recorded",
+    "reason": null,
+    "completeness": "complete",
+    "snapshot_ids": {
+      "observed": "obs_d282348b1bf2",
+      "resolved": "res_aabd3ea9469e"
+    },
+    "artifacts": [
+      {
+        "path": "observation/export.json",
+        "kind": "observation"
+      },
+      {
+        "path": "observation/bundle/harness.json",
+        "kind": "observation"
+      },
+      {
+        "path": "observation/bundle/manifest.json",
+        "kind": "observation"
+      }
+    ]
+  }
+}

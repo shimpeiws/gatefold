@@ -866,6 +866,144 @@ describe("pfl export snapshot contract", () => {
     }
   });
 
+  it("keeps absent, null, and declared snapshot.sourceProject distinct", () => {
+    const absent = parsePflExport(validExportDoc(), "inline");
+    if (absent.command !== "export") throw new Error("unreachable");
+    expect(absent.data.snapshot.sourceProject).toBeUndefined();
+
+    const doc = validExportDoc();
+    doc.data.snapshot.sourceProject = null;
+    const nulled = parsePflExport(doc, "inline");
+    if (nulled.command !== "export") throw new Error("unreachable");
+    expect(nulled.data.snapshot.sourceProject).toBeNull();
+
+    const declared = validExportDoc();
+    declared.data.snapshot.sourceProject = {
+      id: "git-0123456789abcdef",
+      kind: "git-remote",
+      remote: "github.com/owner/repo",
+      issuer: "yuurei",
+      contractVersion: 1,
+      head: "0123456789abcdef0123456789abcdef01234567",
+    };
+    const parsed = parsePflExport(declared, "inline");
+    if (parsed.command !== "export") throw new Error("unreachable");
+    expect(parsed.data.snapshot.sourceProject).toEqual({
+      id: "git-0123456789abcdef",
+      kind: "git-remote",
+      remote: "github.com/owner/repo",
+      issuer: "yuurei",
+      contractVersion: 1,
+      head: "0123456789abcdef0123456789abcdef01234567",
+    });
+  });
+
+  it.each([
+    ["a non-object", "not-an-object", "sourceProject"],
+    [
+      "a malformed id",
+      { id: "bogus", kind: "git-remote", issuer: "yuurei", contractVersion: 1 },
+      "sourceProject.id",
+    ],
+    [
+      "an id/kind prefix disagreement",
+      {
+        id: "git-0123456789abcdef",
+        kind: "local-path",
+        issuer: "yuurei",
+        contractVersion: 1,
+      },
+      "sourceProject.id",
+    ],
+    [
+      "a remote on a local-path declaration",
+      {
+        id: "path-0123456789abcdef",
+        kind: "local-path",
+        remote: "github.com/owner/repo",
+        issuer: "yuurei",
+        contractVersion: 1,
+      },
+      "sourceProject.remote",
+    ],
+    [
+      "an empty remote",
+      {
+        id: "git-0123456789abcdef",
+        kind: "git-remote",
+        remote: "",
+        issuer: "yuurei",
+        contractVersion: 1,
+      },
+      "sourceProject.remote",
+    ],
+    [
+      "a remote carrying control characters",
+      {
+        id: "git-0123456789abcdef",
+        kind: "git-remote",
+        remote: "github.com/o/r\x1b[2J",
+        issuer: "yuurei",
+        contractVersion: 1,
+      },
+      "sourceProject.remote",
+    ],
+    [
+      "a missing issuer",
+      { id: "git-0123456789abcdef", kind: "git-remote", contractVersion: 1 },
+      "sourceProject.issuer",
+    ],
+    [
+      "an issuer carrying control characters",
+      {
+        id: "git-0123456789abcdef",
+        kind: "git-remote",
+        issuer: "yuu\u202erei",
+        contractVersion: 1,
+      },
+      "sourceProject.issuer",
+    ],
+    [
+      "a missing contractVersion",
+      { id: "git-0123456789abcdef", kind: "git-remote", issuer: "yuurei" },
+      "sourceProject.contractVersion",
+    ],
+    [
+      "an unsupported contractVersion",
+      {
+        id: "git-0123456789abcdef",
+        kind: "git-remote",
+        issuer: "yuurei",
+        contractVersion: 2,
+      },
+      "sourceProject.contractVersion",
+    ],
+    [
+      "an empty head",
+      {
+        id: "git-0123456789abcdef",
+        kind: "git-remote",
+        issuer: "yuurei",
+        contractVersion: 1,
+        head: "",
+      },
+      "sourceProject.head",
+    ],
+  ])("rejects sourceProject: %s", (_name, sourceProject, path) => {
+    const doc = validExportDoc();
+    doc.data.snapshot.sourceProject = sourceProject;
+    const error = (() => {
+      try {
+        parsePflExport(doc, "inline");
+        return null;
+      } catch (e) {
+        return e as PflExportError;
+      }
+    })();
+    expect(error?.code, path).toBe("invalid-shape");
+    expect(error?.message, path).toContain(path);
+  });
+
   it("ignores unknown additive fields without echoing them", async () => {
     const result = await readPflExport(fixture("valid-export-partial.json"));
     expect(result.command).toBe("export");

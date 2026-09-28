@@ -144,6 +144,72 @@ function boundExport(
   return doc;
 }
 
+/**
+ * A yuurei #214 `seed.source_project` declaration — the trace's own record
+ * of the source a seeded cell was prepared from.
+ */
+function seedSourceProject(id: string): Record<string, unknown> {
+  return {
+    id,
+    kind: id.startsWith("git-") ? "git-remote" : "local-path",
+    ...(id.startsWith("git-") ? { remote: "github.com/owner/repo" } : {}),
+  };
+}
+
+/** A pfl #217 `data.snapshot.sourceProject` declaration. */
+function declaredSourceProject(id: string): Record<string, unknown> {
+  return {
+    ...seedSourceProject(id),
+    issuer: "yuurei",
+    contractVersion: 1,
+  };
+}
+
+/**
+ * A seeded trace bound to `cellId` whose seed declares the given source
+ * identity (or none when `sourceId` is null).
+ */
+function declaredCellTrace(
+  cellId: string,
+  sourceId: string | null,
+  snapshotIds: { observed: string; resolved: string },
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const trace = cellTrace({
+    cell_id: cellId,
+    observation: observationRecord({ snapshot_ids: snapshotIds }),
+    ...overrides,
+  });
+  if (sourceId !== null)
+    (trace.seed as Record<string, unknown>).source_project =
+      seedSourceProject(sourceId);
+  return trace;
+}
+
+/**
+ * A bound export whose observed project id is `projectId` and whose
+ * snapshot carries `source` as `sourceProject` (`undefined` omits the key
+ * — a pre-schema-3 artifact).
+ */
+function declaredExport(
+  cellId: string,
+  projectId: string,
+  source: Record<string, unknown> | null | undefined,
+  snapshotIds: { observed: string; resolved: string },
+): Record<string, unknown> {
+  const doc = boundExport(cellId, {
+    data: { project: { id: projectId, displayName: "owner/repo" } },
+  });
+  const snapshot = (doc.data as Record<string, unknown>).snapshot as Record<
+    string,
+    unknown
+  >;
+  snapshot.observedSnapshotId = snapshotIds.observed;
+  snapshot.resolvedSnapshotId = snapshotIds.resolved;
+  if (source !== undefined) snapshot.sourceProject = source;
+  return doc;
+}
+
 function observationRecord(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
@@ -1658,6 +1724,495 @@ describe("compare-cells", () => {
       expect(entriesWith(result, "comparison.evaluation-transition.")).toEqual(
         [],
       );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("compare-cells source-project identity", () => {
+  const SRC_A = "git-1111111111111111";
+  const SRC_B = "git-2222222222222222";
+  const IDS_A = { observed: "obs_a", resolved: "res_a" };
+  const IDS_B = { observed: "obs_b", resolved: "res_b" };
+  const PROJECT_A = "path-aaaaaaaaaaaaaaaa";
+  const PROJECT_B = "path-bbbbbbbbbbbbbbbb";
+
+  const writePair = (
+    base: string,
+    sides: {
+      before: {
+        trace: Record<string, unknown>;
+        export: Record<string, unknown>;
+      };
+      after: {
+        trace: Record<string, unknown>;
+        export: Record<string, unknown>;
+      };
+    },
+  ) => ({
+    before: writeCellRun(base, "a", {
+      trace: sides.before.trace,
+      exportBytes: JSON.stringify(sides.before.export),
+    }),
+    after: writeCellRun(base, "b", {
+      trace: sides.after.trace,
+      exportBytes: JSON.stringify(sides.after.export),
+    }),
+  });
+
+  const sourceEntry = (result: CellReportResult) =>
+    entryAt(result, "comparison.source-identity");
+  const noElementDiff = (result: CellReportResult) => {
+    expect(entriesWith(result, "comparison.elements")).toEqual([]);
+    expect(entriesWith(result, "comparison.element-added.")).toEqual([]);
+    expect(entriesWith(result, "comparison.element-removed.")).toEqual([]);
+    expect(entriesWith(result, "comparison.element-changed.")).toEqual([]);
+    expect(entriesWith(result, "comparison.effective")).toEqual([]);
+  };
+
+  it("reports the A → B difference for two observed cells of one declared source", async () => {
+    const base = tmp();
+    try {
+      // Distinct temporary workspaces give the cells distinct observed
+      // project ids; the declared source identity agrees on both sides.
+      const docB = declaredExport(
+        "cell_20260920-b2",
+        PROJECT_B,
+        declaredSourceProject(SRC_A),
+        IDS_B,
+      );
+      (docB.data as Record<string, unknown>).elements = [
+        element("el_bbb"),
+        element("el_ccc"),
+      ];
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_20260920-a1", SRC_A, IDS_A),
+          export: declaredExport(
+            "cell_20260920-a1",
+            PROJECT_A,
+            declaredSourceProject(SRC_A),
+            IDS_A,
+          ),
+        },
+        after: {
+          trace: declaredCellTrace("cell_20260920-b2", SRC_A, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: docB,
+        },
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+
+      const identity = sourceEntry(result);
+      expect(identity.state).toBe("verified");
+      expect(identity.statement).toContain(SRC_A);
+      // Both observed cell-local ids remain stated as distinct facts.
+      expect(identity.statement).toContain(PROJECT_A);
+      expect(identity.statement).toContain(PROJECT_B);
+      const pointers = identity.evidence.map((e) => e.pointer);
+      expect(pointers).toContain("/seed/source_project");
+      expect(pointers).toContain("/data/snapshot/sourceProject");
+      expect(pointers).toContain("/data/project/id");
+      expect(
+        entryAt(result, "association.export-source-project", "before").state,
+      ).toBe("verified");
+      expect(
+        entryAt(result, "association.export-source-project", "after").state,
+      ).toBe("verified");
+
+      // The real diff runs: A's el_aaa was removed, el_ccc added.
+      expect(
+        entriesWith(result, "comparison.element-added.").map((e) => e.id),
+      ).toEqual(["comparison.element-added.el_ccc"]);
+      expect(
+        entriesWith(result, "comparison.element-removed.").map((e) => e.id),
+      ).toEqual(["comparison.element-removed.el_aaa"]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects two cells whose verified declared sources differ", async () => {
+    const base = tmp();
+    try {
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", SRC_A, IDS_A),
+          export: declaredExport(
+            "cell_a",
+            PROJECT_A,
+            declaredSourceProject(SRC_A),
+            IDS_A,
+          ),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", SRC_B, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: declaredExport(
+            "cell_b",
+            PROJECT_B,
+            declaredSourceProject(SRC_B),
+            IDS_B,
+          ),
+        },
+      });
+      const error = await compare(before, after).catch((e) => e);
+      expect(error).toMatchObject({ code: "mismatched-inputs" });
+      expect((error as Error).message).toContain(SRC_A);
+      expect((error as Error).message).toContain(SRC_B);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects differing verified sources even when the observed project ids match", async () => {
+    const base = tmp();
+    try {
+      // Both exports record one observed project id, but each cell's own
+      // records verify a different declared source — the declared identity
+      // wins over the observed cell-local id.
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", SRC_A, IDS_A),
+          export: declaredExport(
+            "cell_a",
+            PROJECT_A,
+            declaredSourceProject(SRC_A),
+            IDS_A,
+          ),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", SRC_B, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: declaredExport(
+            "cell_b",
+            PROJECT_A,
+            declaredSourceProject(SRC_B),
+            IDS_B,
+          ),
+        },
+      });
+      const error = await compare(before, after).catch((e) => e);
+      expect(error).toMatchObject({ code: "mismatched-inputs" });
+      expect((error as Error).message).toContain(SRC_A);
+      expect((error as Error).message).toContain(SRC_B);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("withholds the difference when the export declares a source the trace does not record", async () => {
+    const base = tmp();
+    try {
+      // Both exports carry the same declared id, but neither trace records
+      // it — the declaration cannot be cross-checked against either run.
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", null, IDS_A),
+          export: declaredExport(
+            "cell_a",
+            PROJECT_A,
+            declaredSourceProject(SRC_A),
+            IDS_A,
+          ),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", null, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: declaredExport(
+            "cell_b",
+            PROJECT_B,
+            declaredSourceProject(SRC_A),
+            IDS_B,
+          ),
+        },
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      expect(sourceEntry(result).state).toBe("unverifiable");
+      const caveat = entryAt(result, "comparison.config-unavailable");
+      expect(caveat.state).toBe("unverifiable");
+      expect(caveat.statement).toContain("never 'no configuration change'");
+      noElementDiff(result);
+      expect(
+        entryAt(result, "association.export-source-project", "before").state,
+      ).toBe("unverifiable");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("withholds when a declaring trace meets an export that records no source identity", async () => {
+    const base = tmp();
+    try {
+      // A's export is a pre-schema-3 artifact (no sourceProject key); B's
+      // export records `sourceProject: null`. Neither side can verify a
+      // shared source.
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", SRC_A, IDS_A),
+          export: declaredExport("cell_a", PROJECT_A, undefined, IDS_A),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", SRC_A, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: declaredExport("cell_b", PROJECT_B, null, IDS_B),
+        },
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      expect(sourceEntry(result).state).toBe("unverifiable");
+      entryAt(result, "comparison.config-unavailable");
+      noElementDiff(result);
+      expect(
+        entryAt(result, "association.export-source-project", "before").state,
+      ).toBe("unverifiable");
+      expect(
+        entryAt(result, "association.export-source-project", "after").state,
+      ).toBe("unverifiable");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("withholds when a cell's own seed and export declare different sources", async () => {
+    const base = tmp();
+    try {
+      // A's records contradict each other; B verifies SRC_B. The pair is
+      // caveated — A's records cannot establish which source it was.
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", SRC_A, IDS_A),
+          export: declaredExport(
+            "cell_a",
+            PROJECT_A,
+            declaredSourceProject(SRC_B),
+            IDS_A,
+          ),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", SRC_B, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: declaredExport(
+            "cell_b",
+            PROJECT_B,
+            declaredSourceProject(SRC_B),
+            IDS_B,
+          ),
+        },
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      expect(sourceEntry(result).state).toBe("unverifiable");
+      entryAt(result, "comparison.config-unavailable");
+      noElementDiff(result);
+      const association = entryAt(
+        result,
+        "association.export-source-project",
+        "before",
+      );
+      expect(association.state).toBe("inconsistent");
+      expect(association.statement).toContain(SRC_A);
+      expect(association.statement).toContain(SRC_B);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("still compares a legacy pair on equal observed project ids", async () => {
+    const base = tmp();
+    try {
+      // No source declarations anywhere; both exports record the same
+      // observed project id — the pre-#83 rule, unchanged.
+      const docB = boundExport("cell_b", {
+        data: { elements: [element("el_bbb"), element("el_ccc")] },
+      });
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", null, IDS_A),
+          export: boundExport("cell_a"),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", null, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: docB,
+        },
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const identity = sourceEntry(result);
+      expect(identity.state).toBe("unverifiable");
+      expect(identity.statement).toContain("same observed identity");
+      expect(entryAt(result, "comparison.elements").state).toBe("recorded");
+      expect(
+        entriesWith(result, "comparison.element-added.").map((e) => e.id),
+      ).toEqual(["comparison.element-added.el_ccc"]);
+      expect(
+        entryAt(result, "association.export-source-project", "before").state,
+      ).toBe("not-recorded");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reverses direction for a declared same-source pair", async () => {
+    const base = tmp();
+    try {
+      const docB = declaredExport(
+        "cell_b",
+        PROJECT_B,
+        declaredSourceProject(SRC_A),
+        IDS_B,
+      );
+      (docB.data as Record<string, unknown>).elements = [
+        element("el_bbb"),
+        element("el_ccc"),
+      ];
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", SRC_A, IDS_A),
+          export: declaredExport(
+            "cell_a",
+            PROJECT_A,
+            declaredSourceProject(SRC_A),
+            IDS_A,
+          ),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", SRC_A, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: docB,
+        },
+      });
+      const result = await compare(after, before);
+      expectSchemaValid(result);
+      expect(sourceEntry(result).state).toBe("verified");
+      // B → A: el_aaa was added going back, el_ccc/el_bbb's extra is removed.
+      expect(
+        entriesWith(result, "comparison.element-added.").map((e) => e.id),
+      ).toEqual(["comparison.element-added.el_aaa"]);
+      expect(
+        entriesWith(result, "comparison.element-removed.").map((e) => e.id),
+      ).toEqual(["comparison.element-removed.el_ccc"]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  // The cells under cell-real-pair-a/-b/-other-source are genuine
+  // artifacts: produced by yuurei's run pipeline (#214 build) seeded from
+  // real Git repositories and observed by the real pfl (#217 build). The
+  // seeded workspaces were temporary cells, so each export's observed
+  // `data.project.id` differs while the declared source identity agrees —
+  // the exact pair #83 requires. See docs/v0.9-scope.md#fixtures.
+  it("compares a genuine upstream-produced same-source pair end to end", async () => {
+    const before = fileURLToPath(
+      new URL("./fixtures/yuurei-cell/cell-real-pair-a", import.meta.url),
+    );
+    const after = fileURLToPath(
+      new URL("./fixtures/yuurei-cell/cell-real-pair-b", import.meta.url),
+    );
+    const result = await compare(before, after);
+    expectSchemaValid(result);
+
+    // The observed cell-local project ids differ — the workspaces were
+    // distinct — while the declared source identity is shared.
+    const identity = sourceEntry(result);
+    expect(identity.state).toBe("verified");
+    expect(identity.statement).toContain("git-db9acfc85f531c03");
+    expect(identity.statement).toContain("path-a9b3bdafe676936f");
+    expect(identity.statement).toContain("path-a25ea8edc829502f");
+    expect(
+      entryAt(result, "association.export-source-project", "before").state,
+    ).toBe("verified");
+    expect(
+      entryAt(result, "association.export-source-project", "after").state,
+    ).toBe("verified");
+    expect(entryAt(result, "comparison.elements").state).toBe("recorded");
+  });
+
+  it("rejects a genuine observed cell of a different declared source", async () => {
+    const before = fileURLToPath(
+      new URL("./fixtures/yuurei-cell/cell-real-pair-a", import.meta.url),
+    );
+    const other = fileURLToPath(
+      new URL("./fixtures/yuurei-cell/cell-real-other-source", import.meta.url),
+    );
+    const error = await compare(before, other).catch((e) => e);
+    expect(error).toMatchObject({ code: "mismatched-inputs" });
+    expect((error as Error).message).toContain("git-db9acfc85f531c03");
+    expect((error as Error).message).toContain("git-948b51d1187494ec");
+  });
+
+  it("keeps a new-meets-legacy pair caveated when the observed project ids differ", async () => {
+    const base = tmp();
+    try {
+      // cell-real-pair-b with its source declarations stripped — the same
+      // bytes a pre-#214 yuurei and pre-#217 pfl would have shipped, digest
+      // fixed up so the records stay verified-but-undeclaring. Side A still
+      // verifies its declared source; B cannot, so the pair is caveated.
+      const declaredDir = fileURLToPath(
+        new URL("./fixtures/yuurei-cell/cell-real-pair-a", import.meta.url),
+      );
+      const legacyDir = join(base, "legacy");
+      mkdirSync(join(legacyDir, "observation", "bundle"), {
+        recursive: true,
+      });
+      const sourceDir = fileURLToPath(
+        new URL("./fixtures/yuurei-cell/cell-real-pair-b", import.meta.url),
+      );
+      for (const rel of [
+        "trace.json",
+        "artifacts.json",
+        "baseline-manifest.json",
+        "changes.json",
+        "patch.diff",
+        "stdout.log",
+        "stderr.log",
+        "resolved-profile.json",
+        "observation/export.json",
+        "observation/bundle/harness.json",
+        "observation/bundle/manifest.json",
+      ]) {
+        const text = readFileSync(join(sourceDir, rel), "utf8");
+        writeFileSync(join(legacyDir, rel), text);
+      }
+      const trace = JSON.parse(
+        readFileSync(join(legacyDir, "trace.json"), "utf8"),
+      );
+      delete trace.seed.source_project;
+      writeFileSync(join(legacyDir, "trace.json"), JSON.stringify(trace));
+      const exportPath = join(legacyDir, "observation", "export.json");
+      const doc = JSON.parse(readFileSync(exportPath, "utf8"));
+      delete doc.data.snapshot.sourceProject;
+      const exportBytes = JSON.stringify(doc);
+      writeFileSync(exportPath, exportBytes);
+      rewriteManifestEntry(legacyDir, "observation/export.json", (entry) => {
+        entry.digest = sha256(exportBytes);
+      });
+
+      const result = await compare(declaredDir, legacyDir);
+      expectSchemaValid(result);
+      expect(sourceEntry(result).state).toBe("unverifiable");
+      const caveat = entryAt(result, "comparison.config-unavailable");
+      expect(caveat.statement).toContain("never 'no configuration change'");
+      noElementDiff(result);
+      expect(
+        entryAt(result, "association.export-source-project", "before").state,
+      ).toBe("verified");
+      expect(
+        entryAt(result, "association.export-source-project", "after").state,
+      ).toBe("not-recorded");
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

@@ -1,0 +1,44 @@
+{
+  "artifacts": [
+    {
+      "path": "stdout.log",
+      "kind": "log",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "stderr.log",
+      "kind": "log",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "patch.diff",
+      "kind": "patch",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "baseline-manifest.json",
+      "kind": "file",
+      "digest": "sha256:4eebf3af1be44bb0988be5e349ac9e78da39bad6fe7808b1c969c2e33877d823"
+    },
+    {
+      "path": "changes.json",
+      "kind": "file",
+      "digest": "sha256:b1cdf7bab5611cf46ea45d78cf28da638a253cf0c1dadf3da6fb6f9e01f6743a"
+    },
+    {
+      "path": "observation/export.json",
+      "kind": "file",
+      "digest": "sha256:b909ad0d82bc6ebe20a4ae598ed154e139d532945600309f506937d65bbe321e"
+    },
+    {
+      "path": "observation/bundle/harness.json",
+      "kind": "file",
+      "digest": "sha256:4705a5dc16cc4bb8d031df110c4dc1e72d708c21212f73a8358657edf4e0f720"
+    },
+    {
+      "path": "observation/bundle/manifest.json",
+      "kind": "file",
+      "digest": "sha256:606bae54710d691fca24dcaa4eeda4ce0d95dd4fef9ad1426047f06889ea0a0f"
+    }
+  ]
+}

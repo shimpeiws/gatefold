@@ -65,12 +65,27 @@ Required fields when `command` is `"export"`:
 | --- | --- | --- |
 | `project` | object | `{ id: string, displayName: string }`. |
 | `runtime` | object | `{ id: string, version: string \| null, adapter: { id: string, version: string, runtimeCompatibility: "verified" \| "unverified" } }`. |
-| `snapshot` | object | `{ observedSnapshotId: string, resolvedSnapshotId: string, capturedAt: string, schemaVersion: string }`. |
+| `snapshot` | object | `{ observedSnapshotId: string, resolvedSnapshotId: string, capturedAt: string, schemaVersion: string }`. Optional additive members: `cellId: string \| null` (pfl v1.2.0 — the caller-asserted cell association copied from `--cell-id`); `sourceProject: object \| null` (pfl #217, snapshot schema 3 — the caller-declared source-project identity, see below). |
 | `resolution` | object | `{ semanticsVersion: string, confidence: "verified" \| "unverified-runtime-version" }`. |
 | `elements` | array | Joined elements; see below. At most 10,000 items. |
 | `relations` | array | `{ type, from, to }`; `from` and `to` must reference element ids present in `elements`. pfl produces `"shadows"`, `"overrides"`, and `"accumulates-with"`; because an export projects stored artifacts, the four legacy schema-1 types `"contains"`, `"discovered-from"`, `"resolves-to"`, and `"applies-to"` are also accepted — the same persisted set pfl's own reader tolerates. At most 20,000 items. |
 | `findings` | array | Same item shape and limits as the report payload. |
 | `interpretation` | object | `{ classifier: { id: string, version: string }, origin: "stored" \| "recomputed" }`. |
+
+`snapshot.sourceProject` (pfl #217) carries the **caller-declared**
+source-project identity the observation was told to record — yuurei's
+`source-project.json` contract asserted at `inspect` time. When present it
+is `{ id: "git-<16 lowercase hex>" | "path-<16 lowercase hex>",
+kind: "git-remote" | "local-path", remote?: string, issuer: string,
+contractVersion: 1, head?: string }`. The `id` prefix must agree with
+`kind`, `remote` is present only for `"git-remote"`, `issuer` is bounded to
+64 characters, `remote`/`head` to 512/128, and none may carry control or
+format characters; only `contractVersion: 1` is read. The key may be absent
+(exports written before schema 3), explicitly `null` (no declaration
+recorded), or the validated object; a malformed non-null value fails closed
+as `invalid-shape`. It is **asserted provenance**, intentionally separate
+from `data.project.id`, which remains the observed cell-local project
+identity — pfl never re-derives or verifies it.
 
 Each `elements` item joins three layers on one id:
 

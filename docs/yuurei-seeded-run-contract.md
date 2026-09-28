@@ -5,7 +5,11 @@ This document defines the seeded-workspace additions to the
 (release v0.7). It is grounded in the shipped yuurei implementation of
 [yuurei #202](https://github.com/shimpeiws/yuurei/issues/202) (seeded
 workspace, baseline identity, baseline-relative diff), verified at yuurei
-`d420ba3f026d7b6148ea0222a1136c4a3f2e9d69`.
+`d420ba3f026d7b6148ea0222a1136c4a3f2e9d69`. The additive
+`seed.source_project` field is grounded in
+[yuurei #214](https://github.com/shimpeiws/yuurei/issues/214), verified
+against the shipped build's emitted records (`git-`/`path-` derivation, the
+id/kind agreement rule, and `remote` present only for `git-remote`).
 
 Everything in the v0.6 run-directory contract still applies: the same
 confinement, digest-verification, and untrusted-input rules hold for every
@@ -41,6 +45,17 @@ field of `trace.json`:
 | `seed.baseline.files` | integer ≥ 0, required | File count of the materialized tree. |
 | `seed.baseline.bytes` | integer ≥ 0, required | Total byte size of the materialized tree. |
 | `seed.changes` | object, optional | Counts of the change set the run produced, when change collection completed. Each of `added`, `modified`, `deleted` is an integer ≥ 0. Omitted means the change set is **unknown** — collection did not complete — never that the run changed nothing. |
+| `seed.source_project` | object, optional | The run's **declared source-project identity** (yuurei #214): `{ id, kind, remote? }` where `id` is `git-<16 lowercase hex>` over the seed repository's normalized remote or `path-<16 lowercase hex>` over its canonical root, `kind` is `"git-remote"` or `"local-path"` matching the id prefix, and `remote` (a bounded string) is present only for `"git-remote"`. Stable across cells prepared from the same source — never derived from the temporary cell workspace. Absent on traces written before the field existed and on unseeded runs; absence means **no declared identity**, never "same" and never "different". |
+
+`seed.source_project` is **declared provenance**: yuurei asserts it and the
+observer carries it; Gatefold does not re-derive or independently verify it.
+It is not part of `requested_cell.digest`, and equal ids do not imply
+identical observations or executions — `cell_id`, `run_id`, and the pfl
+snapshot ids remain distinct per run. A record whose shape, `id`/`kind`
+agreement, or `remote` bounds is malformed is `invalid-shape` like any other
+seed field. The same identity and its `source`/`head` provenance are also
+recorded in `baseline-manifest.json` and declared to the observer through a
+cell-root `source-project.json` contract file.
 
 A run whose trace carries `seed` is a **seeded run**; a run without it is a
 **legacy empty-workspace run**. A seeded run additionally records

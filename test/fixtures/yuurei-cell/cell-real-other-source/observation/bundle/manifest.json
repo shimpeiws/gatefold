@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1",
+  "harnessDigest": "sha256:b8b1f49185cddb1a20e0b8ac9bf4bda87c4ecf78aa4ab35a9456edd1d00a6d84",
+  "observedSnapshotId": "obs_4375d7b60ca2",
+  "resolvedSnapshotId": "res_b04dc0c660bd",
+  "createdAt": "2026-09-28T12:39:09.747Z",
+  "containsRawEvidence": false,
+  "evidence": [
+    {
+      "elementId": "el_e35b608c21faf5bf",
+      "sourcePath": "(builtin) claude-code instruction layers",
+      "status": "missing",
+      "verified": false
+    }
+  ]
+}
