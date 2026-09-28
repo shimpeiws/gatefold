@@ -388,6 +388,19 @@ export function associationEntries(ctx: CellCtx): {
         ),
   );
 
+  // The run's own observation record is what declares the export
+  // artifact; an artifact no record declares belongs to no cell record
+  // and is never read as this run's observed configuration. It stays
+  // reportable as a retained manifest entry and as a record-consistency
+  // contradiction (below), but every `export.*` fact is `not-recorded`
+  // until a record declares the path (docs/v0.9-scope.md case matrix).
+  const exportDeclared =
+    observation.record !== undefined && observation.exportDeclared;
+  const undeclaredStatement = (): string =>
+    observation.record === undefined
+      ? "the trace records no observation record, so no export artifact is declared"
+      : `the observation record does not declare '${OBSERVATION_EXPORT_PATH}', so the manifest-listed artifact is not read as this run's export`;
+
   // association.observation
   if (observation.record === undefined) {
     entries.push(
@@ -436,10 +449,10 @@ export function associationEntries(ctx: CellCtx): {
     let state: CellEntryState;
     let completeness: CellCompleteness;
     let statement: string;
-    if (observation.record === undefined) {
+    if (!exportDeclared) {
       state = "not-recorded";
       completeness = "unknown";
-      statement = "no observation record declares an export artifact";
+      statement = undeclaredStatement();
     } else if (record === null) {
       state = observation.exportDeclared ? "unverifiable" : "not-recorded";
       completeness = "unknown";
@@ -495,7 +508,11 @@ export function associationEntries(ctx: CellCtx): {
     let state: CellEntryState;
     let completeness: CellCompleteness;
     let statement: string;
-    if (record === null || observation.exportDocument !== null) {
+    if (!exportDeclared) {
+      state = "not-recorded";
+      completeness = "unknown";
+      statement = undeclaredStatement();
+    } else if (record === null || observation.exportDocument !== null) {
       state = observation.exportDocument !== null ? "verified" : "not-recorded";
       completeness =
         observation.exportDocument === null
@@ -552,7 +569,13 @@ export function associationEntries(ctx: CellCtx): {
     let state: CellEntryState;
     let completeness: CellCompleteness;
     let statement: string;
-    if (observation.exportDocument === null) {
+    if (!exportDeclared) {
+      state = "not-recorded";
+      completeness = "unknown";
+      statement =
+        `${undeclaredStatement()}; the association between this run and ` +
+        `a retained export cannot be checked`;
+    } else if (observation.exportDocument === null) {
       state = noExportState(observation);
       completeness = "unknown";
       statement = `no interpretable export exists to compare: ${noExportReason(observation)}`;
@@ -616,7 +639,11 @@ export function associationEntries(ctx: CellCtx): {
     let state: CellEntryState;
     let completeness: CellCompleteness;
     let statement: string;
-    if (observation.exportDocument === null) {
+    if (!exportDeclared) {
+      state = "not-recorded";
+      completeness = "unknown";
+      statement = undeclaredStatement();
+    } else if (observation.exportDocument === null) {
       state = noExportState(observation);
       completeness = "unknown";
       statement = `no interpretable export exists to compare: ${noExportReason(observation)}`;
@@ -684,7 +711,11 @@ export function associationEntries(ctx: CellCtx): {
     let state: CellEntryState;
     let completeness: CellCompleteness;
     let statement: string;
-    if (observation.exportDocument === null) {
+    if (!exportDeclared) {
+      state = "not-recorded";
+      completeness = "unknown";
+      statement = undeclaredStatement();
+    } else if (observation.exportDocument === null) {
       state = noExportState(observation);
       completeness = "unknown";
       statement = `no interpretable export exists to compare: ${noExportReason(observation)}`;
@@ -728,7 +759,11 @@ export function associationEntries(ctx: CellCtx): {
     let state: CellEntryState;
     let completeness: CellCompleteness;
     let statement: string;
-    if (observation.exportDocument === null) {
+    if (!exportDeclared) {
+      state = "not-recorded";
+      completeness = "unknown";
+      statement = undeclaredStatement();
+    } else if (observation.exportDocument === null) {
       state = noExportState(observation);
       completeness = "unknown";
       statement = `no interpretable export exists to compare: ${noExportReason(observation)}`;
@@ -876,8 +911,11 @@ export function configurationEntries(
   const document = observation.exportDocument;
   const record = observation.exportRecord;
   if (document === null || record === null || binding !== "verified") {
+    // The availability marker mirrors the binding outcome: an undeclared or
+    // unrecorded association is absence (not-recorded), a contradiction is
+    // inconsistent, and a declared-but-unusable export is unverifiable.
     const state: CellEntryState =
-      binding === "not-recorded" && record === null
+      binding === "not-recorded"
         ? "not-recorded"
         : binding === "inconsistent"
           ? "inconsistent"

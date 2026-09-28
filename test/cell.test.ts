@@ -725,6 +725,58 @@ describe("cell report review regressions", () => {
     }
   });
 
+  it("does not read an export no observation record declares", async () => {
+    const base = tmp();
+    try {
+      // The manifest retains a matching export, but the trace records no
+      // observation at all: the artifact belongs to no cell record and is
+      // never published as this run's observed configuration.
+      const trace = cellTrace();
+      delete trace.observation;
+      const runDir = writeCellRun(base, "run", { trace });
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      for (const id of [
+        "association.export-retained",
+        "association.export-document",
+        "association.export-binding",
+        "association.export-runtime",
+      ])
+        expect(entryAt(result, id).state, id).toBe("not-recorded");
+      expect(entryAt(result, "configuration.availability").state).toBe(
+        "not-recorded",
+      );
+      expect(entriesWith(result, "configuration.element.")).toEqual([]);
+      expect(entriesWith(result, "configuration.relation.")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports an undeclared manifest export without reading it as the cell", async () => {
+    const base = tmp();
+    try {
+      // The observation record exists but declares no export artifact.
+      const runDir = writeCellRun(base, "run", {
+        trace: cellTrace({ observation: observationRecord({ artifacts: [] }) }),
+      });
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      expect(entryAt(result, "association.export-binding").state).toBe(
+        "not-recorded",
+      );
+      expect(entryAt(result, "association.export-retained").state).toBe(
+        "not-recorded",
+      );
+      expect(entryAt(result, "association.record-consistency").state).toBe(
+        "inconsistent",
+      );
+      expect(entriesWith(result, "configuration.element.")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("is deterministic under reordered relation and finding arrays", async () => {
     const base = tmp();
     try {
@@ -1049,6 +1101,102 @@ describe("compare-cells", () => {
       expect(entriesWith(result, "comparison.relation-removed.")).toHaveLength(
         1,
       );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("counts a duplicate finding once and a resolved-null transition not at all", async () => {
+    const base = tmp();
+    try {
+      const finding = {
+        rule: "opaque-runtime-layer",
+        message: "m1",
+        elementIds: ["el_bbb"],
+      };
+      const beforeDoc = boundExport("cell_20260920-a1", {
+        data: { elements: [element("el_bbb", { resolved: null })] },
+      });
+      const afterDoc = boundExport("cell_b", {
+        data: {
+          elements: [element("el_bbb")],
+          findings: [finding, { ...finding }],
+        },
+      });
+      const before = writeCellRun(base, "a", {
+        exportBytes: JSON.stringify(beforeDoc),
+      });
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
+        exportBytes: JSON.stringify(afterDoc),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      // Finding identity is the whole finding and the diff mirrors pfl's
+      // `findingsDiff`, which filters the array: a finding recorded twice
+      // in B is added once per recorded occurrence, never matched to A's set.
+      expect(entriesWith(result, "comparison.finding-added.")).toHaveLength(2);
+      expect(entriesWith(result, "comparison.finding-removed.")).toEqual([]);
+      // An element with no resolved layer on A and one on B is a
+      // newly-effective count, never a from -> to transition claim.
+      const effective = entryAt(result, "comparison.effective");
+      expect(effective.statement).toContain("1 element(s) newly effective");
+      expect(entriesWith(result, "comparison.status-change.")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("restates a bound v7 result's transitions", async () => {
+    const base = tmp();
+    try {
+      const v7 = join(base, "v7.json");
+      writeFileSync(
+        v7,
+        JSON.stringify({
+          schemaVersion: 7,
+          source: { command: "compare-evaluations" },
+          inputs: {
+            beforeRun: {
+              trace: { runId: "run-cell-1", taskDigest: "sha256:task-x" },
+            },
+            afterRun: {
+              trace: { runId: "run-cell-2", taskDigest: "sha256:task-x" },
+            },
+          },
+          transitions: [
+            {
+              criterionId: "c1",
+              kind: "check",
+              before: "pass",
+              after: "fail",
+              reason: "r",
+            },
+          ],
+        }),
+      );
+      const result = await compare(
+        writeCellRun(base, "a"),
+        writeCellRun(base, "b", {
+          trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
+          exportBytes: JSON.stringify(boundExport("cell_b")),
+        }),
+        v7,
+      );
+      expectSchemaValid(result);
+      expect(entryAt(result, "comparison.evaluation-binding").state).toBe(
+        "verified",
+      );
+      const transitions = entriesWith(
+        result,
+        "comparison.evaluation-transition.",
+      );
+      expect(transitions.map((e) => e.id)).toEqual([
+        "comparison.evaluation-transition.0",
+      ]);
+      expect(transitions[0]?.statement).toContain("'pass' → 'fail'");
+      expect(transitions[0]?.statement).toContain("c1");
+      expect(transitions[0]?.evidence[0]?.pointer).toBe("/transitions/0");
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

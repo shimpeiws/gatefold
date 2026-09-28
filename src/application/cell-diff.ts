@@ -90,7 +90,10 @@ export function byRelation(
 export function byFinding(a: PflFinding, b: PflFinding): number {
   return (
     compareBytes(a.rule, b.rule) ||
-    compareBytes(a.elementIds.join(""), b.elementIds.join("")) ||
+    // Element ids are joined with a NUL separator, as pfl's own comparator
+    // does: concatenating them directly would let ("ab", "c") and ("a",
+    // "bc") order equal and leave the emitted order input-dependent.
+    compareBytes(a.elementIds.join("\u0000"), b.elementIds.join("\u0000")) ||
     compareBytes(a.message, b.message)
   );
 }
