@@ -2,7 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v7.json",
   "title": "Gatefold evaluation-comparison result",
-  "description": "Machine-readable criterion-level comparison emitted by gatefold compare-evaluations --format json. Version 7 compares two yuurei runs evaluated against the same task-evaluation spec: each criterion's verdict transition is reported individually (including transitions into or out of unknown), with observed context kept separate. No aggregate score and no causal claim exists.",
+  "deprecated": true,
+  "description": "Machine-readable criterion-level comparison emitted by gatefold compare-evaluations --format json. Version 7 compares two yuurei runs evaluated against the same task-evaluation spec: each criterion's verdict transition is reported individually (including transitions into or out of unknown), with observed context kept separate. No aggregate score and no causal claim exists. Deprecated at v0.11: criterion verdicts belong to the analyze layer; this schema is frozen but kept readable.",
   "type": "object",
   "additionalProperties": false,
   "required": [

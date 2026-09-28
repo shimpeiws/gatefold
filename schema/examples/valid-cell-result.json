@@ -14,6 +14,7 @@
       "runtimeId": "claude-code",
       "requestedCellDigest": "sha256:req-cell",
       "observationStatus": "recorded",
+      "observationReason": null,
       "exportObservedSnapshotId": "obs_0123456789ab",
       "exportResolvedSnapshotId": "res_0123456789ab"
     }

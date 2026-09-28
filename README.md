@@ -2,15 +2,19 @@
 
 ![Gatefold ghost reading an open record sleeve on a sofa at night](docs/assets/gatefold-top.jpg)
 
-Gatefold is an evidence-backed judgement layer for coding-agent harnesses.
+Gatefold is an evidence layer for coding-agent harnesses: it binds,
+audits, and compares what the records show — verdicts belong to the
+separate `analyze` layer.
 It reads a [`pfl`](docs/pfl-export-contract.md) JSON document — a
 `pfl report --json` aggregate, a `pfl export --json` full snapshot, or a
 `pfl diff --json` A → B comparison — and, since v0.5, a pair of
 [`yuurei`](docs/yuurei-trace-contract.md) `trace.json` run records, and
 since v0.6 a pair of whole
 [`yuurei` run directories](docs/yuurei-run-contract.md) including their
-artifact manifests and `patch.diff` records, and since v0.7 an explicit
-[task-evaluation spec](docs/v0.7-scope.md) it can evaluate a
+artifact manifests and `patch.diff` records, and since v0.7
+(**deprecated** at v0.11 — see the
+[ownership decision](docs/v0.7-scope.md#ownership-and-deprecation)) an
+explicit [task-evaluation spec](docs/v0.7-scope.md) it can evaluate a
 [seeded run](docs/yuurei-seeded-run-contract.md) against, and since v0.8
 a single run directory it can [audit](docs/v0.8-scope.md) for internal
 consistency — no spec required. Since v0.9 it can also report one
@@ -44,13 +48,15 @@ gatefold compare-runs --before a-run-dir --after b-run-dir
                                                # artifacts included (schema v5)
 gatefold evaluate-run --run run-dir --spec task-spec.json \
                       [--check-report report.json] ...
-                                               # per-criterion pass/fail/unknown
-                                               # verdicts (schema v6)
+                                               # deprecated: per-criterion
+                                               # pass/fail/unknown verdicts
+                                               # (schema v6, frozen)
 gatefold compare-evaluations --before a-run-dir --after b-run-dir \
                              --spec task-spec.json \
                              [--before-check-report f] [--after-check-report f] ...
-                                               # per-criterion A → B verdict
-                                               # transitions (schema v7)
+                                               # deprecated: per-criterion
+                                               # A → B verdict transitions
+                                               # (schema v7, frozen)
 gatefold audit-run --run run-dir \
                    [--check-report report.json] ...
                                                # rubric-free evidence audit
@@ -91,7 +97,11 @@ Missing, truncated, digest-mismatched, and unverifiable artifacts are
 reported as such, never as absent output. See
 [v0.6 scope](docs/v0.6-scope.md) for the full contract.
 
-`evaluate-run` binds a task-evaluation spec to one run directory: the
+`evaluate-run` (**deprecated** at v0.11 — criterion verdicts belong to the
+`analyze` layer; the commands stay functional and frozen at schema v6/v7
+through 1.x, per the
+[ownership decision](docs/v0.7-scope.md#ownership-and-deprecation)) binds a
+task-evaluation spec to one run directory: the
 spec's `task.digest` (and `baseline.digest` when declared) must match the
 run. Each declarative criterion resolves to `pass`, `fail`, or `unknown`
 from verified evidence only — the baseline-relative `patch.diff`, the
@@ -174,6 +184,9 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.8 scope and run-audit contract](docs/v0.8-scope.md)
 - [v0.9 scope and cell-report contract](docs/v0.9-scope.md)
 - [v0.10 scope and repeated-cells contract](docs/v0.10-scope.md)
+- [v0.11 scope: analyze boundary and 1.0 readiness](docs/v0.11-scope.md)
+- [analyze evidence-accessor contract](docs/analyze-accessor-contract.md)
+- [Gatefold 1.0 public contract and release gate](docs/1.0-contract.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [Verification contract cards](docs/verification-contracts.md)

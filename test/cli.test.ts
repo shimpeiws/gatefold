@@ -109,6 +109,17 @@ describe("gatefold CLI", () => {
     expect(help).toContain("Exit codes");
   });
 
+  it("marks the v0.7 evaluation commands deprecated in help", async () => {
+    const help = await runCli(["--help"]);
+    expect(help).toContain("(deprecated) Evaluate a run");
+    expect(help).toContain("(deprecated) Compare two evaluated runs");
+    expect(help).toContain("Deprecated since v0.11");
+    // The other commands are not marked.
+    expect(help).not.toContain("(deprecated) Audit");
+    expect(help).not.toContain("(deprecated) Report");
+    expect(help).not.toContain("(deprecated) Compare two cells");
+  });
+
   it("rejects invalid --min-confidence values", async () => {
     for (const value of ["1.5", "-0.1", "abc", "0x1", "1e0", ""]) {
       await expect(

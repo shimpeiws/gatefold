@@ -92,6 +92,10 @@
           "enum": ["recorded", "partial", "unavailable", null],
           "description": "The trace's observation.status, or null when no observation record exists."
         },
+        "observationReason": {
+          "type": ["string", "null"],
+          "description": "The trace's observation.reason (yuurei ADR-0022), echoed verbatim, or null when the record carries none or no observation record exists. Optional so results emitted before the field existed stay valid."
+        },
         "exportObservedSnapshotId": {
           "type": ["string", "null"],
           "description": "data.snapshot.observedSnapshotId of the bound export, or null when none was bound."

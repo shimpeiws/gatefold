@@ -212,6 +212,7 @@ export function cellRunInput(
     runtimeId: trace.runtime.id,
     requestedCellDigest: trace.requestedCell?.digest ?? null,
     observationStatus: trace.observation?.status ?? null,
+    observationReason: trace.observation?.reason ?? null,
     exportObservedSnapshotId: snapshot?.observedSnapshotId ?? null,
     exportResolvedSnapshotId: snapshot?.resolvedSnapshotId ?? null,
   };

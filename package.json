@@ -1,7 +1,7 @@
 {
   "name": "@shimpeiws/gatefold",
   "version": "0.9.0",
-  "description": "Evidence-backed judgement for coding-agent harnesses",
+  "description": "Evidence-backed audit and comparison for coding-agent harnesses",
   "license": "MIT",
   "author": "Shimpei Takamatsu",
   "repository": {

@@ -1,6 +1,11 @@
 # Gatefold overview
 
-Gatefold is an open-source judgement layer for coding-agent harnesses.
+Gatefold is an open-source evidence layer for coding-agent harnesses:
+it validates inputs, binds identity, audits stored records, and compares
+what was observed — criterion verdicts belong to the separate `analyze`
+layer (the v0.7 `evaluate-run`/`compare-evaluations` commands remain as a
+deprecated, frozen compatibility surface; see
+[the ownership decision](v0.7-scope.md#ownership-and-deprecation)).
 
 Gatefold reads a normalized harness export and emits claims. Each claim carries evidence, provenance, and confidence. Gatefold does not reduce a harness to one health score.
 
