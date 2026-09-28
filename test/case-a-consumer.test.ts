@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
+import Ajv2020 from "ajv/dist/2020.js";
 
 // Case A consumer proof (issue #87): an external `analyze`-style evaluator
 // drives Gatefold's *packed* CLI over genuine upstream-produced runs and
@@ -438,8 +439,14 @@ describe("analyze Case A consumer over the packed CLI", () => {
 
     // The mutation harness: rewrite the result so the failure looks like
     // "observed, and nothing changed" — the representation Case A forbids.
+    // The forged entry copies real evidence so the mutation stays
+    // schema-valid: the consumer's rejection is semantic, not malformed-input.
     const mutated = JSON.parse(run.stdout) as Json;
     const entries = mutated.entries as Json[];
+    const donor = entries.find(
+      (e) => Array.isArray(e.evidence) && (e.evidence as Json[]).length > 0,
+    );
+    expect(donor).toBeDefined();
     mutated.entries = entries.filter(
       (e) => e.id !== "comparison.config-unavailable",
     );
@@ -449,9 +456,19 @@ describe("analyze Case A consumer over the packed CLI", () => {
       state: "recorded",
       completeness: "complete",
       statement: "the retained exports record no element differences",
-      evidence: [],
+      evidence: donor!.evidence,
       provenance: { transform: ["compare-cells", "entry:comparison.elements"] },
     });
+    const schema = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL("../schema/claim-result.v9.json", import.meta.url),
+        ),
+        "utf8",
+      ),
+    );
+    const validate = new Ajv2020({ strict: true }).compile(schema);
+    expect(validate(mutated), "forged entry must stay schema-valid").toBe(true);
     const verdict = evaluateCaseA(mutated);
     expect(verdict.admission).toBe("rejected");
     expect(verdict.violations).toContain(

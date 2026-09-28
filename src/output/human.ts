@@ -302,12 +302,15 @@ function formatCellEvidence(
 
 function formatCellInput(descriptor: CellRunInputDescriptor): string {
   const cell = descriptor.cellId ?? "not recorded";
+  // `?? null` so a legacy v9/v10 document that predates the optional field
+  // reads as no-recorded-reason instead of printing `reason 'undefined'`.
+  const reason = descriptor.observationReason ?? null;
   const observation =
     descriptor.observationStatus === null
       ? "absent"
-      : descriptor.observationReason === null
+      : reason === null
         ? descriptor.observationStatus
-        : `${descriptor.observationStatus} (reason '${sanitizeText(descriptor.observationReason)}')`;
+        : `${descriptor.observationStatus} (reason '${sanitizeText(reason)}')`;
   return (
     `${sanitizeText(descriptor.label)}: run ${descriptor.runId},` +
     ` cell ${sanitizeText(cell)}, observation ${observation}`

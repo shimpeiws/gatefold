@@ -53,6 +53,7 @@ Evidence `source` names resolve to files under that directory:
 | `baselineManifest` | `<label>/baseline-manifest.json` (verified document) |
 | `changes` | `<label>/changes.json` (verified document) |
 | `evaluation` | the `--evaluation` document as supplied (`inputs.evaluation.label`) |
+| `beforeEvaluation` / `afterEvaluation` (v9 compare) | the single supplied `--evaluation` v7 document — each source cites that document's `/inputs/beforeRun` resp. `/inputs/afterRun` half, **not** a file under either run directory |
 
 `compare-cells` prefixes each per-side source with `before`/`after`; v10
 prefixes them with the run label (`run1Trace`, `run2Export`, …). Sources
