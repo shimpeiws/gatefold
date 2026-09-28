@@ -1,0 +1,9 @@
+{
+  "artifacts": [
+    {
+      "path": "observation/export.json",
+      "kind": "export",
+      "digest": "sha256:89fd035bec11e90f6421e3d4b13acfdb698ae604269b425734ad3c115f4dae01"
+    }
+  ]
+}

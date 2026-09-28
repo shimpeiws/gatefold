@@ -64,7 +64,21 @@ function sameElement(a: PflSnapshotElement, b: PflSnapshotElement): boolean {
   );
 }
 
-function byRelation(a: PflSnapshotRelation, b: PflSnapshotRelation): number {
+/**
+ * Byte-order key for one relation endpoint triple. JSON encoding is
+ * injective, so two distinct (type, from, to) triples can never share a
+ * key — concatenating the parts would let `("a", "bc", "d")` and
+ * `("ab", "c", "d")` collapse into one entry and hide a real difference.
+ */
+export function relationKey(relation: PflSnapshotRelation): string {
+  return JSON.stringify([relation.type, relation.from, relation.to]);
+}
+
+/** Byte-order comparator for relations, shared by diffing and reporting. */
+export function byRelation(
+  a: PflSnapshotRelation,
+  b: PflSnapshotRelation,
+): number {
   return (
     compareBytes(a.from, b.from) ||
     compareBytes(a.to, b.to) ||
@@ -72,16 +86,13 @@ function byRelation(a: PflSnapshotRelation, b: PflSnapshotRelation): number {
   );
 }
 
-function byFinding(a: PflFinding, b: PflFinding): number {
+/** Byte-order comparator for findings, shared by diffing and reporting. */
+export function byFinding(a: PflFinding, b: PflFinding): number {
   return (
     compareBytes(a.rule, b.rule) ||
     compareBytes(a.elementIds.join(""), b.elementIds.join("")) ||
     compareBytes(a.message, b.message)
   );
-}
-
-function relationKey(relation: PflSnapshotRelation): string {
-  return `${relation.type}${relation.from}${relation.to}`;
 }
 
 /**

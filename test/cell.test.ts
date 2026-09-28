@@ -121,6 +121,23 @@ function exportDoc(
   };
 }
 
+/**
+ * A contract-shaped export document whose recorded `cellId` binds it to a
+ * named cell, so both sides of a comparison satisfy the association.
+ */
+function boundExport(
+  cellId: string,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const doc = exportDoc(overrides);
+  const data = doc.data as Record<string, unknown>;
+  data.snapshot = {
+    ...(data.snapshot as Record<string, unknown>),
+    cellId,
+  };
+  return doc;
+}
+
 function observationRecord(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
@@ -590,6 +607,173 @@ describe("report-cell", () => {
       rmSync(base, { recursive: true, force: true });
     }
   });
+
+  it("reads a real pfl v1.2.0 export a run directory retains", async () => {
+    // test/fixtures/yuurei-cell/cell-real-pfl/observation/export.json is
+    // genuine pfl v1.2.0 output (`pfl export --cell-id ... --json`, schema
+    // 2, 80 observed elements, completeness "partial"); only the run
+    // records around it are authored. See docs/v0.9-scope.md#fixtures.
+    const runDir = fileURLToPath(
+      new URL("./fixtures/yuurei-cell/cell-real-pfl", import.meta.url),
+    );
+    const result = await report(runDir);
+    expectSchemaValid(result);
+    expect(entryAt(result, "association.export-binding").state).toBe(
+      "verified",
+    );
+    expect(entryAt(result, "association.export-document").state).toBe(
+      "verified",
+    );
+    const elements = entriesWith(result, "configuration.element.");
+    expect(elements).toHaveLength(80);
+    for (const entry of elements) {
+      expect(entry.state).toBe("recorded");
+      expect(entry.completeness).toBe("partial");
+      expect(entry.evidence[0]?.digest).toBeDefined();
+    }
+    expect(entryAt(result, "configuration.completeness").statement).toContain(
+      "partial",
+    );
+  });
+});
+
+describe("cell report review regressions", () => {
+  it("keeps a supported export without a cellId reportable", async () => {
+    const base = tmp();
+    try {
+      // pfl before v1.2.0 (and an authored record) may omit the key
+      // entirely: the association is then unverifiable, never an abort.
+      const doc = exportDoc();
+      delete (doc.data as { snapshot: Record<string, unknown> }).snapshot
+        .cellId;
+      const runDir = writeCellRun(base, "run", {
+        exportBytes: JSON.stringify(doc),
+      });
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      const binding = entryAt(result, "association.export-binding");
+      expect(binding.state).toBe("unverifiable");
+      expect(binding.completeness).toBe("unknown");
+      expect(binding.statement).toContain(
+        "does not carry data.snapshot.cellId",
+      );
+      expect(binding.evidence.map((e) => e.pointer)).toContain(
+        "/data/snapshot",
+      );
+      expect(entryAt(result, "configuration.availability").state).toBe(
+        "unverifiable",
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("flags a recorded observation whose export the manifest does not retain", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeCellRun(base, "run", { exportListed: false });
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      expect(entryAt(result, "association.export-retained").state).toBe(
+        "unverifiable",
+      );
+      const consistency = entryAt(result, "association.record-consistency");
+      expect(consistency.state).toBe("inconsistent");
+      expect(consistency.statement).toContain("does not retain");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a v7 comparison document supplied to a single cell as the wrong kind", async () => {
+    const base = tmp();
+    try {
+      const v7 = join(base, "v7.json");
+      writeFileSync(
+        v7,
+        JSON.stringify({
+          schemaVersion: 7,
+          source: { command: "compare-evaluations" },
+          inputs: {
+            beforeRun: {
+              trace: { runId: "run-cell-1", taskDigest: "sha256:task-x" },
+            },
+            afterRun: {
+              trace: { runId: "run-cell-2", taskDigest: "sha256:task-x" },
+            },
+          },
+          transitions: [
+            {
+              criterionId: "c1",
+              kind: "check",
+              before: "pass",
+              after: "fail",
+              reason: "r",
+            },
+          ],
+        }),
+      );
+      const result = await report(writeCellRun(base, "run"), v7);
+      expectSchemaValid(result);
+      const binding = entryAt(result, "evaluation.binding");
+      expect(binding.state).toBe("unverifiable");
+      expect(binding.statement).toContain("v7");
+      expect(binding.statement).toContain("v6");
+      expect(entriesWith(result, "evaluation.eval-")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("is deterministic under reordered relation and finding arrays", async () => {
+    const base = tmp();
+    try {
+      const relations = [
+        {
+          type: "accumulates-with",
+          from: "el_aaa",
+          to: "el_bbb",
+        },
+        { type: "shadows", from: "el_bbb", to: "el_aaa" },
+      ];
+      const findings = [
+        {
+          rule: "opaque-runtime-layer",
+          message: "m1",
+          elementIds: ["el_aaa"],
+        },
+        {
+          rule: "conditional-activation",
+          message: "m2",
+          elementIds: ["el_bbb"],
+        },
+      ];
+      const plain = exportDoc({
+        data: { relations, findings },
+      });
+      const reordered = exportDoc({
+        data: {
+          elements: [element("el_bbb"), element("el_aaa")],
+          relations: [...relations].reverse(),
+          findings: [...findings].reverse(),
+        },
+      });
+      const config = async (name: string, bytes: string) => {
+        const result = await report(
+          writeCellRun(base, name, { exportBytes: bytes }),
+        );
+        return result.entries
+          .filter((e) => e.lane === "configuration")
+          .map((e) => ({ id: e.id, statement: e.statement }));
+      };
+      const a = await config("plain", JSON.stringify(plain));
+      const b = await config("reordered", JSON.stringify(reordered));
+      expect(b).toEqual(a);
+      expect(a.map((e) => e.id)).toContain("configuration.relation.0");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("compare-cells", () => {
@@ -762,7 +946,16 @@ describe("compare-cells", () => {
         trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
         exportBytes: JSON.stringify(
           exportDoc({
-            data: { elements: [element("el_bbb"), element("el_ccc")] },
+            data: {
+              snapshot: {
+                observedSnapshotId: "obs_0123456789ab",
+                resolvedSnapshotId: "res_0123456789ab",
+                capturedAt: "2026-09-20T09:59:00.000Z",
+                schemaVersion: "2",
+                cellId: "cell_b",
+              },
+              elements: [element("el_bbb"), element("el_ccc")],
+            },
           }),
         ),
       });
@@ -773,6 +966,134 @@ describe("compare-cells", () => {
       expect(cmp(r1).map((e) => e.id)).toEqual(cmp(r2).map((e) => e.id));
       expect(formatJson(r1)).toContain("comparison.element-added.el_ccc");
       expect(formatJson(r2)).toContain("comparison.element-added.el_ccc");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("withholds the configuration difference when a side's export is not bound", async () => {
+    const base = tmp();
+    try {
+      const before = writeCellRun(base, "a");
+      // B retains a parseable export, but its recorded cellId does not
+      // match its own trace's cell_id: no bound configuration to compare.
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_other" }),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const unavailable = entryAt(result, "comparison.config-unavailable");
+      expect(unavailable.state).toBe("unverifiable");
+      expect(unavailable.statement).toContain("not bound to its cell");
+      expect(unavailable.statement).toContain("may or may not differ");
+      expect(entriesWith(result, "comparison.element-added.")).toEqual([]);
+      expect(entriesWith(result, "comparison.element-removed.")).toEqual([]);
+      expect(entriesWith(result, "comparison.element-changed.")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("does not read a partial patch as a complete file set", async () => {
+    const base = tmp();
+    try {
+      const before = writeCellRun(base, "a");
+      const afterDir = writeCellRun(base, "b", {
+        trace: cellTrace({
+          run_id: "run-cell-2",
+          cell_id: "cell_b",
+          patch: { base: "seeded", state: "partial" },
+        }),
+        exportBytes: JSON.stringify(boundExport("cell_b")),
+      });
+      const result = await compare(before, afterDir);
+      expectSchemaValid(result);
+      const patch = entryAt(result, "comparison.patch");
+      expect(patch.state).toBe("recorded");
+      expect(patch.completeness).toBe("partial");
+      expect(patch.statement).toContain("cannot be compared as complete sets");
+      // Omitted content is never read as deletion.
+      expect(entriesWith(result, "comparison.patch-file-removed.")).toEqual([]);
+      expect(entriesWith(result, "comparison.patch-file-added.")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps distinct relations distinct when their concatenations collide", async () => {
+    const base = tmp();
+    try {
+      // "resolves-to" + from + to collides across these two triples; the
+      // comparison must still report one addition and one removal.
+      const beforeDoc = boundExport("cell_20260920-a1", {
+        data: {
+          elements: [element("el_a"), element("aX")],
+          relations: [{ type: "resolves-to", from: "el_a", to: "aX" }],
+        },
+      });
+      const afterDoc = boundExport("cell_b", {
+        data: {
+          elements: [element("el_aa"), element("X")],
+          relations: [{ type: "resolves-to", from: "el_aa", to: "X" }],
+        },
+      });
+      const before = writeCellRun(base, "a", {
+        exportBytes: JSON.stringify(beforeDoc),
+      });
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
+        exportBytes: JSON.stringify(afterDoc),
+      });
+      const result = await compare(before, after);
+      expect(entriesWith(result, "comparison.relation-added.")).toHaveLength(1);
+      expect(entriesWith(result, "comparison.relation-removed.")).toHaveLength(
+        1,
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a v6 result supplied to a comparison as the wrong kind", async () => {
+    const base = tmp();
+    try {
+      const v6 = join(base, "v6.json");
+      writeFileSync(
+        v6,
+        JSON.stringify({
+          schemaVersion: 6,
+          source: { command: "evaluate-run" },
+          inputs: {
+            run: {
+              trace: { runId: "run-cell-1", taskDigest: "sha256:task-x" },
+            },
+          },
+          evaluations: [
+            {
+              criterionId: "c1",
+              kind: "check",
+              verdict: "pass",
+              reason: "r",
+            },
+          ],
+        }),
+      );
+      const result = await compare(
+        writeCellRun(base, "a"),
+        writeCellRun(base, "b", {
+          trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
+          exportBytes: JSON.stringify(boundExport("cell_b")),
+        }),
+        v6,
+      );
+      expectSchemaValid(result);
+      const binding = entryAt(result, "comparison.evaluation-binding");
+      expect(binding.state).toBe("unverifiable");
+      expect(binding.statement).toContain("v6");
+      expect(binding.statement).toContain("v7");
+      expect(entriesWith(result, "comparison.evaluation-transition.")).toEqual(
+        [],
+      );
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

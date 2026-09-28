@@ -2,10 +2,11 @@ import { compareBytes } from "../domain/byte-order.js";
 import {
   CELL_SCHEMA_VERSION,
   type CellEntry,
+  type CellEntryState,
   type CellEvidenceReference,
   type CellReportResult,
 } from "../domain/cell.js";
-import { PflExportError } from "../input/pfl-export.js";
+import { PflExportError, type PflExportDocument } from "../input/pfl-export.js";
 import type { SuppliedEvaluation } from "../input/cell-evaluation.js";
 import type { CellRun } from "../input/yuurei-cell.js";
 import type { OutputFile } from "../input/yuurei-seeded-run.js";
@@ -19,6 +20,7 @@ import {
   assertValidCellResult,
 } from "../domain/validate-cell.js";
 import {
+  associationEntries,
   cellDocs,
   cellEntries,
   cellEntry,
@@ -124,6 +126,66 @@ function evaluationInputsHas(
     inputs !== null &&
     Object.prototype.hasOwnProperty.call(inputs, key)
   );
+}
+
+/**
+ * Whether one side's stored patch is a complete change record, by the
+ * conditions the v0.8 audit applies to `patch.completeness`
+ * (docs/v0.8-scope.md): the trace declares `complete` over
+ * digest-verified, untruncated bytes that parse fully, with no omission
+ * or generation-failure diagnostic. Only then can a file-set difference
+ * be read as a complete account of the change set.
+ */
+function patchIsComplete(run: CellRun["run"]): boolean {
+  const entry = run.patchEntryIndex;
+  return (
+    run.trace.patch?.state === "complete" &&
+    run.patch !== null &&
+    run.patch.complete !== false &&
+    entry !== null &&
+    run.entries[entry].state === "verified" &&
+    !run.patchMalformed &&
+    run.patchOmissionIndex === -1 &&
+    run.patchFailureIndex === -1
+  );
+}
+
+/**
+ * How complete one side's retained patch evidence is: `complete` only
+ * under `patchIsComplete`, `partial` when the record itself declares or
+ * shows omissions (truncation, an omission/generation-failed diagnostic),
+ * and `unknown` when nothing certifies coverage — an untruncated patch is
+ * not by itself a complete change set.
+ */
+function patchCompleteness(
+  run: CellRun["run"],
+): "complete" | "partial" | "unknown" {
+  if (patchIsComplete(run)) return "complete";
+  const declared = run.trace.patch?.state;
+  if (
+    declared === "partial" ||
+    declared === "absent" ||
+    run.patchEntryTruncated ||
+    run.patchMalformed ||
+    run.patchOmissionIndex !== -1 ||
+    run.patchFailureIndex !== -1
+  )
+    return "partial";
+  return "unknown";
+}
+
+/** A short account of one side's retained patch record, for statements. */
+function patchAccount(run: CellRun["run"]): string {
+  const parts: string[] = [
+    `state '${run.trace.patch?.state ?? "not recorded"}'`,
+  ];
+  if (run.patchEntryTruncated) parts.push("truncated stored bytes");
+  if (run.patchMalformed) parts.push("bytes that do not parse");
+  if (run.patchOmissionIndex !== -1)
+    parts.push("a recorded omission diagnostic");
+  if (run.patchFailureIndex !== -1)
+    parts.push("a generation-failed diagnostic");
+  return parts.join(", ");
 }
 
 /** Whether two recorded patch blocks describe identical output content. */
@@ -280,10 +342,21 @@ function comparisonEntries(
     );
   }
 
-  // The configuration difference requires a bound export on each side.
+  // The configuration difference requires a *bound* export on each side:
+  // a parsed document whose recorded cellId equals its own trace's
+  // cell_id. A side whose association is unverifiable or contradicted has
+  // no verified configuration to compare, so the difference is withheld
+  // rather than computed from documents the run does not bind to.
   const exportA = before.observation.exportDocument;
   const exportB = after.observation.exportDocument;
-  if (exportA !== null && exportB !== null) {
+  const bindingA = associationEntries(beforeCtx).binding;
+  const bindingB = associationEntries(afterCtx).binding;
+  if (
+    exportA !== null &&
+    exportB !== null &&
+    bindingA === "verified" &&
+    bindingB === "verified"
+  ) {
     if (exportA.data.project.id !== exportB.data.project.id)
       throw mismatched(
         `the retained exports describe different projects ` +
@@ -489,12 +562,42 @@ function comparisonEntries(
         ),
       );
   } else {
+    const side = (
+      name: string,
+      document: PflExportDocument | null,
+      binding: CellEntryState,
+    ) =>
+      document === null
+        ? `${name} retains no interpretable export (association '${binding}')`
+        : `${name}'s retained export is not bound to its cell (association '${binding}')`;
     const missing =
       exportA === null && exportB === null
         ? "neither cell retains a bound export"
-        : exportA === null
-          ? "cell A retains no bound export"
-          : "cell B retains no bound export";
+        : exportA === null || bindingA !== "verified"
+          ? side("cell A", exportA, bindingA)
+          : side("cell B", exportB, bindingB);
+    const evidence: CellEvidenceReference[] = [
+      {
+        source: "beforeTrace",
+        pointer: before.observation.record === undefined ? "" : "/observation",
+        ...(before.observation.record === undefined
+          ? { note: "no observation field" }
+          : {}),
+      },
+      {
+        source: "afterTrace",
+        pointer: after.observation.record === undefined ? "" : "/observation",
+        ...(after.observation.record === undefined
+          ? { note: "no observation field" }
+          : {}),
+      },
+    ];
+    // A side that does retain a document but does not bind to its cell is
+    // cited at the cellId the binding failed on, so the caveat is checkable.
+    if (exportA !== null)
+      evidence.push(exportSideEv(beforeCtx, "/data/snapshot/cellId"));
+    if (exportB !== null)
+      evidence.push(exportSideEv(afterCtx, "/data/snapshot/cellId"));
     entries.push(
       cmpEntry(
         "comparison.config-unavailable",
@@ -508,24 +611,7 @@ function comparisonEntries(
         `the configuration difference cannot be reported: ${missing}; ` +
           "the configuration may or may not differ — this is never 'no " +
           "configuration change'",
-        [
-          {
-            source: "beforeTrace",
-            pointer:
-              before.observation.record === undefined ? "" : "/observation",
-            ...(before.observation.record === undefined
-              ? { note: "no observation field" }
-              : {}),
-          },
-          {
-            source: "afterTrace",
-            pointer:
-              after.observation.record === undefined ? "" : "/observation",
-            ...(after.observation.record === undefined
-              ? { note: "no observation field" }
-              : {}),
-          },
-        ],
+        evidence,
       ),
     );
   }
@@ -642,15 +728,36 @@ function comparisonEntries(
       );
     } else {
       const patchDiff = diffOutputFileSets(patchA.files, patchB.files);
+      const completenessA = patchCompleteness(before.run);
+      const completenessB = patchCompleteness(after.run);
+      const bothComplete =
+        completenessA === "complete" && completenessB === "complete";
+      // A partial or uncertified patch may omit files, so its absent paths
+      // are never read as deletions: only two complete records support a
+      // file-set difference, and only then are per-file entries emitted.
+      const completeness: "complete" | "partial" | "unknown" = bothComplete
+        ? "complete"
+        : completenessA === "unknown" || completenessB === "unknown"
+          ? "unknown"
+          : "partial";
       entries.push(
         cmpEntry(
           "comparison.patch",
           "recorded",
-          "complete",
-          `between the retained patches: ${patchDiff.added.length} file(s) ` +
-            `added, ${patchDiff.removed.length} removed, ` +
-            `${patchDiff.changed.length} changed, ` +
-            `${patchDiff.identical.length} identical`,
+          completeness,
+          bothComplete
+            ? `between the retained patches: ${patchDiff.added.length} file(s) ` +
+                `added, ${patchDiff.removed.length} removed, ` +
+                `${patchDiff.changed.length} changed, ` +
+                `${patchDiff.identical.length} identical`
+            : `the two patch file sets cannot be compared as complete sets: ` +
+                `A's patch records ${patchAccount(before.run)} and B's records ` +
+                `${patchAccount(after.run)}; within the retained patches ` +
+                `${patchDiff.added.length} file(s) appear only in B, ` +
+                `${patchDiff.removed.length} only in A, ` +
+                `${patchDiff.changed.length} in both with different content, and ` +
+                `${patchDiff.identical.length} in both identical — a file a ` +
+                `partial record omits is not evidence of deletion`,
           [
             {
               source: "beforePatch",
@@ -665,63 +772,65 @@ function comparisonEntries(
           ],
         ),
       );
-      for (const file of patchDiff.added)
-        entries.push(
-          cmpEntry(
-            `comparison.patch-file-added.${file.path}`,
-            "recorded",
-            "complete",
-            `file '${file.path}' appears in B's patch and not in A's`,
-            [
-              {
-                source: "afterPatch",
-                pointer: `/artifacts/${after.run.patchEntryIndex}`,
-                ...entryDigest(after.run, after.run.patchEntryIndex),
-                path: file.path,
-              },
-            ],
-          ),
-        );
-      for (const file of patchDiff.removed)
-        entries.push(
-          cmpEntry(
-            `comparison.patch-file-removed.${file.path}`,
-            "recorded",
-            "complete",
-            `file '${file.path}' appears in A's patch and not in B's`,
-            [
-              {
-                source: "beforePatch",
-                pointer: `/artifacts/${before.run.patchEntryIndex}`,
-                ...entryDigest(before.run, before.run.patchEntryIndex),
-                path: file.path,
-              },
-            ],
-          ),
-        );
-      for (const change of patchDiff.changed)
-        entries.push(
-          cmpEntry(
-            `comparison.patch-file-changed.${change.file.path}`,
-            "recorded",
-            "complete",
-            `file '${change.file.path}' changed between the two retained patches`,
-            [
-              {
-                source: "beforePatch",
-                pointer: `/artifacts/${before.run.patchEntryIndex}`,
-                ...entryDigest(before.run, before.run.patchEntryIndex),
-                path: change.file.path,
-              },
-              {
-                source: "afterPatch",
-                pointer: `/artifacts/${after.run.patchEntryIndex}`,
-                ...entryDigest(after.run, after.run.patchEntryIndex),
-                path: change.file.path,
-              },
-            ],
-          ),
-        );
+      if (bothComplete) {
+        for (const file of patchDiff.added)
+          entries.push(
+            cmpEntry(
+              `comparison.patch-file-added.${file.path}`,
+              "recorded",
+              "complete",
+              `file '${file.path}' appears in B's patch and not in A's`,
+              [
+                {
+                  source: "afterPatch",
+                  pointer: `/artifacts/${after.run.patchEntryIndex}`,
+                  ...entryDigest(after.run, after.run.patchEntryIndex),
+                  path: file.path,
+                },
+              ],
+            ),
+          );
+        for (const file of patchDiff.removed)
+          entries.push(
+            cmpEntry(
+              `comparison.patch-file-removed.${file.path}`,
+              "recorded",
+              "complete",
+              `file '${file.path}' appears in A's patch and not in B's`,
+              [
+                {
+                  source: "beforePatch",
+                  pointer: `/artifacts/${before.run.patchEntryIndex}`,
+                  ...entryDigest(before.run, before.run.patchEntryIndex),
+                  path: file.path,
+                },
+              ],
+            ),
+          );
+        for (const change of patchDiff.changed)
+          entries.push(
+            cmpEntry(
+              `comparison.patch-file-changed.${change.file.path}`,
+              "recorded",
+              "complete",
+              `file '${change.file.path}' changed between the two retained patches`,
+              [
+                {
+                  source: "beforePatch",
+                  pointer: `/artifacts/${before.run.patchEntryIndex}`,
+                  ...entryDigest(before.run, before.run.patchEntryIndex),
+                  path: change.file.path,
+                },
+                {
+                  source: "afterPatch",
+                  pointer: `/artifacts/${after.run.patchEntryIndex}`,
+                  ...entryDigest(after.run, after.run.patchEntryIndex),
+                  path: change.file.path,
+                },
+              ],
+            ),
+          );
+      }
     }
   }
 
@@ -760,6 +869,11 @@ function comparisonEntries(
   );
 
   if (evaluation !== undefined) {
+    // An A → B comparison presents only a v7 `compare-evaluations` result:
+    // a v6 document records one run's verdicts and carries no transitions,
+    // so it is reported as the wrong kind rather than as an unbound pair.
+    const wrongKind =
+      evaluation.state === "parsed" && evaluation.schemaVersion !== 7;
     const boundA =
       evaluation.state === "parsed" &&
       evaluation.beforeRun !== null &&
@@ -773,7 +887,7 @@ function comparisonEntries(
     entries.push(
       cmpEntry(
         "comparison.evaluation-binding",
-        evaluation.state !== "parsed"
+        evaluation.state !== "parsed" || wrongKind
           ? "unverifiable"
           : boundA && boundB
             ? "verified"
@@ -781,10 +895,15 @@ function comparisonEntries(
         boundA && boundB ? "complete" : "unknown",
         evaluation.state !== "parsed"
           ? `the supplied document is not a usable gatefold result: ${evaluation.error}`
-          : boundA && boundB
-            ? "the supplied v7 evaluation comparison binds to both runs"
-            : `the supplied evaluation comparison does not bind to these runs ` +
-              `(A bound: ${boundA}, B bound: ${boundB}); its transitions are withheld`,
+          : wrongKind
+            ? `the supplied document is a gatefold v${evaluation.schemaVersion} ` +
+              `single-run result; an A → B comparison presents only a v7 ` +
+              `compare-evaluations result, so its criterion results are not ` +
+              `recorded A → B transitions`
+            : boundA && boundB
+              ? "the supplied v7 evaluation comparison binds to both runs"
+              : `the supplied evaluation comparison does not bind to these runs ` +
+                `(A bound: ${boundA}, B bound: ${boundB}); its transitions are withheld`,
         [
           evaluationInputsHas(evaluation, "beforeRun")
             ? { source: "beforeEvaluation", pointer: "/inputs/beforeRun" }

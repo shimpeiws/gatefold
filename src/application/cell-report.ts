@@ -27,6 +27,7 @@ import {
 } from "../input/yuurei-cell.js";
 import type { AuditedArtifactRecord } from "../input/yuurei-audit-run.js";
 import { auditRun } from "./audit-run.js";
+import { byFinding, byRelation } from "./cell-diff.js";
 import { MAX_EMITTED_CLAIMS, MAX_EVIDENCE_REFERENCES } from "./limits.js";
 
 /**
@@ -301,10 +302,35 @@ function exportRefEv(
   record: AuditedArtifactRecord,
   pointer: string,
   elementId?: string,
+  note?: string,
 ): CellEvidenceReference {
   return ctx.cell.observation.exportDocument !== null
     ? exportDocEv(ctx, record, pointer, elementId)
-    : exportEntryEv(ctx, record, "no verified export document");
+    : exportEntryEv(ctx, record, note ?? "no verified export document");
+}
+
+/**
+ * Evidence for an optional field inside the bound export's `data.snapshot`:
+ * the field pointer when the document records the key, otherwise the
+ * `data.snapshot` object with a note. A key a document does not carry
+ * (pfl before v1.2.0, or an authored record) leaves the reference
+ * resolvable and still says which field was absent.
+ */
+function exportNestedEv(
+  ctx: CellCtx,
+  record: AuditedArtifactRecord,
+  parent: string,
+  field: string,
+): CellEvidenceReference {
+  const document = ctx.cell.observation.exportDocument;
+  const parentValue = document === null ? undefined : document.data.snapshot;
+  const present =
+    typeof parentValue === "object" &&
+    parentValue !== null &&
+    Object.prototype.hasOwnProperty.call(parentValue, field);
+  return present
+    ? exportRefEv(ctx, record, `${parent}/${field}`)
+    : exportRefEv(ctx, record, parent, undefined, `no ${field} field`);
 }
 
 function exportDocEvidence(ctx: CellCtx): CellEvidenceReference[] {
@@ -567,7 +593,7 @@ export function associationEntries(ctx: CellCtx): {
         : cellEv(ctx, "trace", "/cell_id"),
     ];
     if (record !== null)
-      evidence.push(exportRefEv(ctx, record, "/data/snapshot/cellId"));
+      evidence.push(exportNestedEv(ctx, record, "/data/snapshot", "cellId"));
     else
       evidence.push(
         cellEv(ctx, "manifest", "", { note: "no export manifest entry" }),
@@ -792,6 +818,14 @@ export function associationEntries(ctx: CellCtx): {
         problems.push(
           `the manifest retains '${OBSERVATION_EXPORT_PATH}' but the observation record does not declare it`,
         );
+      if (
+        observation.exportDeclared &&
+        record === null &&
+        (obsRecord.status === "recorded" || obsRecord.status === "partial")
+      )
+        problems.push(
+          `records status '${obsRecord.status}' but the manifest does not retain '${OBSERVATION_EXPORT_PATH}': a declared-and-retained export is what the status asserts`,
+        );
       const extras =
         observation.otherDeclaredPaths.length === 0
           ? ""
@@ -948,12 +982,16 @@ export function configurationEntries(
     );
   }
 
-  for (const [index, relation] of document.data.relations.entries()) {
+  for (const [position, [index, relation]] of [
+    ...document.data.relations.entries(),
+  ]
+    .sort((a, b) => byRelation(a[1], b[1]) || a[0] - b[0])
+    .entries()) {
     entries.push(
       cellEntry(
         ctx,
         "configuration",
-        `configuration.relation.${index}`,
+        `configuration.relation.${position}`,
         "recorded",
         completeness,
         `the export records relation '${relation.type}' from ` +
@@ -963,12 +1001,16 @@ export function configurationEntries(
     );
   }
 
-  for (const [index, finding] of document.data.findings.entries()) {
+  for (const [position, [index, finding]] of [
+    ...document.data.findings.entries(),
+  ]
+    .sort((a, b) => byFinding(a[1], b[1]) || a[0] - b[0])
+    .entries()) {
     entries.push(
       cellEntry(
         ctx,
         "configuration",
-        `configuration.finding.${index}`,
+        `configuration.finding.${position}`,
         "recorded",
         completeness,
         `the export records a '${finding.rule}' finding on ` +
@@ -1297,8 +1339,14 @@ export function evaluationEntries(
     ),
   ];
 
-  const runBinding =
-    evaluation.schemaVersion === 6 ? evaluation.run : evaluation.beforeRun;
+  // A single-cell report presents only a v6 `evaluate-run` result. A v7
+  // `compare-evaluations` document describes two runs and has no
+  // per-run verdict field, so it is reported as a wrong-kind document
+  // rather than bound through its `beforeRun` and rendered from a field
+  // it does not carry.
+  const wrongKind =
+    evaluation.state === "parsed" && evaluation.schemaVersion !== 6;
+  const runBinding = wrongKind ? null : evaluation.run;
   const bound =
     evaluation.state === "parsed" &&
     runBinding !== null &&
@@ -1317,15 +1365,19 @@ export function evaluationEntries(
       evaluation.state !== "parsed" || runBinding === null
         ? "unknown"
         : "complete",
-      evaluation.state !== "parsed" || runBinding === null
-        ? "the supplied document records no run identity to bind against"
-        : bound
-          ? `the supplied evaluation's recorded run ('${runBinding.runId}', ` +
-            `task ${runBinding.taskDigest}) matches this run's trace`
-          : `the supplied evaluation's recorded run ` +
-            `('${runBinding.runId}', task ${runBinding.taskDigest}) does ` +
-            `not match this run ('${ctx.cell.run.trace.runId}', task ` +
-            `${ctx.cell.run.trace.task.digest}); its verdicts are withheld`,
+      wrongKind
+        ? `the supplied document is a gatefold v${evaluation.schemaVersion} ` +
+            `comparison of two runs; a single-cell report presents only a v6 ` +
+            `evaluate-run result, so its transitions are not this run's verdicts`
+        : evaluation.state !== "parsed" || runBinding === null
+          ? "the supplied document records no run identity to bind against"
+          : bound
+            ? `the supplied evaluation's recorded run ('${runBinding.runId}', ` +
+              `task ${runBinding.taskDigest}) matches this run's trace`
+            : `the supplied evaluation's recorded run ` +
+              `('${runBinding.runId}', task ${runBinding.taskDigest}) does ` +
+              `not match this run ('${ctx.cell.run.trace.runId}', task ` +
+              `${ctx.cell.run.trace.task.digest}); its verdicts are withheld`,
       [
         typeof evaluation.document === "object" &&
         evaluation.document !== null &&

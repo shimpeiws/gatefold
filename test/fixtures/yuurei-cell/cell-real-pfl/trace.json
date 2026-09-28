@@ -1,0 +1,65 @@
+{
+  "schema_version": "0.3",
+  "run_id": "run-obs_24aaef3576cf",
+  "yuurei_version": "0.3.0",
+  "started_at": "2026-09-28T05:15:40Z",
+  "finished_at": "2026-09-28T05:15:52Z",
+  "runtime": {
+    "id": "codex",
+    "version": "0.156.1"
+  },
+  "model": {
+    "requested": "gpt-5",
+    "resolved": null,
+    "resolved_reason": "unobserved"
+  },
+  "profile": {
+    "name": "codex-minimal",
+    "digest": "sha256:real-profile"
+  },
+  "task": {
+    "source": "probe",
+    "digest": "sha256:real-task"
+  },
+  "requested_cell": {
+    "digest": "sha256:real-requested-cell",
+    "inputs_version": 2
+  },
+  "cell_id": "cell_20260928T120000Z-a1b2",
+  "observation": {
+    "observer": {
+      "id": "pfl",
+      "version": "1.2.0"
+    },
+    "status": "recorded",
+    "reason": null,
+    "completeness": "partial",
+    "snapshot_ids": {
+      "observed": "obs_24aaef3576cf",
+      "resolved": "res_5559432b2b84"
+    },
+    "artifacts": [
+      {
+        "path": "observation/export.json",
+        "kind": "export"
+      }
+    ]
+  },
+  "isolation": {
+    "strategy": "cell1",
+    "verified": true
+  },
+  "execution": {
+    "exit_code": 0,
+    "signal": null,
+    "duration_ms": 12000,
+    "timed_out": false
+  },
+  "usage": {
+    "input_tokens": 14,
+    "output_tokens": 2
+  },
+  "cost": null,
+  "artifacts": [],
+  "diagnostics": []
+}
