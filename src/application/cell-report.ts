@@ -260,11 +260,14 @@ function availabilityReason(
       "(see association.export-binding): the document exists and was read, " +
       "but it is not bound to this cell"
     );
-  if (observation.exportDocument !== null)
-    return (
-      "the retained export is not bound to this cell: its recorded cellId " +
-      "is null or the trace records none, so the association cannot be checked"
-    );
+  if (observation.exportDocument !== null) {
+    const cellId = observation.exportDocument.data.snapshot.cellId;
+    return cellId === undefined
+      ? "the retained export does not record a cellId, so the association cannot be checked"
+      : cellId === null
+        ? "the retained export records cellId: null — it asserts no cell association"
+        : "the trace records no cell_id, so the retained export's association cannot be checked";
+  }
   return noExportReason(observation);
 }
 

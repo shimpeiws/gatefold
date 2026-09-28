@@ -969,6 +969,40 @@ describe("cell report review regressions", () => {
     }
   });
 
+  it("stops a missing cellId and a null cellId from reading alike", async () => {
+    const base = tmp();
+    try {
+      const nullCellId = exportDoc();
+      (nullCellId.data as { snapshot: Record<string, unknown> }).snapshot = {
+        ...(nullCellId.data as { snapshot: Record<string, unknown> }).snapshot,
+        cellId: null,
+      };
+      const nullRun = writeCellRun(base, "null-cell-id", {
+        exportBytes: JSON.stringify(nullCellId),
+      });
+      const nullResult = await report(nullRun);
+      expectSchemaValid(nullResult);
+      expect(
+        entryAt(nullResult, "configuration.availability").statement,
+      ).toContain("asserts no cell association");
+
+      const absentCellId = exportDoc();
+      delete (absentCellId.data as { snapshot: Record<string, unknown> })
+        .snapshot.cellId;
+      const absentResult = await report(
+        writeCellRun(base, "absent-cell-id", {
+          exportBytes: JSON.stringify(absentCellId),
+        }),
+      );
+      expectSchemaValid(absentResult);
+      expect(
+        entryAt(absentResult, "configuration.availability").statement,
+      ).toContain("does not record a cellId");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("is deterministic under reordered relation and finding arrays", async () => {
     const base = tmp();
     try {
