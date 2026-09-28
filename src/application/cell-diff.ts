@@ -17,6 +17,17 @@ import type {
  * `metadata`; finding identity is the canonical serialization of the
  * whole finding, so a reworded finding is an add plus a remove.
  */
+/**
+ * One tooling-version difference between the two exports. `kind` names
+ * which export record the note is about, so the emitted entry cites the
+ * pointer that can substantiate it rather than a shared interpretation
+ * pointer.
+ */
+export interface CellVersionNote {
+  readonly kind: "classifier" | "runtime" | "resolution";
+  readonly text: string;
+}
+
 export interface CellExportDiff {
   readonly addedIds: readonly string[];
   readonly removedIds: readonly string[];
@@ -34,7 +45,7 @@ export interface CellExportDiff {
   readonly relationsRemoved: readonly PflSnapshotRelation[];
   readonly findingsAdded: readonly PflFinding[];
   readonly findingsRemoved: readonly PflFinding[];
-  readonly versionNotes: readonly string[];
+  readonly versionNotes: readonly CellVersionNote[];
 }
 
 /** Canonical JSON: object keys sorted recursively, code-unit order. */
@@ -165,7 +176,13 @@ export function diffCellExports(
   }
   statusChanges.sort((a, b) => compareBytes(a.id, b.id));
 
-  const facetDeltas: Record<string, number> = {};
+  // A null-prototype record: a facet literally named `__proto__` is a
+  // valid pfl facet name and must not be swallowed by the prototype
+  // setter (pfl-export-contract: facet names are arbitrary strings).
+  const facetDeltas: Record<string, number> = Object.create(null) as Record<
+    string,
+    number
+  >;
   const facetCount = (document: PflExportDocument, facet: string): number =>
     document.data.elements.filter(
       (element) => element.interpretation?.facets.includes(facet) ?? false,
@@ -198,25 +215,28 @@ export function diffCellExports(
     .filter((finding) => !findingsB.has(canonicalJson(finding)))
     .sort(byFinding);
 
-  const versionNotes: string[] = [];
+  const versionNotes: CellVersionNote[] = [];
   if (
     before.data.interpretation.classifier.version !==
     after.data.interpretation.classifier.version
   )
-    versionNotes.push(
-      `classifier version differs: ${before.data.interpretation.classifier.version} → ${after.data.interpretation.classifier.version}`,
-    );
+    versionNotes.push({
+      kind: "classifier",
+      text: `classifier version differs: ${before.data.interpretation.classifier.version} → ${after.data.interpretation.classifier.version}`,
+    });
   if (before.data.runtime.version !== after.data.runtime.version)
-    versionNotes.push(
-      `runtime version differs: ${before.data.runtime.version ?? "unknown"} → ${after.data.runtime.version ?? "unknown"}`,
-    );
+    versionNotes.push({
+      kind: "runtime",
+      text: `runtime version differs: ${before.data.runtime.version ?? "unknown"} → ${after.data.runtime.version ?? "unknown"}`,
+    });
   if (
     before.data.resolution.semanticsVersion !==
     after.data.resolution.semanticsVersion
   )
-    versionNotes.push(
-      `resolution semantics differ: ${before.data.resolution.semanticsVersion} → ${after.data.resolution.semanticsVersion}`,
-    );
+    versionNotes.push({
+      kind: "resolution",
+      text: `resolution semantics differ: ${before.data.resolution.semanticsVersion} → ${after.data.resolution.semanticsVersion}`,
+    });
 
   return {
     addedIds,

@@ -14,7 +14,7 @@ import {
   checkTraceComparability,
   type ComparabilityCaveat,
 } from "./trace-comparability.js";
-import { diffCellExports } from "./cell-diff.js";
+import { diffCellExports, type CellVersionNote } from "./cell-diff.js";
 import {
   assertCellEvidenceResolves,
   assertValidCellResult,
@@ -188,10 +188,40 @@ function patchAccount(run: CellRun["run"]): string {
   return parts.join(", ");
 }
 
-/** Whether two recorded patch blocks describe identical output content. */
-function sameOutputFile(a: OutputFile, b: OutputFile): boolean {
+/**
+ * The exact stored bytes of one recorded patch block, sliced by the
+ * parser's recorded byte range. The block includes its file and hunk
+ * headers, so edit positions are part of the comparison: two blocks with
+ * equal `+`/`-` content at different positions are not identical, which
+ * the parsed `change`/`addedLines`/`removedLines` view alone cannot tell
+ * apart. `null` when the bytes or the range are unusable.
+ */
+function blockText(bytes: Buffer | null, file: OutputFile): string | null {
+  if (bytes === null) return null;
+  if (
+    file.byteStart < 0 ||
+    file.byteEnd < file.byteStart ||
+    file.byteEnd > bytes.length
+  )
+    return null;
+  return bytes.subarray(file.byteStart, file.byteEnd).toString("utf8");
+}
+
+/**
+ * Whether two recorded patch blocks are identical: the same change kind
+ * and the same stored block bytes. When either block's bytes cannot be
+ * located, the parsed `+`/`-` content is compared instead — a weaker
+ * statement, which is why the caller only reaches it for unusable ranges.
+ */
+function sameOutputFile(
+  a: OutputFile,
+  b: OutputFile,
+  textA: string | null,
+  textB: string | null,
+): boolean {
+  if (a.change !== b.change) return false;
+  if (textA !== null && textB !== null) return textA === textB;
   return (
-    a.change === b.change &&
     a.addedLines.length === b.addedLines.length &&
     a.removedLines.length === b.removedLines.length &&
     a.addedLines.every((line, i) => line === b.addedLines[i]) &&
@@ -202,7 +232,9 @@ function sameOutputFile(a: OutputFile, b: OutputFile): boolean {
 /** The added/removed/changed/identical file sets between two output patches. */
 function diffOutputFileSets(
   before: readonly OutputFile[],
+  beforeBytes: Buffer | null,
   after: readonly OutputFile[],
+  afterBytes: Buffer | null,
 ): {
   added: OutputFile[];
   removed: OutputFile[];
@@ -211,6 +243,12 @@ function diffOutputFileSets(
 } {
   const byPathA = new Map(before.map((file) => [file.path, file]));
   const byPathB = new Map(after.map((file) => [file.path, file]));
+  const textA = new Map(
+    before.map((file) => [file.path, blockText(beforeBytes, file)]),
+  );
+  const textB = new Map(
+    after.map((file) => [file.path, blockText(afterBytes, file)]),
+  );
   const paths = [...new Set([...byPathA.keys(), ...byPathB.keys()])];
   paths.sort(compareBytes);
   const added: OutputFile[] = [];
@@ -222,7 +260,10 @@ function diffOutputFileSets(
     const b = byPathB.get(path);
     if (a === undefined) added.push(b as OutputFile);
     else if (b === undefined) removed.push(a);
-    else if (sameOutputFile(a, b)) identical.push(a);
+    else if (
+      sameOutputFile(a, b, textA.get(path) ?? null, textB.get(path) ?? null)
+    )
+      identical.push(a);
     else changed.push({ file: a });
   }
   return { added, removed, changed, identical };
@@ -280,18 +321,26 @@ function comparisonEntries(
     );
   }
 
-  // The cells' recorded identities: distinct prepared cells are expected.
+  // The cells' recorded identities. Equal ids are reported as equal: a
+  // repeated cell_id is what the records claim, and comparing a run
+  // directory with itself is allowed.
   {
     const idA = before.run.trace.cellId;
     const idB = after.run.trace.cellId;
     const side = (id: string | undefined) =>
       id === undefined ? "records no cell_id" : `records cell_id '${id}'`;
+    const conclusion =
+      idA === undefined || idB === undefined
+        ? "— whether the two runs used the same prepared cell is not recorded"
+        : idA === idB
+          ? `— the same cell_id is recorded on both sides; an id is a recorded claim, not proof that one prepared cell was reused`
+          : "— the records name distinct prepared cell instances";
     entries.push(
       cmpEntry(
         "comparison.cell-ids",
         "recorded",
         "complete",
-        `cell A ${side(idA)}; cell B ${side(idB)} — the two prepared cells are distinct instances`,
+        `cell A ${side(idA)}; cell B ${side(idB)} ${conclusion}`,
         [
           {
             source: "beforeTrace",
@@ -548,16 +597,21 @@ function comparisonEntries(
           [exportSideEv(beforeCtx, "/data/findings")],
         ),
       );
+    const NOTE_POINTER: Record<CellVersionNote["kind"], string> = {
+      classifier: "/data/interpretation",
+      runtime: "/data/runtime/version",
+      resolution: "/data/resolution/semanticsVersion",
+    };
     for (const [index, note] of diff.versionNotes.entries())
       entries.push(
         cmpEntry(
           `comparison.version-note.${index}`,
           "recorded",
           "complete",
-          `the exports' tooling versions differ — ${note}`,
+          `the exports' tooling versions differ — ${note.text}`,
           [
-            exportSideEv(beforeCtx, "/data/interpretation"),
-            exportSideEv(afterCtx, "/data/interpretation"),
+            exportSideEv(beforeCtx, NOTE_POINTER[note.kind]),
+            exportSideEv(afterCtx, NOTE_POINTER[note.kind]),
           ],
         ),
       );
@@ -727,7 +781,12 @@ function comparisonEntries(
         ),
       );
     } else {
-      const patchDiff = diffOutputFileSets(patchA.files, patchB.files);
+      const patchDiff = diffOutputFileSets(
+        patchA.files,
+        before.run.patchBytes,
+        patchB.files,
+        after.run.patchBytes,
+      );
       const completenessA = patchCompleteness(before.run);
       const completenessB = patchCompleteness(after.run);
       const bothComplete =

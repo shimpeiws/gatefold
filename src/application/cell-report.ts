@@ -171,7 +171,19 @@ export function cellRunInput(
   label?: string,
 ): CellRunInputDescriptor {
   const trace = cell.run.trace;
-  const snapshot = cell.observation.exportDocument?.data.snapshot;
+  const observation = cell.observation;
+  // The descriptor is the report's compact identity record: only a bound
+  // export's snapshot ids belong to this cell. An export whose recorded
+  // cellId does not equal the trace's cell_id stays out of it, exactly as
+  // the configuration lane withholds that export's content.
+  const document = observation.exportDocument;
+  const bound =
+    observation.record !== undefined &&
+    observation.exportDeclared &&
+    document !== null &&
+    trace.cellId !== undefined &&
+    document.data.snapshot.cellId === trace.cellId;
+  const snapshot = bound ? document!.data.snapshot : undefined;
   return {
     label: label ?? cell.label,
     runId: trace.runId,
@@ -822,16 +834,35 @@ export function associationEntries(ctx: CellCtx): {
     const problems: string[] = [];
     const obsRecord = observation.record;
     if (obsRecord === undefined) {
+      // A manifest-listed export with no observation record is a
+      // contradiction: a run that was not observed must not retain an
+      // observation artifact, and the artifact is never read either way.
+      const listed = ctx.cell.run.entries.some(
+        (entry) => entry.path === OBSERVATION_EXPORT_PATH,
+      );
       entries.push(
-        cellEntry(
-          ctx,
-          "association",
-          "association.record-consistency",
-          "not-recorded",
-          "unknown",
-          "the trace records no observation record to check",
-          [cellEv(ctx, "trace", "", { note: "no observation field" })],
-        ),
+        listed
+          ? cellEntry(
+              ctx,
+              "association",
+              "association.record-consistency",
+              "inconsistent",
+              "complete",
+              `the manifest retains '${OBSERVATION_EXPORT_PATH}' but the trace records no observation at all`,
+              [
+                cellEv(ctx, "trace", "", { note: "no observation field" }),
+                cellEv(ctx, "manifest", "/artifacts"),
+              ],
+            )
+          : cellEntry(
+              ctx,
+              "association",
+              "association.record-consistency",
+              "not-recorded",
+              "unknown",
+              "the trace records no observation record to check",
+              [cellEv(ctx, "trace", "", { note: "no observation field" })],
+            ),
       );
     } else {
       if (observation.unsafeDeclaredPaths.length > 0)
@@ -1061,6 +1092,33 @@ export function configurationEntries(
   return entries;
 }
 
+/**
+ * A stored-byte citation for one artifact: the artifact's own pointer with
+ * the manifest-recorded digest when the stored bytes were verified, and
+ * the manifest entry itself (with a note) when they were not — a missing
+ * or digest-mismatched artifact is evidence about the manifest's record,
+ * not about bytes that were read.
+ */
+function storedByteEv(
+  ctx: CellCtx,
+  base: "patch" | "result",
+  run: CellRun["run"],
+  index: number | null,
+  absentNote: string,
+): CellEvidenceReference {
+  if (index === null) return cellEv(ctx, "manifest", "", { note: absentNote });
+  const entry = run.entries[index];
+  const verified =
+    entry.state === "verified" || entry.state === "verified-truncated";
+  if (verified)
+    return cellEv(ctx, base, `/artifacts/${index}`, {
+      ...(entry.digest === null ? {} : { digest: entry.digest }),
+    });
+  return cellEv(ctx, "manifest", `/artifacts/${index}`, {
+    note: `the stored bytes are '${entry.state}'`,
+  });
+}
+
 // -- execution lane ---------------------------------------------------------
 
 /**
@@ -1259,16 +1317,13 @@ export function executionEntries(ctx: CellCtx): CellEntry[] {
       "complete",
       `the final-result record is in state '${run.resultState}'`,
       [
-        run.resultEntryIndex === null
-          ? cellEv(ctx, "manifest", "", { note: "no result.txt entry" })
-          : cellEv(
-              ctx,
-              "result",
-              `/artifacts/${run.resultEntryIndex}`,
-              run.entries[run.resultEntryIndex].digest === null
-                ? {}
-                : { digest: run.entries[run.resultEntryIndex].digest },
-            ),
+        storedByteEv(
+          ctx,
+          "result",
+          run,
+          run.resultEntryIndex,
+          "no result.txt entry",
+        ),
         traceFieldEv(ctx, "diagnostics"),
       ],
     ),
@@ -1286,16 +1341,13 @@ export function executionEntries(ctx: CellCtx): CellEntry[] {
         ...(trace.patch === undefined
           ? []
           : [cellEv(ctx, "trace", "/patch/state")]),
-        run.patchEntryIndex === null
-          ? cellEv(ctx, "manifest", "", { note: "no patch.diff entry" })
-          : cellEv(
-              ctx,
-              "patch",
-              `/artifacts/${run.patchEntryIndex}`,
-              run.entries[run.patchEntryIndex].digest === null
-                ? {}
-                : { digest: run.entries[run.patchEntryIndex].digest },
-            ),
+        storedByteEv(
+          ctx,
+          "patch",
+          run,
+          run.patchEntryIndex,
+          "no patch.diff entry",
+        ),
       ],
     ),
     cellEntry(

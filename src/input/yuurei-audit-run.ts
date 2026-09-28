@@ -143,7 +143,15 @@ export interface ReadAuditedRunOptions {
    * absent from `extraRecords` — presence there, not request, is what
    * makes bytes reachable.
    */
-  readonly extraInterpretedPaths?: readonly string[];
+  /**
+   * Additional artifact paths to interpret, either fixed or derived from
+   * the parsed trace. The function form lets a caller interpret a path
+   * only when the run's own records declare it, so an undeclared
+   * manifest entry is never opened (and so cannot fail the run).
+   */
+  readonly extraInterpretedPaths?:
+    | readonly string[]
+    | ((trace: EvaluatedRun["trace"]) => readonly string[]);
 }
 
 export async function readAuditedRun(
@@ -192,7 +200,9 @@ export async function readAuditedRun(
     PATCH_ARTIFACT_PATH,
     RESULT_ARTIFACT_PATH,
     ...(seeded ? [BASELINE_MANIFEST_ARTIFACT_PATH, CHANGES_ARTIFACT_PATH] : []),
-    ...(options.extraInterpretedPaths ?? []),
+    ...(typeof options.extraInterpretedPaths === "function"
+      ? options.extraInterpretedPaths(trace)
+      : (options.extraInterpretedPaths ?? [])),
   ]);
 
   for (const entry of loaded.rawEntries) {

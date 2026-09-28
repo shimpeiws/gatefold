@@ -77,7 +77,16 @@ export interface CellRun {
  */
 export async function readCellRun(dirPath: string): Promise<CellRun> {
   const run = await readAuditedRun(dirPath, {
-    extraInterpretedPaths: [OBSERVATION_EXPORT_PATH],
+    // Only an export the run's own observation record declares is
+    // interpreted: an undeclared manifest entry is never opened, so a
+    // broken or escaping artifact cannot fail the report and cannot be
+    // mistaken for this run's observed configuration.
+    extraInterpretedPaths: (trace) =>
+      (trace.observation?.artifacts ?? []).some(
+        (artifact) => artifact.path === OBSERVATION_EXPORT_PATH,
+      )
+        ? [OBSERVATION_EXPORT_PATH]
+        : [],
   });
   const record = run.trace.observation;
   const declared = record?.artifacts ?? [];

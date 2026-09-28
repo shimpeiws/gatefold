@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -283,6 +289,22 @@ function writeCellRun(
   }
   writeFileSync(join(runDir, "artifacts.json"), JSON.stringify({ artifacts }));
   return runDir;
+}
+
+/** Rewrites one artifact entry of an already written run directory. */
+function rewriteManifestEntry(
+  runDir: string,
+  path: string,
+  mutate: (entry: Record<string, unknown>) => void,
+): void {
+  const file = join(runDir, "artifacts.json");
+  const manifest = JSON.parse(readFileSync(file, "utf8")) as {
+    artifacts: Record<string, unknown>[];
+  };
+  const entry = manifest.artifacts.find((item) => item.path === path);
+  if (entry === undefined) throw new Error(`no manifest entry for ${path}`);
+  mutate(entry);
+  writeFileSync(file, JSON.stringify(manifest));
 }
 
 async function report(
@@ -725,6 +747,90 @@ describe("cell report review regressions", () => {
     }
   });
 
+  it("keeps an unbound export's snapshot ids out of the input descriptor", async () => {
+    const base = tmp();
+    try {
+      // The export parses and retains bytes, but its cellId is not this
+      // cell's: the descriptor must not present its snapshot ids as ours.
+      const runDir = writeCellRun(base, "run", {
+        trace: cellTrace({ cell_id: "cell_other" }),
+      });
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      expect(result.inputs.run?.cellId).toBe("cell_other");
+      expect(result.inputs.run?.exportObservedSnapshotId).toBeNull();
+      expect(result.inputs.run?.exportResolvedSnapshotId).toBeNull();
+      expect(entryAt(result, "configuration.availability").state).toBe(
+        "inconsistent",
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a manifest-listed export with no observation as a contradiction", async () => {
+    const base = tmp();
+    try {
+      const trace = cellTrace();
+      delete trace.observation;
+      const result = await report(writeCellRun(base, "run", { trace }));
+      expectSchemaValid(result);
+      const consistency = entryAt(result, "association.record-consistency");
+      expect(consistency.state).toBe("inconsistent");
+      expect(consistency.statement).toContain("no observation at all");
+      expect(entriesWith(result, "configuration.element.")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("never opens an undeclared manifest export whose path escapes the run", async () => {
+    const base = tmp();
+    try {
+      const outside = join(base, "outside-export.json");
+      writeFileSync(outside, JSON.stringify(exportDoc()));
+      const trace = cellTrace();
+      delete trace.observation;
+      const runDir = writeCellRun(base, "run", { trace, exportBytes: null });
+      symlinkSync(outside, join(runDir, "observation", "export.json"));
+      rewriteManifestEntry(runDir, "observation/export.json", (entry) => {
+        entry.digest = sha256(readFileSync(outside));
+      });
+      // The declaration is what makes an export readable: an undeclared
+      // entry is never verified, so the escaping target cannot reject the
+      // whole report.
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      expect(entryAt(result, "association.record-consistency").state).toBe(
+        "inconsistent",
+      );
+      expect(entryAt(result, "association.export-binding").state).toBe(
+        "not-recorded",
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("cites the manifest, not stored bytes, for an unverified artifact", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeCellRun(base, "run");
+      rewriteManifestEntry(runDir, "patch.diff", (entry) => {
+        entry.digest = `sha256:${"0".repeat(64)}`;
+      });
+      const result = await report(runDir);
+      expectSchemaValid(result);
+      const evidence = entryAt(result, "execution.patch").evidence.filter(
+        (item) => item.source === "manifest",
+      );
+      expect(evidence).toHaveLength(1);
+      expect(evidence[0]?.pointer).toBe("/artifacts/0");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("does not read an export no observation record declares", async () => {
     const base = tmp();
     try {
@@ -1100,6 +1206,108 @@ describe("compare-cells", () => {
       expect(entriesWith(result, "comparison.relation-added.")).toHaveLength(1);
       expect(entriesWith(result, "comparison.relation-removed.")).toHaveLength(
         1,
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("does not call same-content blocks at different positions identical", async () => {
+    const base = tmp();
+    try {
+      const patch = (start: number) =>
+        `--- src/f.ts\n+++ src/f.ts\n@@ -${start},1 +${start},1 @@\n-old\n+new\n`;
+      const before = writeCellRun(base, "a", { patch: patch(1) });
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
+        patch: patch(9),
+        exportBytes: JSON.stringify(boundExport("cell_b")),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const summary = entryAt(result, "comparison.patch");
+      expect(summary.completeness).toBe("complete");
+      expect(summary.statement).toContain("1 changed");
+      expect(
+        entriesWith(result, "comparison.patch-file-changed.src/f.ts"),
+      ).toHaveLength(1);
+      expect(entriesWith(result, "comparison.patch-file-added.")).toEqual([]);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("reports equal cell ids as equal, not as distinct instances", async () => {
+    const base = tmp();
+    try {
+      const before = writeCellRun(base, "a");
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2" }),
+      });
+      const result = await compare(before, after);
+      const statement = entryAt(result, "comparison.cell-ids").statement;
+      expect(statement).toContain("the same cell_id is recorded on both sides");
+      expect(statement).not.toContain("distinct prepared cell instances");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a facet named __proto__ in the comparison", async () => {
+    const base = tmp();
+    try {
+      const beforeDoc = boundExport("cell_20260920-a1", {
+        data: {
+          elements: [
+            element("el_aaa", {
+              interpretation: {
+                elementId: "el_aaa",
+                facets: ["__proto__"],
+                confidence: "high",
+                reason: "r",
+              },
+            }),
+          ],
+        },
+      });
+      const afterDoc = boundExport("cell_b", {
+        data: { elements: [element("el_aaa")] },
+      });
+      const before = writeCellRun(base, "a", {
+        exportBytes: JSON.stringify(beforeDoc),
+      });
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
+        exportBytes: JSON.stringify(afterDoc),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const entry = entryAt(result, "comparison.facet.__proto__");
+      expect(entry.statement).toContain("count changed by -1");
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("cites the field a version note is about", async () => {
+    const base = tmp();
+    try {
+      const afterDoc = boundExport("cell_b");
+      (afterDoc.data as { runtime: Record<string, unknown> }).runtime = {
+        ...(afterDoc.data as { runtime: Record<string, unknown> }).runtime,
+        version: "2.2.0",
+      };
+      const before = writeCellRun(base, "a");
+      const after = writeCellRun(base, "b", {
+        trace: cellTrace({ run_id: "run-cell-2", cell_id: "cell_b" }),
+        exportBytes: JSON.stringify(afterDoc),
+      });
+      const result = await compare(before, after);
+      expectSchemaValid(result);
+      const note = entryAt(result, "comparison.version-note.0");
+      expect(note.statement).toContain("runtime version differs");
+      expect(note.evidence.map((item) => item.pointer)).toContain(
+        "/data/runtime/version",
       );
     } finally {
       rmSync(base, { recursive: true, force: true });
