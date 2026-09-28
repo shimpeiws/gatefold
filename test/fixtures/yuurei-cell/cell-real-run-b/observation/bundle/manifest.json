@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1",
+  "harnessDigest": "sha256:01c498c13c0fa91ef357f069616861780f6283fd23d2d703b38db06e93d0b5d1",
+  "observedSnapshotId": "obs_68ae20c59b46",
+  "resolvedSnapshotId": "res_d05b18be3493",
+  "createdAt": "2026-09-28T19:26:01.768Z",
+  "containsRawEvidence": false,
+  "evidence": [
+    {
+      "elementId": "el_0fc92802d8f84176",
+      "sourcePath": "CLAUDE.md",
+      "status": "included",
+      "verified": true,
+      "actualDigest": "sha256:f65f9e4121af2e1d9ff194e24fe9727778b51a850c4fa592b79d45415d6c4ac0",
+      "sizeBytes": 33,
+      "expectedDigest": "sha256:f65f9e4121af2e1d9ff194e24fe9727778b51a850c4fa592b79d45415d6c4ac0"
+    },
+    {
+      "elementId": "el_e35b608c21faf5bf",
+      "sourcePath": "(builtin) claude-code instruction layers",
+      "status": "missing",
+      "verified": false
+    }
+  ]
+}

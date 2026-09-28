@@ -137,6 +137,22 @@ describe("claim schema validation", () => {
     }
   });
 
+  it("accepts the committed v10 cells-report example", async () => {
+    const { CELLS_SCHEMA_VERSION } = await import("../src/domain/cells.js");
+    const v10Schema = JSON.parse(
+      await readFile(
+        fileURLToPath(new URL("schema/claim-result.v10.json", root)),
+        "utf8",
+      ),
+    );
+    expect(ajv.validateSchema(v10Schema)).toBe(true);
+    const validateV10 = ajv.compile(v10Schema);
+    const example = await readExample("valid-cells-result.json");
+    expect(validateV10(example), JSON.stringify(validateV10.errors)).toBe(true);
+    const doc = example as { schemaVersion: number };
+    expect(doc.schemaVersion).toBe(CELLS_SCHEMA_VERSION);
+  });
+
   it("rejects every committed invalid example", async () => {
     const files = await readdir(examplesDir);
     const invalid = files.filter((f) => f.startsWith("invalid-"));

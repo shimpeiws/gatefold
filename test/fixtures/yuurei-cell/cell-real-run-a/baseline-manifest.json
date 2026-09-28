@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "policy": "git-tracked-files",
+  "source": "/private/var/folders/b2/78mzqz1109j_lylk0r5mzz_h0000gn/T/srcid-repo-geudIf",
+  "head": "f395491da0228418634a05394fea7ad7869179b8",
+  "source_project": {
+    "id": "git-db9acfc85f531c03",
+    "kind": "git-remote",
+    "remote": "github.com/gatefold-fixture/demo"
+  },
+  "requested_digest": "sha256:68a766c3d6be8e1de4cfa1a15680971a920810bf7ca80ae643b33051fbc374d9",
+  "materialized_digest": "sha256:68a766c3d6be8e1de4cfa1a15680971a920810bf7ca80ae643b33051fbc374d9",
+  "files": {
+    "CLAUDE.md": {
+      "digest": "sha256:f65f9e4121af2e1d9ff194e24fe9727778b51a850c4fa592b79d45415d6c4ac0",
+      "mode": 420,
+      "bytes": 33
+    },
+    "seeded.txt": {
+      "digest": "sha256:4a6689419b00b11700c9b6246bcfa8936c8f5e1e824db3a7e57030e2d1c1a684",
+      "mode": 420,
+      "bytes": 5
+    }
+  }
+}

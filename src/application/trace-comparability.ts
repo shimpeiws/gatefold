@@ -34,7 +34,7 @@ function mismatched(message: string): PflExportError {
  * `--model` nor the run definition supplies one, so an empty value means "no
  * model was requested" — described as such rather than quoted as `''`.
  */
-function describeRequestedModel(value: string): string {
+export function describeRequestedModel(value: string): string {
   return value === "" ? "none (an empty string)" : `'${value}'`;
 }
 

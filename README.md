@@ -16,7 +16,10 @@ a single run directory it can [audit](docs/v0.8-scope.md) for internal
 consistency — no spec required. Since v0.9 it can also report one
 [cell](docs/v0.9-scope.md) — a run directory plus the manifest-listed pfl
 export its pre-run observation retained — as a single evidence-backed
-account, and compare two cells A → B. It emits descriptive claims, each
+account, and compare two cells A → B. Since v0.10 it can also report a
+[bounded set of repeated cells](docs/v0.10-scope.md): which configuration
+facts each supplied run recorded, which records differed within the set,
+and which could not be checked. It emits descriptive claims, each
 with evidence, provenance, and confidence. It does not score or rank
 harnesses.
 
@@ -62,6 +65,10 @@ gatefold compare-cells --before a-run-dir --after b-run-dir \
                        [--evaluation evaluation-comparison.json]
                                                # directional A → B cell
                                                # comparison (schema v9)
+gatefold report-cells --run a-run-dir --run b-run-dir [--run c-run-dir ...]
+                                               # observed configuration
+                                               # facts across 2–32 repeated
+                                               # cells (schema v10)
 ```
 
 `compare-traces` compares two yuurei `trace.json` runs only when they
@@ -125,6 +132,20 @@ quality judgement. `cell_id`, pfl `observedSnapshotId`/`resolvedSnapshotId`,
 `run_id`, and `requested_cell.digest` are distinct identities: the report
 states which record asserted each. See [v0.9 scope](docs/v0.9-scope.md).
 
+`report-cells` extends that account to a bounded set of two or more run
+directories supplied in caller order as `run1`, `run2`, … It applies the
+same comparability gate uniformly across the set and joins the bound
+exports only when the runs record one verified source-project identity —
+or, for legacy runs that declare none, one observed cell-local project id.
+Each eligible run's export then contributes to `set` lane entries that
+state, for every element, relation, and finding recorded in the union,
+which runs recorded it, whether the observed records are identical or
+differ, and — for runs without a bound export — that they could not be
+checked at all. A partial export's omission is reported as an
+unestablished absence, never as an observed removal, and the set makes no
+stability, causal, or quality claim. See
+[v0.10 scope](docs/v0.10-scope.md).
+
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
 confidence score — see [the claim model](docs/claim-model.md).
 
@@ -152,6 +173,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.7 scope and Outcome-evaluation contract](docs/v0.7-scope.md)
 - [v0.8 scope and run-audit contract](docs/v0.8-scope.md)
 - [v0.9 scope and cell-report contract](docs/v0.9-scope.md)
+- [v0.10 scope and repeated-cells contract](docs/v0.10-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [Verification contract cards](docs/verification-contracts.md)

@@ -48,7 +48,18 @@ export {
   type CellProvenance,
   type CellReportResult,
   type CellRunInputDescriptor,
+  type CellsEvidenceSource,
+  type CellsRunName,
 } from "./domain/cell.js";
+export {
+  CELLS_MAX_RUNS,
+  CELLS_SCHEMA_VERSION,
+  type CellsCommand,
+  type CellsInputs,
+  type CellsReportResult,
+  type CellsRunInputDescriptor,
+} from "./domain/cells.js";
+export { reportCells } from "./application/report-cells.js";
 export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
 export {
   COMPARISON_SCHEMA_VERSION,
@@ -235,6 +246,7 @@ export type {
 export {
   formatAuditHuman,
   formatCellHuman,
+  formatCellsHuman,
   formatComparisonHuman,
   formatEvaluationComparisonHuman,
   formatEvaluationHuman,
