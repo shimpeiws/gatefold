@@ -238,13 +238,17 @@ Criterion parser, evidence binding, evaluator, or output validator.
 
 ## Initial inventory
 
-| Proposition | Inner observation | Boundary / integration | Real-system observation | Current confidence |
-| --- | --- | --- | --- | --- |
-| VC-G-01 evidence-backed statements | rules/validators | raw input readers | CLI schema + citations | strong |
-| VC-G-02 difference != judgement | comparison rules | cell lanes | real A/B report | strong |
-| VC-G-03 unknown preserved | audit/cell model | digest/bounded readers | partial/corrupt fixtures | strong |
-| VC-G-04 comparability demonstrated | comparability policy | upstream bindings | real pair currently blocked by #83 dependencies | medium |
-| VC-G-05 criteria + verified evidence only | evaluator | subject binding | seeded run evaluation | strong |
+- **VC-G-01:** rules/validators internally, raw input readers at the boundary,
+  and CLI schema/citation checks at the system boundary. Coverage is strong.
+- **VC-G-02:** comparison rules internally, cell lanes at the boundary, and
+  real A/B reporting at the system boundary. Coverage is strong.
+- **VC-G-03:** audit/cell state models internally, digest and bounded readers at
+  the boundary, and partial/corrupt fixtures at the outer boundary. Coverage is
+  strong.
+- **VC-G-04:** comparability policy internally and upstream bindings at the
+  boundary. The real pair remains blocked by the dependencies tracked in #83.
+- **VC-G-05:** evaluator logic internally, subject binding at the boundary, and
+  seeded-run evaluation at the system boundary. Coverage is strong.
 
 ## Review rule
 
@@ -258,20 +262,33 @@ A Gatefold check should answer at least one of these questions:
    proposition?
 
 If a check cannot answer any of them, it is probably implementation coupling or
-maintenance scaffolding rather than a semantic contract.
+maintenance support rather than a semantic contract.
 
 ## Concrete evidence inventory
 
 Gatefold is the clearest example of an existing suite already organized around
 semantic distinctions. Most of the work here is naming and indexing that fact.
 
-| Proposition | Existing evidence | Assessment |
-| --- | --- | --- |
-| VC-G-01 | `test/rules.test.ts` requires evidence, provenance and stable rule ids; `test/schema.test.ts` rejects claims without evidence; E2E resolves emitted evidence pointers | Strong at generation, schema, and process boundaries. |
-| VC-G-02 | `test/rules.test.ts` explicitly checks neutral phrasing such as "never as improvement" and avoids proving harness change from rewording; `test/audit.test.ts` and `test/cell.test.ts` keep verdict vocabulary out of descriptive reports | Strong. The distinction between description and evaluation is enforced in output behavior. |
-| VC-G-03 | `test/audit.test.ts` has extensive unverifiable / inconsistent / not-recorded / partial cases; `test/cell.test.ts` checks missing observation and observer failure never become "no configuration change"; E2E keeps truncated/unrecorded artifacts as caveats | Very strong. This is one of the most thoroughly tested semantics in the repository. |
-| VC-G-04 | compare / trace / run tests reject mismatched subjects; `test/cell.test.ts` validates cell/export binding and withholds comparison when a side is unbound | Strong for existing identities. The real two-cell source-project identity path remains blocked by upstream work and is already tracked by #83. |
-| VC-G-05 | `test/evaluation.test.ts` covers declared criteria, subject binding, unknown on rejected/missing/conflicting reports, and explicitly asserts "never produces a pass from unverifiable evidence"; E2E covers v6/v7 CLI paths | Strong across criterion evaluation and process boundary. |
+- **VC-G-01:** `test/rules.test.ts` requires evidence, provenance, and stable
+  rule ids. `test/schema.test.ts` rejects claims without evidence, and E2E
+  resolves emitted evidence pointers. Strong across generation, schema, and
+  process boundaries.
+- **VC-G-02:** `test/rules.test.ts` checks neutral phrasing such as "never as
+  improvement" and avoids proving harness change from rewording.
+  `test/audit.test.ts` and `test/cell.test.ts` keep verdict vocabulary out
+  of descriptive reports. Strong.
+- **VC-G-03:** `test/audit.test.ts` covers unverifiable, inconsistent,
+  not-recorded, and partial cases. `test/cell.test.ts` verifies that missing
+  observation and observer failure never become "no configuration change".
+  E2E keeps truncated or unrecorded artifacts as caveats. Very strong.
+- **VC-G-04:** compare/trace/run tests reject mismatched subjects, and
+  `test/cell.test.ts` validates cell/export binding and withholds comparison
+  when a side is unbound. Existing identities are strong; the real two-cell
+  source-project identity path remains #83.
+- **VC-G-05:** `test/evaluation.test.ts` covers declared criteria, subject
+  binding, unknown on rejected/missing/conflicting reports, and explicitly
+  asserts that unverifiable evidence never produces a pass. E2E covers v6/v7
+  CLI paths. Strong.
 
 ### Gaps / active work
 
