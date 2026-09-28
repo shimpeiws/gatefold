@@ -11,8 +11,12 @@ artifact manifests and `patch.diff` records, and since v0.7 an explicit
 [task-evaluation spec](docs/v0.7-scope.md) it can evaluate a
 [seeded run](docs/yuurei-seeded-run-contract.md) against, and since v0.8
 a single run directory it can [audit](docs/v0.8-scope.md) for internal
-consistency — no spec required. It emits descriptive claims, each with
-evidence, provenance, and confidence. It does not score or rank harnesses.
+consistency — no spec required. Since v0.9 it can also report one
+[cell](docs/v0.9-scope.md) — a run directory plus the manifest-listed pfl
+export its pre-run observation retained — as a single evidence-backed
+account, and compare two cells A → B. It emits descriptive claims, each
+with evidence, provenance, and confidence. It does not score or rank
+harnesses.
 
 ## CLI usage
 
@@ -47,6 +51,15 @@ gatefold audit-run --run run-dir \
                                                # rubric-free evidence audit
                                                # of one run's stored records
                                                # (schema v8)
+gatefold report-cell --run run-dir \
+                     [--evaluation evaluation-result.json]
+                                               # one cell's observation,
+                                               # run, and audit evidence
+                                               # (schema v9)
+gatefold compare-cells --before a-run-dir --after b-run-dir \
+                       [--evaluation evaluation-comparison.json]
+                                               # directional A → B cell
+                                               # comparison (schema v9)
 ```
 
 `compare-traces` compares two yuurei `trace.json` runs only when they
@@ -93,6 +106,23 @@ subject digests match the run's recorded identity; a matching declaration
 never attests the evaluator ran on those bytes. See
 [v0.8 scope](docs/v0.8-scope.md).
 
+`report-cell` reads one run directory whose trace records a `cell_id` and
+an `observation` record: the manifest-listed observation export
+(`observation/export.json`) is opened only after its stored bytes verify
+against the manifest's recorded digest, and the report binds the export's
+`data.snapshot.cellId`, snapshot ids, and declared completeness to the
+trace's record before presenting the pfl-observed configuration, the
+yuurei-recorded execution/outcome/usage/cost, and the v0.8 audit facts as
+separate lanes. A missing, failed, or partial observation is reported as
+unknown or unverifiable — never as a claim that the configuration did or
+did not change. `compare-cells` applies the v0.5 comparability checks to
+two runs and, only when both sides bind a verified export, emits a
+directional A → B account of recorded element, resolved-status, relation,
+finding, patch, result, usage, and cost differences — never a causal or
+quality judgement. `cell_id`, pfl `observedSnapshotId`/`resolvedSnapshotId`,
+`run_id`, and `requested_cell.digest` are distinct identities: the report
+states which record asserted each. See [v0.9 scope](docs/v0.9-scope.md).
+
 Every claim carries a stable `ruleId`, evidence pointers, provenance, and a
 confidence score — see [the claim model](docs/claim-model.md).
 
@@ -119,6 +149,7 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [v0.6 scope and run-directory comparison contract](docs/v0.6-scope.md)
 - [v0.7 scope and Outcome-evaluation contract](docs/v0.7-scope.md)
 - [v0.8 scope and run-audit contract](docs/v0.8-scope.md)
+- [v0.9 scope and cell-report contract](docs/v0.9-scope.md)
 - [Architecture](docs/architecture.md)
 - [Claim model and schema](docs/claim-model.md)
 - [pfl export contract](docs/pfl-export-contract.md)

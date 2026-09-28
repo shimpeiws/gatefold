@@ -1,5 +1,7 @@
 export { analyze } from "./application/analyze.js";
 export { auditRun } from "./application/audit-run.js";
+export { reportCell } from "./application/cell-report.js";
+export { compareCells } from "./application/compare-cells.js";
 export { compareDocuments } from "./application/compare.js";
 export { compareEvaluations } from "./application/compare-evaluations.js";
 export { compareRuns } from "./application/compare-runs.js";
@@ -32,6 +34,21 @@ export {
   type AuditProvenance,
   type AuditResult,
 } from "./domain/audit.js";
+export {
+  CELL_SCHEMA_VERSION,
+  type CellCommand,
+  type CellCompleteness,
+  type CellEntry,
+  type CellEntryState,
+  type CellEvaluationInput,
+  type CellEvidenceReference,
+  type CellEvidenceSource,
+  type CellInputs,
+  type CellLane,
+  type CellProvenance,
+  type CellReportResult,
+  type CellRunInputDescriptor,
+} from "./domain/cell.js";
 export { CLAIM_SCHEMA_VERSION } from "./domain/claim.js";
 export {
   COMPARISON_SCHEMA_VERSION,
@@ -146,6 +163,17 @@ export {
   type AuditedRun,
 } from "./input/yuurei-audit-run.js";
 export {
+  OBSERVATION_EXPORT_PATH,
+  readCellRun,
+  type CellObservation,
+  type CellRun,
+  type ExportInterpretationIssue,
+} from "./input/yuurei-cell.js";
+export {
+  readCellEvaluation,
+  type SuppliedEvaluation,
+} from "./input/cell-evaluation.js";
+export {
   BASELINE_MANIFEST_ARTIFACT_PATH,
   CHANGES_ARTIFACT_PATH,
   normalizeResultText,
@@ -181,6 +209,9 @@ export {
   TRACE_SCHEMA_VERSION,
 } from "./input/yuurei-trace.js";
 export type {
+  YuureiObservation,
+  YuureiObservationReason,
+  YuureiObservationStatus,
   YuureiPatchBase,
   YuureiPatchState,
   YuureiSeedBaseline,
@@ -203,6 +234,7 @@ export type {
 } from "./input/yuurei-trace.js";
 export {
   formatAuditHuman,
+  formatCellHuman,
   formatComparisonHuman,
   formatEvaluationComparisonHuman,
   formatEvaluationHuman,

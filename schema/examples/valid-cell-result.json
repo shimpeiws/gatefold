@@ -1,0 +1,1151 @@
+{
+  "schemaVersion": 9,
+  "source": {
+    "command": "report-cell"
+  },
+  "inputs": {
+    "run": {
+      "label": "test/fixtures/yuurei-cell/cell-a",
+      "runId": "run-cell-a",
+      "cellId": "cell_20260920-a1",
+      "taskDigest": "sha256:task-x",
+      "profileName": "p",
+      "profileDigest": "sha256:p",
+      "runtimeId": "claude-code",
+      "requestedCellDigest": "sha256:req-cell",
+      "observationStatus": "recorded",
+      "exportObservedSnapshotId": "obs_0123456789ab",
+      "exportResolvedSnapshotId": "res_0123456789ab"
+    }
+  },
+  "entries": [
+    {
+      "lane": "association",
+      "id": "association.cell-id",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the trace records cell_id 'cell_20260920-a1'",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/cell_id"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.cell-id"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.observation",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the observation record reports status 'recorded' from observer 'pfl' 1.2.0",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/observation/observer/id"
+        },
+        {
+          "source": "trace",
+          "pointer": "/observation/status"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.observation"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.export-retained",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the manifest retains 'observation/export.json' and the stored bytes verify (3318 bytes)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/observation/artifacts"
+        },
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/6",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.export-retained"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.export-document",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the retained bytes are a conforming pfl export document (pflVersion '1.2.0', completeness 'complete')",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/observation"
+        },
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/6",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.export-document"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.export-binding",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the export's recorded cellId 'cell_20260920-a1' equals the trace's cell_id — a recorded association between the run and the export's caller-asserted provenance, not proof of observation",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/cell_id"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/snapshot/cellId",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.export-binding"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.export-snapshots",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the recorded snapshot_ids ('obs_0123456789ab', 'res_0123456789ab') equal the export's observed and resolved snapshot ids",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/observation/snapshot_ids"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/snapshot/observedSnapshotId",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/snapshot/resolvedSnapshotId",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.export-snapshots"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.export-runtime",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the export's runtime.id 'claude-code' equals the trace's runtime.id",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/runtime/id"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/runtime/id",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.export-runtime"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.export-completeness",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the observation record's completeness 'complete' equals the export's",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/observation/completeness"
+        },
+        {
+          "source": "export",
+          "pointer": "/completeness",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.export-completeness"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "id": "association.record-consistency",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the observation record is internally coherent (status 'recorded')",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/observation"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.record-consistency"
+        ]
+      }
+    },
+    {
+      "lane": "configuration",
+      "id": "configuration.snapshot",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the bound export identifies observed snapshot 'obs_0123456789ab', resolved snapshot 'res_0123456789ab', schema '2', captured '2026-09-20T09:59:00.000Z'",
+      "evidence": [
+        {
+          "source": "export",
+          "pointer": "/data/snapshot/capturedAt",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/snapshot/observedSnapshotId",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/snapshot/resolvedSnapshotId",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:configuration.snapshot"
+        ]
+      }
+    },
+    {
+      "lane": "configuration",
+      "id": "configuration.subject",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the export describes project 'path-0123456789abcdef' ('owner/repo') under runtime 'claude-code'",
+      "evidence": [
+        {
+          "source": "export",
+          "pointer": "/data/project/id",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/runtime/id",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:configuration.subject"
+        ]
+      }
+    },
+    {
+      "lane": "configuration",
+      "id": "configuration.completeness",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the export declares completeness 'complete' with 0 diagnostic(s)",
+      "evidence": [
+        {
+          "source": "export",
+          "pointer": "/completeness",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        },
+        {
+          "source": "export",
+          "pointer": "/diagnostics",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:configuration.completeness"
+        ]
+      }
+    },
+    {
+      "lane": "configuration",
+      "id": "configuration.element.el_aaa",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "element 'el_aaa' (kind 'instructions', origin 'project', scope 'project') is observed as 'observed'; resolved as 'effective' (activation 'always', strategy 'accumulate'); interpretation facets [instructions] (confidence 'high')",
+      "evidence": [
+        {
+          "source": "export",
+          "pointer": "/data/elements/0",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38",
+          "elementId": "el_aaa"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:configuration.element.el_aaa"
+        ]
+      }
+    },
+    {
+      "lane": "configuration",
+      "id": "configuration.element.el_bbb",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "element 'el_bbb' (kind 'instructions', origin 'project', scope 'project') is observed as 'observed'; resolved as 'effective' (activation 'always', strategy 'accumulate'); interpretation facets [instructions] (confidence 'high')",
+      "evidence": [
+        {
+          "source": "export",
+          "pointer": "/data/elements/1",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38",
+          "elementId": "el_bbb"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:configuration.element.el_bbb"
+        ]
+      }
+    },
+    {
+      "lane": "configuration",
+      "id": "configuration.relation.0",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the export records relation 'accumulates-with' from 'el_aaa' to 'el_bbb'",
+      "evidence": [
+        {
+          "source": "export",
+          "pointer": "/data/relations/0",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:configuration.relation.0"
+        ]
+      }
+    },
+    {
+      "lane": "configuration",
+      "id": "configuration.finding.0",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the export records a 'opaque-runtime-layer' finding on [el_aaa]: element el_aaa could not be fully inspected",
+      "evidence": [
+        {
+          "source": "export",
+          "pointer": "/data/findings/0",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:configuration.finding.0"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.run-id",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the trace records run_id 'run-cell-a' (started 2026-09-20T10:00:00Z, finished 2026-09-20T10:00:12Z)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/finished_at"
+        },
+        {
+          "source": "trace",
+          "pointer": "/run_id"
+        },
+        {
+          "source": "trace",
+          "pointer": "/started_at"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.run-id"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.task",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the run's task is 't' (digest sha256:task-x)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/task/digest"
+        },
+        {
+          "source": "trace",
+          "pointer": "/task/source"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.task"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.profile",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the run used profile 'p' (digest sha256:p)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/profile/digest"
+        },
+        {
+          "source": "trace",
+          "pointer": "/profile/name"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.profile"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.runtime",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the run's runtime is 'claude-code' version '2.1.272'",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/runtime/id"
+        },
+        {
+          "source": "trace",
+          "pointer": "/runtime/version"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.runtime"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.model",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the run requested model 'm' and resolved 'm-1' (reason 'observed')",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/model/requested"
+        },
+        {
+          "source": "trace",
+          "pointer": "/model/resolved"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.model"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.requested-cell",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the trace records requested_cell digest 'sha256:req-cell' (inputs_version 2)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/requested_cell/digest"
+        },
+        {
+          "source": "trace",
+          "pointer": "/requested_cell/inputs_version"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.requested-cell"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.isolation",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the run records isolation strategy 'cell' (verified: true)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/isolation/strategy"
+        },
+        {
+          "source": "trace",
+          "pointer": "/isolation/verified"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.isolation"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.outcome",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the run's execution records exit_code '0', signal not recorded, duration_ms 10, timed_out false",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/execution"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.outcome"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.usage",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the run records usage input_tokens=100, output_tokens=10",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/usage"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.usage"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.cost",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the trace records cost 0.01 USD",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/cost/amount"
+        },
+        {
+          "source": "trace",
+          "pointer": "/cost/currency"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.cost"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.artifacts",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the manifest lists 7 artifact(s): unverified×2, verified×5",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.artifacts"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.result",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the final-result record is in state 'verified'",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/diagnostics"
+        },
+        {
+          "source": "result",
+          "pointer": "/artifacts/3",
+          "digest": "sha256:b44c495d015ecc6b29e29b8b06ef8d49a94a30a39b6491fc16eb2f44230d5bfe"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.result"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.patch",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the patch record is in state 'verified' covering 1 file(s)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/patch/state"
+        },
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:21ea0270e64b8d9e270048ab495c9404165c02f3e9b8fa6f92a074992655729b"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.patch"
+        ]
+      }
+    },
+    {
+      "lane": "execution",
+      "id": "execution.diagnostics",
+      "state": "recorded",
+      "completeness": "complete",
+      "statement": "the trace records 0 diagnostic(s)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/diagnostics"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:execution.diagnostics"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.run.trace",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the run records a trace.json document that conforms to the trace contract",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": ""
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:run.trace"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.run.manifest",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the run records an artifacts.json manifest that conforms to the run-directory contract",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": ""
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:run.manifest"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.seed.provenance",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the trace records seeded-workspace provenance",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:seed.provenance"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.seed.inputs-version",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "requested_cell.inputs_version 2 agrees with the run's seeded record",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/requested_cell/inputs_version"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:seed.inputs-version"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.seed.patch-base",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "patch.base 'seeded' agrees with the seed record",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/patch/base"
+        },
+        {
+          "source": "trace",
+          "pointer": "/seed"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:seed.patch-base"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.seed.baseline-materialization",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the declared requested and materialized baseline digests agree; identity equality only — the baseline bytes themselves are never read",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/baseline/materialized_digest"
+        },
+        {
+          "source": "trace",
+          "pointer": "/seed/baseline/requested_digest"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:seed.baseline-materialization"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.seed.changes-record",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the trace records the change set (added: 1, modified: 0, deleted: 0)",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/changes"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:seed.changes-record"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.baseline-manifest.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the manifest records baseline-manifest.json and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/4"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:baseline-manifest.stored"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.baseline-manifest.record",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the verified baseline-manifest.json restates the trace's seed record and file inventory",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed"
+        },
+        {
+          "source": "baselineManifest",
+          "pointer": "",
+          "digest": "sha256:b3b9f31a522b97041b00c3bfa8787f582831c2f27df02f22c7f0197689d1a3fc"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:baseline-manifest.record"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.changes.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the manifest records changes.json and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/5"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:changes.stored"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.changes.record",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the verified changes.json restates the trace's declared change set",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/changes"
+        },
+        {
+          "source": "changes",
+          "pointer": "",
+          "digest": "sha256:6b9a24ba9541141b1a1e37f0da625a3c1dc8833de4c7c320f76700f7dce82d27"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:changes.record"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.patch.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the manifest records patch.diff and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/2"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:patch.stored"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.patch.interpretable",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the verified patch.diff bytes parse under the run's grammar",
+      "evidence": [
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:21ea0270e64b8d9e270048ab495c9404165c02f3e9b8fa6f92a074992655729b"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:patch.interpretable"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.patch.record",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the patch record (base 'seeded', state 'complete') agrees with the manifest and the trace's diagnostics",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/patch"
+        },
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/2"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:patch.record"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.patch.completeness",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the trace declares the patch complete over verified untruncated bytes that parse fully",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/patch/state"
+        },
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:21ea0270e64b8d9e270048ab495c9404165c02f3e9b8fa6f92a074992655729b"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:patch.completeness"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.seed.changes-patch",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the parsed patch's per-kind counts agree with the declared change set",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed/changes"
+        },
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:21ea0270e64b8d9e270048ab495c9404165c02f3e9b8fa6f92a074992655729b"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:seed.changes-patch"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.changes.patch-agreement",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the parsed patch and the verified changes.json record the same per-kind change sets",
+      "evidence": [
+        {
+          "source": "patch",
+          "pointer": "/artifacts/2",
+          "digest": "sha256:21ea0270e64b8d9e270048ab495c9404165c02f3e9b8fa6f92a074992655729b"
+        },
+        {
+          "source": "changes",
+          "pointer": "",
+          "digest": "sha256:6b9a24ba9541141b1a1e37f0da625a3c1dc8833de4c7c320f76700f7dce82d27"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:changes.patch-agreement"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.result.stored",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the manifest records result.txt and the stored bytes match its recorded digest",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/3"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:result.stored"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.result.availability",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the manifest records result.txt (verified) and no result diagnostic contradicts it",
+      "evidence": [
+        {
+          "source": "manifest",
+          "pointer": "/artifacts/3"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:result.availability"
+        ]
+      }
+    },
+    {
+      "lane": "audit",
+      "id": "audit.result.content",
+      "state": "verified",
+      "completeness": "complete",
+      "statement": "the verified result.txt bytes decode to text under the contract normalization",
+      "evidence": [
+        {
+          "source": "result",
+          "pointer": "/artifacts/3",
+          "digest": "sha256:b44c495d015ecc6b29e29b8b06ef8d49a94a30a39b6491fc16eb2f44230d5bfe",
+          "bytes": {
+            "start": 0,
+            "end": 20
+          }
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "audit-run",
+          "fact:result.content"
+        ]
+      }
+    }
+  ]
+}

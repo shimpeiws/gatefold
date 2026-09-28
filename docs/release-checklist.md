@@ -1,6 +1,6 @@
 # Release checklist
 
-Reproducible steps to cut the current release (v0.8). Every step must pass in
+Reproducible steps to cut the current release (v0.9). Every step must pass in
 order.
 
 ## 1. Clean install
@@ -21,7 +21,7 @@ pnpm build
 ```
 
 `pnpm ci:all` runs all five in this order and must stay in sync with the
-release gate in [v0.8 scope](v0.8-scope.md).
+release gate in [v0.9 scope](v0.9-scope.md).
 
 ## 3. Package validation
 
@@ -33,9 +33,10 @@ npm pack --dry-run --json
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
 `.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
-`claim-result.v8.json`, including `schema/examples/` and the v4
+`claim-result.v9.json`, including `schema/examples/` and the v4
 trace-comparison, v5 run-comparison, v6 evaluation, v7
-evaluation-comparison, and v8 audit examples), `README.md`,
+evaluation-comparison, v8 audit, v9 cell, and v9 cell-comparison
+examples), `README.md`,
 and `package.json`. All of `docs/` is shipped intentionally — keep only
 public-facing documentation in that directory. The tarball must not contain
 `test/`, `node_modules/`, `src/`, or any agent or review artifacts.
@@ -76,6 +77,9 @@ gatefold evaluate-run --run run-dir --spec task-spec.json --check-report check-r
 gatefold compare-evaluations --before run-a-dir --after run-b-dir --spec task-spec.json --format json        # evaluation comparison (v7)
 gatefold audit-run --run run-dir --format json                                                              # single-run evidence audit (v8)
 gatefold audit-run --run run-dir --check-report check-report.json --format json                             # audit with an external check report
+gatefold report-cell --run run-dir --format json                                                            # single-cell evidence account (v9)
+gatefold report-cell --run run-dir --evaluation evaluation-result.json --format json                        # cell report with an evaluation
+gatefold compare-cells --before a-run-dir --after b-run-dir --format json                                    # A → B cell comparison (v9)
 pfl report --json | gatefold -            # stdin transport
 pfl export --json | gatefold -            # stdin transport
 pfl diff --json | gatefold -              # stdin transport
@@ -102,7 +106,13 @@ confirm `schemaVersion` is 8, `source.command` is `audit-run`, `inputs`
 records `run` and `checkReports`, and every fact carries a `state` of
 `verified`/`inconsistent`/`unverifiable`/`not-recorded`, a `completeness` of
 `complete`/`partial`/`unknown`, and evidence whose pointer resolves inside
-the named document.
+the named document. For the v9 cell results, confirm `schemaVersion` is 9,
+`source.command` is `report-cell` or `compare-cells`, `inputs` records
+`run` or `beforeRun`/`afterRun`, and every entry carries a `lane`, a
+`state`, a `completeness`, and evidence whose `source` and `pointer`
+resolve inside the named run's trace, manifest, or verified stored bytes —
+with the manifest-recorded digest attached to every citation of stored
+bytes.
 
 ## 6. Tag and publish
 

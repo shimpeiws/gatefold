@@ -1,0 +1,39 @@
+{
+  "artifacts": [
+    {
+      "path": "stdout.log",
+      "kind": "log",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "stderr.log",
+      "kind": "log",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "patch.diff",
+      "kind": "patch",
+      "digest": "sha256:4106b95ed25b06bbfd0de43817160dac976dbd25bd7c06ca535a59e5a34b70f4"
+    },
+    {
+      "path": "result.txt",
+      "kind": "result",
+      "digest": "sha256:eae28580ba215a01264d56ea362c943cb225e1b926475818d9249ba397433bff"
+    },
+    {
+      "path": "baseline-manifest.json",
+      "kind": "file",
+      "digest": "sha256:b3b9f31a522b97041b00c3bfa8787f582831c2f27df02f22c7f0197689d1a3fc"
+    },
+    {
+      "path": "changes.json",
+      "kind": "file",
+      "digest": "sha256:a4fcf16b01995b5e290467d0c7440e7b53475b430a99b276273639aed1418cb3"
+    },
+    {
+      "path": "observation/export.json",
+      "kind": "export",
+      "digest": "sha256:ff89867faf7f10870a584276b0353f7fad63afc784aea63ebe8a3383ab2cd1a9"
+    }
+  ]
+}

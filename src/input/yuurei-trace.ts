@@ -114,6 +114,42 @@ export type YuureiPatchBase = "empty" | "seeded";
 export type YuureiPatchState = "complete" | "partial" | "absent";
 
 /**
+ * The observation statuses yuurei records (ADR-0022). `recorded` and
+ * `partial` say the observer produced an export artifact; `unavailable`
+ * says it did not and `reason` then names why. None of these is a
+ * completeness judgement about the harness.
+ */
+export type YuureiObservationStatus = "recorded" | "partial" | "unavailable";
+
+/** The shipped observer-failure vocabulary (ADR-0022). */
+export type YuureiObservationReason =
+  | "observer-not-found"
+  | "spawn-failed"
+  | "timeout"
+  | "consent-required"
+  | "export-failed"
+  | "isolation-level0-unsupported";
+
+/**
+ * The pre-run observation record: what the observer declared about its own
+ * work. `snapshot_ids` is what the observer transcribed from the export
+ * envelope — null when it did not record them; `artifacts` declares the
+ * paths the run retained under `observation/`. Absent `observation` means
+ * the phase was not opted in or did not run — never "no configuration".
+ */
+export interface YuureiObservation {
+  readonly observer: { readonly id: string; readonly version: string | null };
+  readonly status: YuureiObservationStatus;
+  readonly reason: YuureiObservationReason | null;
+  readonly completeness: string | null;
+  readonly snapshotIds: {
+    readonly observed: string;
+    readonly resolved: string;
+  } | null;
+  readonly artifacts: readonly YuureiTraceArtifact[];
+}
+
+/**
  * The durable patch-completeness record
  * (docs/yuurei-seeded-run-contract.md): which workspace the patch diffs
  * against and whether the stored record describes every recorded change.
@@ -151,6 +187,9 @@ export interface YuureiTrace {
   readonly cost: YuureiTraceCost | null;
   readonly artifacts: readonly YuureiTraceArtifact[];
   readonly yuureiVersion?: string;
+  /** The prepared cell's identifier, when the run records one. */
+  readonly cellId?: string;
+  readonly observation?: YuureiObservation;
   readonly requestedCell?: YuureiTraceRequestedCell;
   readonly executionOptions?: YuureiTraceExecutionOptions;
   readonly definition?: YuureiTraceDefinition;
@@ -174,6 +213,15 @@ const MAX_SCALAR_CHARS = 4_096;
 const RESOLVED_REASONS = ["observed", "unobserved", "parse_failed"] as const;
 const PATCH_BASES = ["empty", "seeded"] as const;
 const PATCH_STATES = ["complete", "partial", "absent"] as const;
+const OBSERVATION_STATUSES = ["recorded", "partial", "unavailable"] as const;
+const OBSERVATION_REASONS = [
+  "observer-not-found",
+  "spawn-failed",
+  "timeout",
+  "consent-required",
+  "export-failed",
+  "isolation-level0-unsupported",
+] as const;
 /** The only `seed.policy` the shipped seeded workspace accepts. */
 const SEED_POLICY = "git-tracked-files";
 
@@ -208,6 +256,11 @@ function stringField(
 /**
  * Required string that may be empty. Provenance fields (a task source, a
  * profile name) describe where content came from and carry no identity.
+ *
+ * `model.requested` is also allowed to be empty: yuurei's `run` CLI defaults
+ * it to `''` when neither `--model` nor the run definition supplies one, so a
+ * shipped trace can record an empty request. Absence of a request is a
+ * recorded fact, not a malformed one.
  */
 function boundedStringField(
   record: Record<string, unknown>,
@@ -567,6 +620,110 @@ function parseTracePatch(value: unknown): YuureiTracePatch | undefined {
   };
 }
 
+/**
+ * The optional pre-run observation record (ADR-0022,
+ * docs/yuurei-trace-contract.md): validated for shape when present so a
+ * malformed record still rejects like any other contract violation, but
+ * absent stays absent — never an empty record.
+ */
+function parseObservation(value: unknown): YuureiObservation | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw shapeError("observation", "an object");
+  const observer = requiredRecord(value, "observer", "observation.observer");
+  const status = value.status;
+  if (
+    typeof status !== "string" ||
+    !(OBSERVATION_STATUSES as readonly string[]).includes(status)
+  )
+    throw shapeError(
+      "observation.status",
+      `one of ${OBSERVATION_STATUSES.map((s) => `"${s}"`).join(", ")}`,
+    );
+  const reason = value.reason;
+  if (reason === undefined)
+    throw shapeError(
+      "observation.reason",
+      "a required key (its value may be null)",
+    );
+  if (
+    reason !== null &&
+    (typeof reason !== "string" ||
+      !(OBSERVATION_REASONS as readonly string[]).includes(reason))
+  )
+    throw shapeError(
+      "observation.reason",
+      `null or one of ${OBSERVATION_REASONS.map((r) => `"${r}"`).join(", ")}`,
+    );
+  const completeness = value.completeness;
+  if (completeness === undefined)
+    throw shapeError(
+      "observation.completeness",
+      "a required key (its value may be null)",
+    );
+  if (
+    completeness !== null &&
+    (typeof completeness !== "string" || completeness.length > MAX_SCALAR_CHARS)
+  )
+    throw shapeError(
+      "observation.completeness",
+      `null or a string of at most ${MAX_SCALAR_CHARS} characters`,
+    );
+  const snapshotIds = value.snapshot_ids;
+  let parsedSnapshotIds: YuureiObservation["snapshotIds"];
+  if (snapshotIds === undefined)
+    throw shapeError(
+      "observation.snapshot_ids",
+      "a required key (its value may be null)",
+    );
+  if (snapshotIds === null) parsedSnapshotIds = null;
+  else {
+    if (!isRecord(snapshotIds))
+      throw shapeError("observation.snapshot_ids", "an object or null");
+    parsedSnapshotIds = {
+      observed: stringField(
+        snapshotIds,
+        "observed",
+        "observation.snapshot_ids.observed",
+      ),
+      resolved: stringField(
+        snapshotIds,
+        "resolved",
+        "observation.snapshot_ids.resolved",
+      ),
+    };
+  }
+  const artifacts = value.artifacts;
+  if (!Array.isArray(artifacts))
+    throw shapeError("observation.artifacts", "an array");
+  if (artifacts.length > MAX_ARTIFACTS)
+    throw shapeError(
+      "observation.artifacts",
+      `an array with at most ${MAX_ARTIFACTS} items`,
+    );
+  return {
+    observer: {
+      id: stringField(observer, "id", "observation.observer.id"),
+      version: nullableStringField(
+        observer,
+        "version",
+        "observation.observer.version",
+      ),
+    },
+    status: status as YuureiObservationStatus,
+    reason: reason as YuureiObservationReason | null,
+    completeness,
+    snapshotIds: parsedSnapshotIds,
+    artifacts: artifacts.map((item, index) => {
+      const at = `observation.artifacts[${index}]`;
+      if (!isRecord(item)) throw shapeError(at, "an object");
+      return {
+        path: boundedStringField(item, "path", `${at}.path`),
+        kind: boundedStringField(item, "kind", `${at}.kind`),
+      };
+    }),
+  };
+}
+
 function parseDiagnostics(value: unknown): readonly string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw shapeError("diagnostics", "an array");
@@ -673,7 +830,7 @@ export function parseYuureiTrace(
       version: nullableStringField(runtime, "version", "runtime.version"),
     },
     model: {
-      requested: stringField(model, "requested", "model.requested"),
+      requested: boundedStringField(model, "requested", "model.requested"),
       resolved: nullableStringField(model, "resolved", "model.resolved"),
       ...(resolvedReason === undefined
         ? {}
@@ -709,6 +866,12 @@ export function parseYuureiTrace(
     cost: parseCost(value.cost),
     artifacts: parseArtifacts(value.artifacts),
     ...(yuureiVersion === undefined ? {} : { yuureiVersion }),
+    ...(value.cell_id === undefined
+      ? {}
+      : { cellId: stringField(value, "cell_id", "cell_id") }),
+    ...(value.observation === undefined
+      ? {}
+      : { observation: parseObservation(value.observation) }),
     ...(value.requested_cell === undefined
       ? {}
       : { requestedCell: parseRequestedCell(value.requested_cell) }),

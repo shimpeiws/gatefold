@@ -128,6 +128,20 @@ describe("yuurei trace reader contract", () => {
     expect((trace as Record<string, unknown>).level).toBeUndefined();
   });
 
+  it("accepts an empty model.requested as a recorded absent request", () => {
+    // yuurei's `run` CLI defaults the field to '' when neither --model nor the
+    // run definition supplies one, so a shipped trace records an empty
+    // request. It is a value, not a missing field or a malformed one.
+    const doc = validDoc();
+    doc.model.requested = "";
+    const trace = parseYuureiTrace(doc, "x.json");
+    expect(trace.model.requested).toBe("");
+    // the empty value is still capped and still must be a string
+    const wrongType = validDoc();
+    wrongType.model.requested = null;
+    expect(() => parseYuureiTrace(wrongType, "x.json")).toThrow(PflExportError);
+  });
+
   it.each([
     [
       "wrong-schema-version.json",

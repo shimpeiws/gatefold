@@ -18,7 +18,12 @@ these rules: they resolve each spec-declared criterion to a `pass`/`fail`/
 see [v0.7 scope](v0.7-scope.md) and `claim-result.v6.json`/
 `claim-result.v7.json`. The `audit-run` command (v0.8) runs no rules either:
 it emits the fixed fact list of [v0.8 scope](v0.8-scope.md) and
-`claim-result.v8.json` — record states, not claims or verdicts.
+`claim-result.v8.json` — record states, not claims or verdicts. The
+`report-cell` and `compare-cells` commands (v0.9) likewise run no rules:
+they emit the fixed lane/entry list of [v0.9 scope](v0.9-scope.md) and
+`claim-result.v9.json` — association, configuration, execution, audit,
+evaluation, and comparison records with states and completeness markers,
+never claims, verdicts, or confidence scores.
 
 ## `report` rules
 
@@ -105,11 +110,11 @@ never causation, never answer quality.
 
 | Rule id | What it claims | Confidence |
 | --- | --- | --- |
-| `trace-inputs` | The pair's shared identity: same task content digest, runtime id, requested model, and isolation strategy; run ids and task sources are quoted as provenance, and a differing `isolation.verified` is stated. | 1.0 |
+| `trace-inputs` | The pair's shared identity: same task content digest, runtime id, requested model, and isolation strategy; run ids and task sources are quoted as provenance, and a differing `isolation.verified` is stated. An empty `model.requested` on both sides is stated as no model requested. | 1.0 |
 | `trace-comparability` | One caveat per allowed-but-meaningful difference or gap: `requested_cell` / `execution_options` absent on either side (unverifiable, not assumed), and observed drift in `yuurei_version`, `runtime.version`, `model.resolved`, `model.resolved_reason`, or `isolation.verified`. Sorted by field name. | 1.0 |
 | `trace-profiles` | The profile/harness variant: both profiles' names and content digests, and — when both record it — the `requested_cell.digest` difference consistent with them. The compared variable, never a rejection. | 1.0 |
 | `trace-runtime` | The shared runtime id and each side's recorded `runtime.version`; a null version is stated as unobserved (the trace records the key, not a value), never as a difference. | 1.0 |
-| `trace-model` | The shared requested model and each side's observed `model.resolved`; null is stated as unobserved with `resolved_reason` when recorded. | 1.0 |
+| `trace-model` | The shared requested model and each side's observed `model.resolved`; null is stated as unobserved with `resolved_reason` when recorded. An empty requested model is stated as no model requested. | 1.0 |
 | `trace-execution` | Each side's recorded outcome — `timed_out`, `exit_code`, `signal` — always with the disclaimer that exit status describes process termination, not answer quality. | 1.0 |
 | `trace-duration` | The recorded `duration_ms` of each side and the A → B difference; no difference is computed when either side is null. | 1.0 |
 | `trace-usage` | One claim per usage key in byte order: a numeric difference only when the key is numeric on both sides; `null` is stated as attempted-but-unobserved and absent as never-attempted — the two cases are never merged. | 1.0 |

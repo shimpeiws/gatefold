@@ -1,5 +1,7 @@
 import { analyze } from "./application/analyze.js";
 import { auditRun } from "./application/audit-run.js";
+import { compareCells } from "./application/compare-cells.js";
+import { reportCell } from "./application/cell-report.js";
 import { compareDocuments } from "./application/compare.js";
 import { compareEvaluations } from "./application/compare-evaluations.js";
 import { compareRuns } from "./application/compare-runs.js";
@@ -7,6 +9,7 @@ import { compareTraces } from "./application/compare-traces.js";
 import { loadCheckReports } from "./application/check-report-binding.js";
 import { evaluateRun } from "./application/evaluate-run.js";
 import type { AuditResult } from "./domain/audit.js";
+import type { CellReportResult } from "./domain/cell.js";
 import type { ComparisonResult } from "./domain/comparison.js";
 import type {
   EvaluationComparisonResult,
@@ -23,11 +26,14 @@ import {
 } from "./input/pfl-export.js";
 import { readTaskSpec } from "./input/task-spec.js";
 import { readAuditedRun } from "./input/yuurei-audit-run.js";
+import { readCellEvaluation } from "./input/cell-evaluation.js";
+import { readCellRun } from "./input/yuurei-cell.js";
 import { readEvaluatedRun } from "./input/yuurei-seeded-run.js";
 import { readYuureiRun } from "./input/yuurei-run.js";
 import { readYuureiTrace, readYuureiTraceStdin } from "./input/yuurei-trace.js";
 import {
   formatAuditHuman,
+  formatCellHuman,
   formatComparisonHuman,
   formatEvaluationComparisonHuman,
   formatEvaluationHuman,
@@ -85,10 +91,25 @@ interface CliOptions {
     run?: string;
     checkReports: string[];
   };
+  readonly reportCell?: {
+    run?: string;
+    evaluation?: string;
+  };
+  readonly compareCells?: {
+    before?: string;
+    after?: string;
+    evaluation?: string;
+  };
   readonly format: OutputFormat;
   readonly minConfidence: number;
   /** The --min-confidence token exactly as supplied, for display. */
   readonly minConfidenceText: string;
+  /**
+   * Whether the caller supplied `--min-confidence` at all. Commands whose
+   * entries carry no confidence reject the option rather than accepting a
+   * filter they cannot apply.
+   */
+  readonly minConfidenceSupplied: boolean;
   readonly help: boolean;
 }
 
@@ -116,9 +137,12 @@ function parseArgs(args: readonly string[]): CliOptions {
   let evaluateRun: CliOptions["evaluateRun"];
   let compareEvaluations: CliOptions["compareEvaluations"];
   let auditRun: CliOptions["auditRun"];
+  let reportCell: CliOptions["reportCell"];
+  let compareCells: CliOptions["compareCells"];
   let format: OutputFormat = "human";
   let minConfidence = 0;
   let minConfidenceText = "0";
+  let minConfidenceSupplied = false;
   let optionsDone = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -130,6 +154,7 @@ function parseArgs(args: readonly string[]): CliOptions {
         format,
         minConfidence,
         minConfidenceText,
+        minConfidenceSupplied,
         help: true,
       };
     if (!optionsDone && argument === "--") {
@@ -167,19 +192,25 @@ function parseArgs(args: readonly string[]): CliOptions {
       !optionsDone &&
       (evaluateRun !== undefined ||
         compareEvaluations !== undefined ||
-        auditRun !== undefined) &&
+        auditRun !== undefined ||
+        reportCell !== undefined ||
+        compareCells !== undefined) &&
       argument.startsWith("--") &&
       (evaluateRun !== undefined
         ? ["run", "spec", "check-report"]
         : auditRun !== undefined
           ? ["run", "check-report"]
-          : [
-              "before",
-              "after",
-              "spec",
-              "before-check-report",
-              "after-check-report",
-            ]
+          : reportCell !== undefined
+            ? ["run", "evaluation"]
+            : compareCells !== undefined
+              ? ["before", "after", "evaluation"]
+              : [
+                  "before",
+                  "after",
+                  "spec",
+                  "before-check-report",
+                  "after-check-report",
+                ]
       ).includes(
         argument.slice(
           2,
@@ -193,7 +224,15 @@ function parseArgs(args: readonly string[]): CliOptions {
       );
       const [value, consumed] = optionValue(args, index, `--${name}`);
       index = consumed;
-      if (evaluateRun !== undefined) {
+      if (reportCell !== undefined) {
+        if ((reportCell as Record<string, unknown>)[name] !== undefined)
+          throw new CliError(`--${name} is already set`, EXIT_USAGE);
+        reportCell = { ...reportCell, [name]: value };
+      } else if (compareCells !== undefined) {
+        if ((compareCells as Record<string, unknown>)[name] !== undefined)
+          throw new CliError(`--${name} is already set`, EXIT_USAGE);
+        compareCells = { ...compareCells, [name]: value };
+      } else if (evaluateRun !== undefined) {
         if (name === "check-report")
           evaluateRun = {
             ...evaluateRun,
@@ -273,6 +312,7 @@ function parseArgs(args: readonly string[]): CliOptions {
         );
       minConfidence = parsed;
       minConfidenceText = value;
+      minConfidenceSupplied = true;
       continue;
     }
     if (!optionsDone && argument === "-") {
@@ -306,6 +346,16 @@ function parseArgs(args: readonly string[]): CliOptions {
           "audit-run inputs must be given with --run/--check-report; '-' is a flag value, not a positional",
           EXIT_USAGE,
         );
+      if (reportCell !== undefined)
+        throw new CliError(
+          "report-cell inputs must be given with --run/--evaluation; '-' is a flag value, not a positional",
+          EXIT_USAGE,
+        );
+      if (compareCells !== undefined)
+        throw new CliError(
+          "compare-cells inputs must be given with --before/--after/--evaluation; '-' is a flag value, not a positional",
+          EXIT_USAGE,
+        );
       if (inputPath !== undefined)
         throw new CliError("only one input file is allowed", EXIT_USAGE);
       inputPath = argument;
@@ -325,19 +375,25 @@ function parseArgs(args: readonly string[]): CliOptions {
       evaluateRun === undefined &&
       compareEvaluations === undefined &&
       auditRun === undefined &&
+      reportCell === undefined &&
+      compareCells === undefined &&
       inputPath === undefined &&
       (argument === "compare" ||
         argument === "compare-traces" ||
         argument === "compare-runs" ||
         argument === "evaluate-run" ||
         argument === "compare-evaluations" ||
-        argument === "audit-run")
+        argument === "audit-run" ||
+        argument === "report-cell" ||
+        argument === "compare-cells")
     ) {
       if (argument === "compare") compare = {};
       else if (argument === "compare-traces") compareTraces = {};
       else if (argument === "compare-runs") compareRuns = {};
       else if (argument === "evaluate-run") evaluateRun = { checkReports: [] };
       else if (argument === "audit-run") auditRun = { checkReports: [] };
+      else if (argument === "report-cell") reportCell = {};
+      else if (argument === "compare-cells") compareCells = {};
       else
         compareEvaluations = {
           beforeCheckReports: [],
@@ -373,6 +429,16 @@ function parseArgs(args: readonly string[]): CliOptions {
     if (auditRun !== undefined)
       throw new CliError(
         "audit-run takes no positional inputs; use --run/--check-report",
+        EXIT_USAGE,
+      );
+    if (reportCell !== undefined)
+      throw new CliError(
+        "report-cell takes no positional inputs; use --run/--evaluation",
+        EXIT_USAGE,
+      );
+    if (compareCells !== undefined)
+      throw new CliError(
+        "compare-cells takes no positional inputs; use --before/--after/--evaluation",
         EXIT_USAGE,
       );
     if (inputPath !== undefined)
@@ -481,6 +547,42 @@ function parseArgs(args: readonly string[]): CliOptions {
         EXIT_USAGE,
       );
   }
+  if (
+    minConfidenceSupplied &&
+    (reportCell !== undefined || compareCells !== undefined)
+  )
+    throw new CliError(
+      "--min-confidence does not apply to report-cell or compare-cells: cell entries carry no confidence",
+      EXIT_USAGE,
+    );
+  if (reportCell !== undefined) {
+    if (reportCell.run === undefined)
+      throw new CliError("report-cell requires --run (see --help)", EXIT_USAGE);
+    if (reportCell.run === "-" || reportCell.evaluation === "-")
+      throw new CliError(
+        "report-cell reads run directories and evaluation files; '-' for stdin is not supported",
+        EXIT_USAGE,
+      );
+  }
+  if (compareCells !== undefined) {
+    const missing = (["before", "after"] as const).filter(
+      (flag) => compareCells[flag] === undefined,
+    );
+    if (missing.length > 0)
+      throw new CliError(
+        `compare-cells requires ${missing.map((f) => `--${f}`).join(", ")} (see --help)`,
+        EXIT_USAGE,
+      );
+    if (
+      compareCells.before === "-" ||
+      compareCells.after === "-" ||
+      compareCells.evaluation === "-"
+    )
+      throw new CliError(
+        "compare-cells reads run directories and evaluation files; '-' for stdin is not supported",
+        EXIT_USAGE,
+      );
+  }
   return {
     inputPath,
     stdin,
@@ -490,9 +592,12 @@ function parseArgs(args: readonly string[]): CliOptions {
     evaluateRun,
     compareEvaluations,
     auditRun,
+    reportCell,
+    compareCells,
     format,
     minConfidence,
     minConfidenceText,
+    minConfidenceSupplied,
     help: false,
   };
 }
@@ -517,6 +622,12 @@ function usage(): string {
     "       gatefold audit-run --run <run-dir>",
     "                              [--check-report <report.json>] ...",
     "                              Audit one run's stored records for consistency",
+    "       gatefold report-cell --run <run-dir>",
+    "                              [--evaluation <v6-evaluation-result.json>]",
+    "                              Report one cell's observation, run, and audit evidence",
+    "       gatefold compare-cells --before <A-run-dir> --after <B-run-dir>",
+    "                              [--evaluation <v7-evaluation-comparison.json>]",
+    "                              Compare two cells A → B across all recorded lanes",
     "",
     "Analyze a pfl report, export, or diff and print evidence-backed claims.",
     "The document's top-level 'command' field selects the reader.",
@@ -558,6 +669,18 @@ function usage(): string {
     "no task spec; --check-report is optional and repeatable. Facts are",
     "states (verified/inconsistent/unverifiable/not-recorded) plus a",
     "completeness, never verdicts or scores.",
+    "",
+    "report-cell reads one run directory including the pre-run pfl export",
+    "its observation record declares (observation/export.json, digest-",
+    "verified via the manifest) and reports the cell_id association, the",
+    "recorded configuration, the run's execution records, and the audit",
+    "facts in separate lanes. --evaluation is optional; a supplied v6",
+    "evaluate-run result is restated only when it binds to the run.",
+    "",
+    "compare-cells reads two run directories and reports the directional",
+    "A → B difference across the same lanes. The runs must satisfy the",
+    "same comparability conditions as compare-runs; a missing, failed, or",
+    "partial observation is reported as unknown, never as no change.",
     "",
     "Options:",
     "  --format <human|json>        Output format (default: human)",
@@ -645,6 +768,45 @@ export async function runCli(args: readonly string[]): Promise<string> {
           options.minConfidence,
           options.minConfidenceText,
         );
+  }
+  if (options.reportCell !== undefined) {
+    const cellArgs = options.reportCell as {
+      run: string;
+      evaluation?: string;
+    };
+    const result: CellReportResult = reportCell({
+      cell: await readCellRun(cellArgs.run),
+      evaluation:
+        cellArgs.evaluation === undefined
+          ? undefined
+          : await readCellEvaluation(cellArgs.evaluation),
+      label: cellArgs.run,
+    });
+    return options.format === "json"
+      ? formatJson(result)
+      : formatCellHuman(result);
+  }
+  if (options.compareCells !== undefined) {
+    const cellArgs = options.compareCells as {
+      before: string;
+      after: string;
+      evaluation?: string;
+    };
+    const result: CellReportResult = compareCells({
+      before: await readCellRun(cellArgs.before),
+      after: await readCellRun(cellArgs.after),
+      evaluation:
+        cellArgs.evaluation === undefined
+          ? undefined
+          : await readCellEvaluation(cellArgs.evaluation),
+      labels: {
+        before: cellArgs.before,
+        after: cellArgs.after,
+      },
+    });
+    return options.format === "json"
+      ? formatJson(result)
+      : formatCellHuman(result);
   }
   if (options.auditRun !== undefined) {
     const auditArgs = options.auditRun as {

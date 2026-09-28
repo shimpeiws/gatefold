@@ -43,7 +43,7 @@ Required fields:
 | `started_at` | string | Run start timestamp as recorded by yuurei. |
 | `finished_at` | string | Run end timestamp as recorded by yuurei. |
 | `runtime` | object | `{ id: string, version: string \| null }` — the runtime identity and its observed version. |
-| `model` | object | `{ requested: string, resolved: string \| null, resolved_reason?: "observed" \| "unobserved" \| "parse_failed" }` — the requested model identity and the model observed to have run. |
+| `model` | object | `{ requested: string, resolved: string \| null, resolved_reason?: "observed" \| "unobserved" \| "parse_failed" }` — the requested model identity and the model observed to have run. `requested` may be an empty string: yuurei records `""` when no model was requested, which is a recorded value, not an absent one. |
 | `profile` | object | `{ name: string, digest: string }` — the profile's name (provenance) and content digest (identity). |
 | `task` | object | `{ source: string, digest: string }` — the task's path or origin (provenance) and content digest (identity). |
 | `isolation` | object | `{ strategy: string, verified: boolean }` — the isolation strategy requested for the cell and whether verification succeeded. |
@@ -77,6 +77,11 @@ different. Gatefold applies it field by field:
   no model identity) from `"parse_failed"` (an expected source existed but
   could not be read); `"observed"` accompanies a non-null `resolved` and is
   omitted by yuurei when redundant, so its absence is not an error.
+- `model.requested: ""` means no model was requested. yuurei's `run` CLI
+  defaults the field to the empty string when neither `--model` nor the run
+  definition supplies one, so the empty value is a recorded fact and is
+  stated as an absent request — never quoted as a model named `''`, and never
+  treated as a missing field.
 - `execution.exit_code: null` means no exit code was recorded (for example a
   signal-terminated run); `execution.signal` names the signal when one was
   observed. `execution.duration_ms: null` means the duration was not
@@ -179,6 +184,7 @@ issue, #45) cover at minimum:
 | Valid schema 0.3 trace, all fields present | accepted |
 | Valid trace missing every optional field (older-trace shape) | accepted; absent fields are unknown |
 | `model.resolved: null` with each `resolved_reason` | accepted; reported as unobserved |
+| `model.requested: ""` (no model requested — yuurei's CLI default) | accepted; stated as no model requested, never as a model named `''` |
 | `usage` with absent keys, null values, and observed values | accepted; the three cases stay distinct |
 | `cost: null` | accepted; unestimated, never zero |
 | `execution` nulls and `timed_out: true` | accepted; unobserved values and timeout recorded |

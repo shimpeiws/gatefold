@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "policy": "git-tracked-files",
+  "source": "/seed/x",
+  "head": "0123456789abcdef0123456789abcdef01234567",
+  "requested_digest": "sha256:base-1",
+  "materialized_digest": "sha256:base-1",
+  "files": {
+    "a.txt": {
+      "digest": "sha256:ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+      "mode": 420,
+      "bytes": 1
+    }
+  }
+}

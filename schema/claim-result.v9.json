@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v9.json",
+  "title": "Gatefold cell report",
+  "description": "Machine-readable cell report emitted by gatefold report-cell or compare-cells --format json. Version 9 describes one yuurei cell — its trace and manifest records, the verified pre-run pfl export the observation record declares, the v0.8 audit facts, and an optional supplied evaluation — or a directional A -> B account of two compatible cells. Every entry names its evidence lane and carries a state and a completeness. This is a descriptive evidence report: no causal attribution, no ranking, and no new quality judgement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "source",
+    "inputs",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 9,
+      "description": "Version of this result schema. Additive changes keep the version; structural changes bump it."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "description": "Identifies this result's command form.",
+      "properties": {
+        "command": {
+          "type": "string",
+          "enum": ["report-cell", "compare-cells"]
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Descriptors of the cell inputs: 'run' for report-cell, 'before'/'after' for compare-cells, and the optional supplied evaluation document.",
+      "properties": {
+        "run": { "$ref": "#/$defs/cellInput" },
+        "before": { "$ref": "#/$defs/cellInput" },
+        "after": { "$ref": "#/$defs/cellInput" },
+        "evaluation": { "$ref": "#/$defs/evaluationInput" }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/cellEntry" },
+      "description": "Every statement of the report in contract order: by subject (before before after), then lane (association, configuration, execution, audit, evaluation, comparison), then each lane's stable ordering."
+    }
+  },
+  "$defs": {
+    "cellInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "runId",
+        "cellId",
+        "taskDigest",
+        "profileName",
+        "profileDigest",
+        "runtimeId",
+        "requestedCellDigest",
+        "observationStatus",
+        "exportObservedSnapshotId",
+        "exportResolvedSnapshotId"
+      ],
+      "description": "Descriptor of one cell input: the run directory plus the identities needed to reconcile the report.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run directory argument as supplied."
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "trace.run_id — the retained run's identity."
+        },
+        "cellId": {
+          "type": ["string", "null"],
+          "description": "trace.cell_id — the prepared cell instance id, or null when the trace does not record one. Not the same as run_id, requested_cell.digest, or the pfl snapshot ids."
+        },
+        "taskDigest": { "type": "string", "minLength": 1 },
+        "profileName": { "type": "string" },
+        "profileDigest": { "type": "string", "minLength": 1 },
+        "runtimeId": { "type": "string", "minLength": 1 },
+        "requestedCellDigest": {
+          "type": ["string", "null"],
+          "description": "trace.requested_cell.digest — the requested input set, or null when the trace does not record it."
+        },
+        "observationStatus": {
+          "type": ["string", "null"],
+          "enum": ["recorded", "partial", "unavailable", null],
+          "description": "The trace's observation.status, or null when no observation record exists."
+        },
+        "exportObservedSnapshotId": {
+          "type": ["string", "null"],
+          "description": "data.snapshot.observedSnapshotId of the bound export, or null when none was bound."
+        },
+        "exportResolvedSnapshotId": {
+          "type": ["string", "null"],
+          "description": "data.snapshot.resolvedSnapshotId of the bound export, or null when none was bound."
+        }
+      }
+    },
+    "evaluationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "schemaVersion", "command"],
+      "description": "Descriptor of the optionally supplied gatefold evaluation result document.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The evaluation document argument as supplied."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "description": "The supplied document's schemaVersion (6 or 7); 0 when it did not identify as one."
+        },
+        "command": {
+          "type": "string",
+          "enum": ["evaluate-run", "compare-evaluations"]
+        }
+      }
+    },
+    "cellEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lane",
+        "id",
+        "state",
+        "completeness",
+        "statement",
+        "evidence",
+        "provenance"
+      ],
+      "properties": {
+        "lane": {
+          "type": "string",
+          "enum": [
+            "association",
+            "configuration",
+            "execution",
+            "audit",
+            "evaluation",
+            "comparison"
+          ],
+          "description": "The record family the entry reports: association (trace/export cross-checks), configuration (bound pfl export content), execution (yuurei run records), audit (v0.8 facts), evaluation (supplied context), comparison (A -> B statements)."
+        },
+        "subject": {
+          "type": "string",
+          "enum": ["before", "after"],
+          "description": "compare-cells only: which cell the entry describes; absent on comparison entries and in single-cell results."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable dot-separated entry identifier from docs/v0.9-scope.md (e.g. 'association.export-binding', 'configuration.element.<id>', 'comparison.element-added.<id>')."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "recorded",
+            "verified",
+            "inconsistent",
+            "unverifiable",
+            "not-recorded"
+          ],
+          "description": "recorded: a document declares this (content restated, no independent check). verified: the records affirmatively establish the check. inconsistent: two well-formed records contradict each other. unverifiable: a needed record is missing, mismatched, truncated, or uninterpretable. not-recorded: the record the entry reports was never produced — absence reported as absence."
+        },
+        "completeness": {
+          "type": "string",
+          "enum": ["complete", "partial", "unknown"],
+          "description": "How complete the evidence behind the entry is — separate from state: a bound export declaring completeness 'partial' yields 'partial' entries; an unverifiable or absent record is 'unknown'."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A descriptive account of what the record declares or what the check established — never a causal claim or a judgement."
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceReference" },
+          "description": "References into the named inputs that support the entry; every pointer resolves inside its document."
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "pointer"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "trace",
+            "manifest",
+            "export",
+            "patch",
+            "result",
+            "baselineManifest",
+            "changes",
+            "evaluation",
+            "beforeTrace",
+            "beforeManifest",
+            "beforeExport",
+            "beforePatch",
+            "beforeResult",
+            "beforeBaselineManifest",
+            "beforeChanges",
+            "beforeEvaluation",
+            "afterTrace",
+            "afterManifest",
+            "afterExport",
+            "afterPatch",
+            "afterResult",
+            "afterBaselineManifest",
+            "afterChanges",
+            "afterEvaluation"
+          ],
+          "description": "Which named input the reference resolves against. Bare names are the single cell's documents; before*/after* names are the A and B sides' documents. 'export' is the digest-verified pfl export artifact declared by the run's observation record; 'evaluation' is the supplied evaluation document."
+        },
+        "pointer": {
+          "type": "string",
+          "pattern": "^$|^(?:/(?:[^/~]|~0|~1)*)*$",
+          "description": "JSON Pointer (RFC 6901) into the document named by source. For patch/result it is the artifact's manifest pointer (/artifacts/<i>) with path/lines/bytes locating inside verified bytes; for manifest it names the manifest entry. The empty string references the whole document."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Verified-byte evidence only: the manifest-recorded digest of the stored bytes the reference locates into — for 'export' it binds the citation to the retained artifact bytes."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Patch evidence only: the workspace-relative file path whose block the range locates inside the stored patch bytes."
+        },
+        "lines": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: an inclusive 1-based line range inside the verified stored bytes."
+        },
+        "bytes": {
+          "$ref": "#/$defs/range",
+          "description": "Artifact evidence only: an inclusive 0-based byte range inside the verified stored bytes."
+        },
+        "elementId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Export evidence only: the pfl element id the reference is about."
+        },
+        "note": {
+          "type": "string",
+          "description": "A short clarifier, e.g. naming an absent field when the pointer references a document root."
+        }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transform"],
+      "properties": {
+        "transform": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "The build path that produced the entry, e.g. ['report-cell', 'entry:association.export-binding'] or ['compare-cells', 'audit-run', 'fact:patch.stored']."
+        }
+      }
+    }
+  }
+}

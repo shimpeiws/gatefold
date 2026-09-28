@@ -1,0 +1,8 @@
+--- /dev/null
++++ src/new.ts
+@@ -0,0 +1,1 @@
++export const X = 2;
+--- /dev/null
++++ src/extra.ts
+@@ -0,0 +1,1 @@
++export const Y = 2;
