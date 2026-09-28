@@ -394,6 +394,7 @@ describe("yuurei trace reader contract", () => {
     });
 
     for (const [sourceProject, part] of [
+      [null, "seed.source_project"],
       ["not-an-object", "seed.source_project"],
       [{ id: "bogus", kind: "git-remote" }, "seed.source_project.id"],
       [

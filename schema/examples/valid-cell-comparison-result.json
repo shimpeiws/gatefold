@@ -234,6 +234,32 @@
     {
       "lane": "association",
       "subject": "before",
+      "id": "association.export-source-project",
+      "state": "not-recorded",
+      "completeness": "unknown",
+      "statement": "neither the trace's seed record nor the export records a source-project identity — the observed cell's source identity is unknown",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/seed",
+          "note": "no source_project field"
+        },
+        {
+          "source": "beforeExport",
+          "pointer": "/data/snapshot",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-cells",
+          "entry:association.export-source-project"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "subject": "before",
       "id": "association.record-consistency",
       "state": "verified",
       "completeness": "complete",
@@ -1412,6 +1438,32 @@
     {
       "lane": "association",
       "subject": "after",
+      "id": "association.export-source-project",
+      "state": "not-recorded",
+      "completeness": "unknown",
+      "statement": "neither the trace's seed record nor the export records a source-project identity — the observed cell's source identity is unknown",
+      "evidence": [
+        {
+          "source": "afterTrace",
+          "pointer": "/seed",
+          "note": "no source_project field"
+        },
+        {
+          "source": "afterExport",
+          "pointer": "/data/snapshot",
+          "digest": "sha256:ff89867faf7f10870a584276b0353f7fad63afc784aea63ebe8a3383ab2cd1a9"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-cells",
+          "entry:association.export-source-project"
+        ]
+      }
+    },
+    {
+      "lane": "association",
+      "subject": "after",
       "id": "association.record-consistency",
       "state": "verified",
       "completeness": "complete",
@@ -2518,6 +2570,53 @@
         "transform": [
           "compare-cells",
           "entry:comparison.profile"
+        ]
+      }
+    },
+    {
+      "lane": "comparison",
+      "id": "comparison.source-identity",
+      "state": "unverifiable",
+      "completeness": "unknown",
+      "statement": "no verified shared source-project identity is recorded — cell A records no source-project identity; cell B records no source-project identity; the observed cell-local project ids are 'path-0123456789abcdef' (A) and 'path-0123456789abcdef' (B) — the same observed identity, which is what the comparison keys on",
+      "evidence": [
+        {
+          "source": "beforeTrace",
+          "pointer": "/seed",
+          "note": "no source_project field"
+        },
+        {
+          "source": "afterTrace",
+          "pointer": "/seed",
+          "note": "no source_project field"
+        },
+        {
+          "source": "beforeExport",
+          "pointer": "/data/project/id",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        },
+        {
+          "source": "afterExport",
+          "pointer": "/data/project/id",
+          "digest": "sha256:ff89867faf7f10870a584276b0353f7fad63afc784aea63ebe8a3383ab2cd1a9"
+        },
+        {
+          "source": "beforeExport",
+          "pointer": "/data/snapshot",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38",
+          "note": "no sourceProject field"
+        },
+        {
+          "source": "afterExport",
+          "pointer": "/data/snapshot",
+          "digest": "sha256:ff89867faf7f10870a584276b0353f7fad63afc784aea63ebe8a3383ab2cd1a9",
+          "note": "no sourceProject field"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "compare-cells",
+          "entry:comparison.source-identity"
         ]
       }
     },

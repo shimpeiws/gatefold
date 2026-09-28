@@ -1869,6 +1869,43 @@ describe("compare-cells source-project identity", () => {
     }
   });
 
+  it("rejects differing verified sources even when the observed project ids match", async () => {
+    const base = tmp();
+    try {
+      // Both exports record one observed project id, but each cell's own
+      // records verify a different declared source — the declared identity
+      // wins over the observed cell-local id.
+      const { before, after } = writePair(base, {
+        before: {
+          trace: declaredCellTrace("cell_a", SRC_A, IDS_A),
+          export: declaredExport(
+            "cell_a",
+            PROJECT_A,
+            declaredSourceProject(SRC_A),
+            IDS_A,
+          ),
+        },
+        after: {
+          trace: declaredCellTrace("cell_b", SRC_B, IDS_B, {
+            run_id: "run-cell-2",
+          }),
+          export: declaredExport(
+            "cell_b",
+            PROJECT_A,
+            declaredSourceProject(SRC_B),
+            IDS_B,
+          ),
+        },
+      });
+      const error = await compare(before, after).catch((e) => e);
+      expect(error).toMatchObject({ code: "mismatched-inputs" });
+      expect((error as Error).message).toContain(SRC_A);
+      expect((error as Error).message).toContain(SRC_B);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("withholds the difference when the export declares a source the trace does not record", async () => {
     const base = tmp();
     try {

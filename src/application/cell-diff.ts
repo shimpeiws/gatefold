@@ -112,8 +112,9 @@ export function byFinding(a: PflFinding, b: PflFinding): number {
 /**
  * Computes the directional A → B difference between two exports. Both
  * documents must already be bound to their cells and mutually comparable
- * (same `data.project.id`, same `data.runtime.id`); the caller enforces
- * those contracts before calling.
+ * (a shared verified source-project identity or equal observed
+ * `data.project.id` values, plus equal `data.runtime.id`); the caller
+ * enforces those contracts before calling.
  */
 export function diffCellExports(
   before: PflExportDocument,

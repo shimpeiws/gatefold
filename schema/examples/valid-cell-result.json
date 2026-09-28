@@ -212,6 +212,31 @@
     },
     {
       "lane": "association",
+      "id": "association.export-source-project",
+      "state": "not-recorded",
+      "completeness": "unknown",
+      "statement": "neither the trace's seed record nor the export records a source-project identity — the observed cell's source identity is unknown",
+      "evidence": [
+        {
+          "source": "trace",
+          "pointer": "/seed",
+          "note": "no source_project field"
+        },
+        {
+          "source": "export",
+          "pointer": "/data/snapshot",
+          "digest": "sha256:781a5b7309e3afcc50c55a14f8dc786e03d15bab108655c053518d1eae250e38"
+        }
+      ],
+      "provenance": {
+        "transform": [
+          "report-cell",
+          "entry:association.export-source-project"
+        ]
+      }
+    },
+    {
+      "lane": "association",
       "id": "association.record-consistency",
       "state": "verified",
       "completeness": "complete",

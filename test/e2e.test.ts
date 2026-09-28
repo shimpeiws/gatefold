@@ -2236,6 +2236,45 @@ describe("gatefold e2e: report-cell and compare-cells", () => {
     expect(ids).not.toContain("comparison.config-unavailable");
   });
 
+  it("compare-cells compares a genuine same-source pair whose observed project ids differ", async () => {
+    // Real yuurei #214 + pfl #217 outputs: two cells from one source with
+    // distinct cell-local project ids joined on the declared source identity.
+    const run = await gatefold([
+      "compare-cells",
+      "--before",
+      cellFixture("cell-real-pair-a"),
+      "--after",
+      cellFixture("cell-real-pair-b"),
+      "--format",
+      "json",
+    ]);
+    expect(run.code, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout);
+    expect(validateCell(result), JSON.stringify(validateCell.errors)).toBe(
+      true,
+    );
+    const states = entryMap(result);
+    expect(states.get("comparison.source-identity")).toBe("verified");
+    const identity = result.entries.find(
+      (e: { id: string }) => e.id === "comparison.source-identity",
+    );
+    expect(identity.statement).toContain("git-db9acfc85f531c03");
+    expect(states.get("comparison.elements")).toBe("recorded");
+  });
+
+  it("compare-cells rejects a genuine different-source pair with exit 3", async () => {
+    const run = await gatefold([
+      "compare-cells",
+      "--before",
+      cellFixture("cell-real-pair-a"),
+      "--after",
+      cellFixture("cell-real-other-source"),
+    ]);
+    expect(run.code).toBe(3);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("gatefold:");
+  });
+
   it("compare-cells never concludes 'no configuration change' when a side lacks an export", async () => {
     const run = await gatefold([
       "compare-cells",
