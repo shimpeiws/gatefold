@@ -1,0 +1,45 @@
+name: Release
+
+# Tag-triggered publish: `git tag vX.Y.Z && git push origin vX.Y.Z` on the
+# release commit is the entire release act — this workflow re-runs the full
+# gate on the tagged commit and publishes with provenance via npm Trusted
+# Publishing (OIDC). The tag/version check below keeps the pushed tag and
+# package.json version from drifting apart.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # Third-party actions are pinned to commit SHAs; the tag comment
+      # records the release they correspond to.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          # Node 24 ships npm >= 11.5.1, which npm Trusted Publishing
+          # requires; engines.node only bounds the published package.
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ci:all
+      - name: Tag must match package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag v${TAG} does not match package.json version ${PKG}"
+            exit 1
+          fi
+      - run: npm publish --provenance --access public
