@@ -326,7 +326,9 @@ describe("readPflExport contract", () => {
     try {
       await readPflExport(badPath);
     } catch (error) {
-      expect((error as Error).message).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
+      expect((error as Error).message).not.toMatch(
+        /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u,
+      );
     }
   });
 

@@ -49,6 +49,8 @@ const KINDS_REQUIRING_TEXT: readonly string[] = [
 
 const MAX_CRITERIA = 1_000;
 const MAX_SCALAR_CHARS = 4_096;
+const MAX_EQUALS_DEPTH = 12;
+const MAX_EQUALS_NODES = 10_000;
 
 /** One declared criterion. */
 export interface TaskCriterion {
@@ -110,6 +112,46 @@ function requiredString(
 }
 
 const POINTER_PATTERN = /^$|^(?:\/(?:[^/~]|~0|~1)*)*$/;
+
+/**
+ * Bounds one `equals` expectation to the same JSON envelope the other
+ * readers enforce — depth and node ceilings plus bounded scalars — so
+ * comparing it later (`jsonEquals` recurses) cannot run away on a deeply
+ * nested spec value.
+ */
+function checkEqualsValue(
+  value: unknown,
+  path: string,
+  depth: number,
+  budget: { nodes: number },
+): void {
+  budget.nodes += 1;
+  if (budget.nodes > MAX_EQUALS_NODES)
+    throw shapeError(
+      path,
+      `nested JSON with at most ${MAX_EQUALS_NODES} nodes`,
+    );
+  if (value === null || typeof value !== "object") {
+    if (typeof value === "string" && value.length > MAX_SCALAR_CHARS)
+      throw shapeError(
+        path,
+        `a string of at most ${MAX_SCALAR_CHARS} characters`,
+      );
+    return;
+  }
+  if (depth > MAX_EQUALS_DEPTH)
+    throw shapeError(
+      path,
+      `JSON nested no deeper than ${MAX_EQUALS_DEPTH} levels`,
+    );
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries())
+      checkEqualsValue(item, `${path}[${index}]`, depth + 1, budget);
+    return;
+  }
+  for (const [key, item] of Object.entries(value))
+    checkEqualsValue(item, `${path}.${key}`, depth + 1, budget);
+}
 
 /** Validates a parsed JSON value against the task-spec contract. Pure: no I/O. */
 export function parseTaskSpec(value: unknown, sourcePath: string): TaskSpec {
@@ -178,6 +220,7 @@ export function parseTaskSpec(value: unknown, sourcePath: string): TaskSpec {
         throw shapeError(`${at}.pointer`, "an RFC 6901 JSON Pointer");
       if (!("equals" in item))
         throw shapeError(`${at}.equals`, "a required key");
+      checkEqualsValue(item.equals, `${at}.equals`, 0, { nodes: 0 });
       criterion.equals = item.equals;
     }
     return criterion;

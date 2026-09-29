@@ -73,6 +73,13 @@ function gatefoldWithStdin(
   });
 }
 
+/**
+ * The display contract: no Unicode Cc/Cf/Zl/Zp character reaches stdout
+ * verbatim — \t, \n, and \r are the formatter's own line/tab structure.
+ */
+const UNSAFE_DISPLAY = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+const displayBody = (stdout: string): string => stdout.replace(/[\t\n\r]/g, "");
+
 const schema = JSON.parse(
   readFileSync(`${root}schema/claim-result.v2.json`, "utf8"),
 );
@@ -242,6 +249,14 @@ describe("gatefold e2e (real process)", () => {
     for (const token of ["--format", "--min-confidence", "Exit codes"]) {
       expect(run.stdout).toContain(token);
     }
+  });
+
+  it("--version prints the package version and exits 0", async () => {
+    const run = await gatefold(["--version"]);
+    expect(run.code).toBe(0);
+    expect(run.stderr).toBe("");
+    const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
+    expect(run.stdout.trim()).toBe(`gatefold ${pkg.version}`);
   });
 
   it("reads a pfl export from stdin when the input is '-'", async () => {
@@ -721,7 +736,7 @@ describe("gatefold e2e (real process)", () => {
   it("never emits raw control characters in human output", async () => {
     const run = await gatefold([fixture("valid-export.json")]);
     expect(run.code).toBe(0);
-    expect(run.stdout).not.toMatch(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+    expect(displayBody(run.stdout)).not.toMatch(UNSAFE_DISPLAY);
   });
 
   it("escapes hostile characters in both output formats end to end", async () => {
@@ -750,18 +765,16 @@ describe("gatefold e2e (real process)", () => {
       replaced.data.metadata = { "run\u200b": "v\u001b[32mal" };
       const path = join(dir, "hostile-export.json");
       writeFileSync(path, JSON.stringify(replaced));
-      // The sanitizer's unsafe set minus \t \n \r, which the formatter emits.
-      const unsafe =
-        /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+
       const human = await gatefold([path]);
       expect(human.code).toBe(0);
-      expect(human.stdout).not.toMatch(unsafe);
+      expect(displayBody(human.stdout)).not.toMatch(UNSAFE_DISPLAY);
       expect(human.stdout).toContain("\\u001b");
       const json = await gatefold([path, "--format", "json"]);
       expect(json.code).toBe(0);
       const result = JSON.parse(json.stdout);
       for (const claim of result.claims) {
-        expect(claim.claim).not.toMatch(unsafe);
+        expect(claim.claim).not.toMatch(UNSAFE_DISPLAY);
       }
       const claimText = result.claims.map((claim) => claim.claim).join("\n");
       expect(claimText).toContain("\\u001b");
@@ -1569,8 +1582,7 @@ describe("gatefold compare-traces e2e (real process)", () => {
       hostile.task.source = "src\u202eevil";
       const path = join(dir, "hostile.json");
       writeFileSync(path, JSON.stringify(hostile));
-      const unsafe =
-        /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+
       const human = await gatefold([
         "compare-traces",
         "--before",
@@ -1579,7 +1591,7 @@ describe("gatefold compare-traces e2e (real process)", () => {
         path,
       ]);
       expect(human.code).toBe(0);
-      expect(human.stdout).not.toMatch(unsafe);
+      expect(displayBody(human.stdout)).not.toMatch(UNSAFE_DISPLAY);
       const json = await gatefold([
         "compare-traces",
         "--before",
@@ -1591,7 +1603,7 @@ describe("gatefold compare-traces e2e (real process)", () => {
       ]);
       const result = JSON.parse(json.stdout);
       for (const claim of result.claims)
-        expect(claim.claim).not.toMatch(unsafe);
+        expect(claim.claim).not.toMatch(UNSAFE_DISPLAY);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1827,8 +1839,7 @@ describe("gatefold compare-runs e2e (real process)", () => {
           artifacts: [{ path: "patch.diff", kind: "patch", digest }],
         }),
       );
-      const unsafe =
-        /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+
       const human = await gatefold([
         "compare-runs",
         "--before",
@@ -1837,7 +1848,7 @@ describe("gatefold compare-runs e2e (real process)", () => {
         b,
       ]);
       expect(human.code, human.stderr).toBe(0);
-      expect(human.stdout).not.toMatch(unsafe);
+      expect(displayBody(human.stdout)).not.toMatch(UNSAFE_DISPLAY);
       const json = await gatefold([
         "compare-runs",
         "--before",
@@ -1849,7 +1860,7 @@ describe("gatefold compare-runs e2e (real process)", () => {
       ]);
       const result = JSON.parse(json.stdout);
       for (const claim of result.claims)
-        expect(claim.claim).not.toMatch(unsafe);
+        expect(claim.claim).not.toMatch(UNSAFE_DISPLAY);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

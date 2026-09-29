@@ -1,4 +1,5 @@
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { analyze } from "./application/analyze.js";
 import { auditRun } from "./application/audit-run.js";
 import { compareCells } from "./application/compare-cells.js";
@@ -118,6 +119,7 @@ interface CliOptions {
    */
   readonly minConfidenceSupplied: boolean;
   readonly help: boolean;
+  readonly version?: boolean;
 }
 
 function optionValue(
@@ -164,6 +166,17 @@ function parseArgs(args: readonly string[]): CliOptions {
         minConfidenceText,
         minConfidenceSupplied,
         help: true,
+      };
+    if (!optionsDone && argument === "--version")
+      return {
+        inputPath,
+        stdin,
+        format,
+        minConfidence,
+        minConfidenceText,
+        minConfidenceSupplied,
+        help: false,
+        version: true,
       };
     if (!optionsDone && argument === "--") {
       optionsDone = true;
@@ -748,6 +761,7 @@ function usage(): string {
     "  --format <human|json>        Output format (default: human)",
     "  --min-confidence <0..1>      Only print claims at or above this confidence (default: 0)",
     "  -h, --help                   Show this help",
+    "  --version                    Print the package version",
     "  --                           Stop option parsing (paths starting with '-')",
     "",
     "Exit codes: 0 success, 2 usage error, 3 input error, 4 internal error",
@@ -807,9 +821,25 @@ async function readTraceInput(argument: string) {
   return argument === "-" ? readYuureiTraceStdin() : readYuureiTrace(argument);
 }
 
+/**
+ * The installed package version, read from the manifest next to the
+ * compiled entry — dist/src/cli.js sits two levels below package.json,
+ * in the repo and in the packed tarball alike.
+ */
+function versionLine(): string {
+  const manifest = JSON.parse(
+    readFileSync(
+      fileURLToPath(new URL("../../package.json", import.meta.url)),
+      "utf8",
+    ),
+  ) as { version?: string };
+  return `gatefold ${manifest.version ?? "unknown"}`;
+}
+
 export async function runCli(args: readonly string[]): Promise<string> {
   const options = parseArgs(args);
   if (options.help) return usage();
+  if (options.version === true) return versionLine();
   if (options.evaluateRun !== undefined) {
     const evaluateArgs = options.evaluateRun as {
       run: string;

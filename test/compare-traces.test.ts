@@ -718,13 +718,13 @@ describe("gatefold compare-traces review regressions", () => {
     [
       "usage",
       (doc: any) => {
-        doc.usage = { tokens: 1e400 };
+        doc.usage = { tokens: Infinity };
       },
     ],
     [
       "cost.amount",
       (doc: any) => {
-        doc.cost = { amount: 1e400, currency: "USD" };
+        doc.cost = { amount: Infinity, currency: "USD" };
       },
     ],
     [
@@ -732,7 +732,7 @@ describe("gatefold compare-traces review regressions", () => {
       (doc: any) => {
         doc.execution_options = {
           timeout_ms: 600000,
-          runtime: { max_turns: 1e400 },
+          runtime: { max_turns: Infinity },
         };
       },
     ],
@@ -742,7 +742,7 @@ describe("gatefold compare-traces review regressions", () => {
         doc.execution = {
           exit_code: 0,
           signal: null,
-          duration_ms: 1e400,
+          duration_ms: Infinity,
           timed_out: false,
         };
       },
