@@ -187,17 +187,21 @@ export function diffCellExports(
     string,
     number
   >;
-  const facetCount = (document: PflExportDocument, facet: string): number =>
-    document.data.elements.filter(
-      (element) => element.interpretation?.facets.includes(facet) ?? false,
-    ).length;
-  const facets = new Set<string>();
-  for (const document of [before, after])
+  // Count each side's facet occurrences in one pass: an element carrying a
+  // facet name twice still counts once per facet.
+  const facetCounts = (document: PflExportDocument): Map<string, number> => {
+    const counts = new Map<string, number>();
     for (const element of document.data.elements)
-      for (const facet of element.interpretation?.facets ?? [])
-        facets.add(facet);
+      for (const facet of new Set(element.interpretation?.facets ?? []))
+        counts.set(facet, (counts.get(facet) ?? 0) + 1);
+    return counts;
+  };
+  const countsBefore = facetCounts(before);
+  const countsAfter = facetCounts(after);
+  const facets = new Set([...countsBefore.keys(), ...countsAfter.keys()]);
   for (const facet of [...facets].sort(compareBytes)) {
-    const delta = facetCount(after, facet) - facetCount(before, facet);
+    const delta =
+      (countsAfter.get(facet) ?? 0) - (countsBefore.get(facet) ?? 0);
     if (delta !== 0) facetDeltas[facet] = delta;
   }
 

@@ -313,13 +313,25 @@ function diffOutputFileSets(
   return { added, removed, changed, identical };
 }
 
-function elementIndex(cell: CellRun, id: string): number | null {
+/**
+ * First index of each element id in the run's bound export, so callers
+ * resolving many ids never rescan the element list per id.
+ */
+function elementIndexMap(cell: CellRun): Map<string, number> {
+  const map = new Map<string, number>();
   const document = cell.observation.exportDocument;
-  if (document === null) return null;
-  const index = document.data.elements.findIndex(
-    (element) => element.id === id,
-  );
-  return index === -1 ? null : index;
+  if (document === null) return map;
+  document.data.elements.forEach((element, index) => {
+    if (!map.has(element.id)) map.set(element.id, index);
+  });
+  return map;
+}
+
+function elementIndex(
+  indexMap: Map<string, number>,
+  id: string,
+): number | null {
+  return indexMap.get(id) ?? null;
 }
 
 /**
@@ -626,6 +638,8 @@ function comparisonEntries(
       const afterById = new Map(
         exportB.data.elements.map((element) => [element.id, element]),
       );
+      const beforeIndexes = elementIndexMap(before);
+      const afterIndexes = elementIndexMap(after);
       for (const id of diff.addedIds)
         entries.push(
           cmpEntry(
@@ -633,7 +647,11 @@ function comparisonEntries(
             "recorded",
             completeness,
             `element '${id}' is present in B's export and not in A's`,
-            exportElementEvidence(afterCtx, elementIndex(after, id)!, id),
+            exportElementEvidence(
+              afterCtx,
+              elementIndex(afterIndexes, id)!,
+              id,
+            ),
           ),
         );
       for (const id of diff.removedIds)
@@ -643,7 +661,11 @@ function comparisonEntries(
             "recorded",
             completeness,
             `element '${id}' is present in A's export and not in B's`,
-            exportElementEvidence(beforeCtx, elementIndex(before, id)!, id),
+            exportElementEvidence(
+              beforeCtx,
+              elementIndex(beforeIndexes, id)!,
+              id,
+            ),
           ),
         );
       for (const id of diff.changedIds) {
@@ -670,10 +692,14 @@ function comparisonEntries(
             [
               ...exportElementEvidence(
                 beforeCtx,
-                elementIndex(before, id)!,
+                elementIndex(beforeIndexes, id)!,
                 id,
               ),
-              ...exportElementEvidence(afterCtx, elementIndex(after, id)!, id),
+              ...exportElementEvidence(
+                afterCtx,
+                elementIndex(afterIndexes, id)!,
+                id,
+              ),
             ],
           ),
         );
@@ -705,12 +731,12 @@ function comparisonEntries(
             [
               ...exportElementEvidence(
                 beforeCtx,
-                elementIndex(before, change.id)!,
+                elementIndex(beforeIndexes, change.id)!,
                 change.id,
               ),
               ...exportElementEvidence(
                 afterCtx,
-                elementIndex(after, change.id)!,
+                elementIndex(afterIndexes, change.id)!,
                 change.id,
               ),
             ],

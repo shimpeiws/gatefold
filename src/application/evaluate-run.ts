@@ -256,6 +256,29 @@ function diagnosticEvidence(
   return { source: src.trace, pointer: `/diagnostics/${index}` };
 }
 
+/**
+ * First file of each recorded path in a patch, memoized per patch file
+ * list: every `file-*` criterion resolves one path, and rescanning the
+ * list per criterion is quadratic over the patch block cap.
+ */
+const patchFileIndex = new WeakMap<
+  readonly OutputFile[],
+  Map<string, OutputFile>
+>();
+
+function patchFilesByPath(
+  files: readonly OutputFile[],
+): Map<string, OutputFile> {
+  let index = patchFileIndex.get(files);
+  if (index === undefined) {
+    index = new Map();
+    for (const file of files)
+      if (!index.has(file.path)) index.set(file.path, file);
+    patchFileIndex.set(files, index);
+  }
+  return index;
+}
+
 /** Evaluates one `file-*` criterion against the unified patch record. */
 function evaluateFileCriterion(
   run: EvaluatedRun,
@@ -312,7 +335,10 @@ function evaluateFileCriterion(
     );
   }
 
-  const file = run.patch.files.find((f) => f.path === criterion.path);
+  const file =
+    criterion.path === undefined
+      ? undefined
+      : patchFilesByPath(run.patch.files).get(criterion.path);
   if (file !== undefined) {
     if (file.change === expected) {
       return evaluation(

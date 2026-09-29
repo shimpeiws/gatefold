@@ -886,6 +886,18 @@ function setLaneEntries(args: {
 
   // Relations: union over eligible exports keyed by (type, from, to).
   {
+    // First-occurrence index of each relation key per run, so evidence
+    // pointers below never rescan a run's relation list per bucket.
+    const relationIndex = new Map<EligibleRun, Map<string, number>>(
+      eligible.map((run) => {
+        const index = new Map<string, number>();
+        run.doc.data.relations.forEach((relation, i) => {
+          const key = relationKey(relation);
+          if (!index.has(key)) index.set(key, i);
+        });
+        return [run, index];
+      }),
+    );
     const union = new Map<
       string,
       { from: string; to: string; type: string; runs: EligibleRun[] }
@@ -929,12 +941,12 @@ function setLaneEntries(args: {
           }),
           parts.join("; "),
           [
-            ...bucket.runs.map((run) => {
-              const i = run.doc.data.relations.findIndex(
-                (r) => relationKey(r) === key,
-              );
-              return exportSideEv(run.ctx, `/data/relations/${i}`);
-            }),
+            ...bucket.runs.map((run) =>
+              exportSideEv(
+                run.ctx,
+                `/data/relations/${relationIndex.get(run)!.get(key)!}`,
+              ),
+            ),
             ...absent.map((run) => exportSideEv(run.ctx, "/data/relations")),
           ],
         ),
@@ -944,6 +956,16 @@ function setLaneEntries(args: {
 
   // Findings: union over eligible exports keyed by the whole record.
   {
+    const findingIndex = new Map<EligibleRun, Map<string, number>>(
+      eligible.map((run) => {
+        const index = new Map<string, number>();
+        run.doc.data.findings.forEach((finding, i) => {
+          const key = canonicalJson(finding);
+          if (!index.has(key)) index.set(key, i);
+        });
+        return [run, index];
+      }),
+    );
     const union = new Map<
       string,
       {
@@ -974,6 +996,9 @@ function setLaneEntries(args: {
     });
     entries_.forEach((bucket, index) => {
       const absent = eligible.filter((run) => !bucket.runs.includes(run));
+      // canonicalJson is deterministic: the stored finding serializes to
+      // the same key the union was built under.
+      const key = canonicalJson(bucket.finding);
       const parts = [
         `finding '${bucket.finding.rule}'` +
           (bucket.finding.elementIds.length === 0
@@ -1000,12 +1025,12 @@ function setLaneEntries(args: {
           }),
           parts.join("; "),
           [
-            ...bucket.runs.map((run) => {
-              const i = run.doc.data.findings.findIndex(
-                (f) => canonicalJson(f) === canonicalJson(bucket.finding),
-              );
-              return exportSideEv(run.ctx, `/data/findings/${i}`);
-            }),
+            ...bucket.runs.map((run) =>
+              exportSideEv(
+                run.ctx,
+                `/data/findings/${findingIndex.get(run)!.get(key)!}`,
+              ),
+            ),
             ...absent.map((run) => exportSideEv(run.ctx, "/data/findings")),
           ],
         ),
