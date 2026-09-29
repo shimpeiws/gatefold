@@ -1,4 +1,9 @@
-import { InputTooLargeError, MAX_INPUT_BYTES, readBounded } from "./bounded.js";
+import {
+  InputTooLargeError,
+  MAX_INPUT_BYTES,
+  NotRegularFileError,
+  readBounded,
+} from "./bounded.js";
 import { PflExportError } from "./pfl-export.js";
 
 /**
@@ -199,6 +204,11 @@ export async function readTaskSpec(path: string): Promise<TaskSpec> {
       throw new PflExportError(
         "invalid-shape",
         `task spec exceeds the ${MAX_INPUT_BYTES}-byte limit: ${path}`,
+      );
+    if (error instanceof NotRegularFileError)
+      throw new PflExportError(
+        "unreadable-file",
+        `task spec is not a regular file: ${path}`,
       );
     throw new PflExportError(
       "unreadable-file",

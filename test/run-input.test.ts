@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -258,6 +259,95 @@ describe("readYuureiRun", () => {
           ],
         }),
       );
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a trace.json symlink that escapes the run directory", async () => {
+    const base = tmp();
+    try {
+      const outside = join(base, "outside-trace.json");
+      writeFileSync(outside, JSON.stringify(minimalTrace()));
+      const runDir = writeRun(base, { patch: null });
+      rmSync(join(runDir, "trace.json"));
+      symlinkSync(outside, join(runDir, "trace.json"));
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an artifacts.json symlink that escapes the run directory", async () => {
+    const base = tmp();
+    try {
+      const outside = join(base, "outside-manifest.json");
+      writeFileSync(outside, JSON.stringify({ artifacts: [] }));
+      const runDir = writeRun(base, { patch: null });
+      rmSync(join(runDir, "artifacts.json"));
+      symlinkSync(outside, join(runDir, "artifacts.json"));
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts a trace.json symlink that resolves inside the run directory", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeRun(base, { patch: null });
+      const realTrace = join(runDir, "real-trace.json");
+      writeFileSync(realTrace, JSON.stringify(minimalTrace()));
+      rmSync(join(runDir, "trace.json"));
+      symlinkSync(realTrace, join(runDir, "trace.json"));
+      const run = await readYuureiRun(runDir);
+      expect(run.trace).toBeDefined();
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a fixed-name member that is not a regular file", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeRun(base, { patch: null });
+      rmSync(join(runDir, "trace.json"));
+      mkdirSync(join(runDir, "trace.json"));
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a FIFO trace.json promptly instead of blocking", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeRun(base, { patch: null });
+      rmSync(join(runDir, "trace.json"));
+      execFileSync("mkfifo", [join(runDir, "trace.json")]);
+      await expect(readYuureiRun(runDir)).rejects.toMatchObject({
+        code: "invalid-shape",
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a FIFO artifacts.json promptly instead of blocking", async () => {
+    const base = tmp();
+    try {
+      const runDir = writeRun(base, { patch: null });
+      rmSync(join(runDir, "artifacts.json"));
+      execFileSync("mkfifo", [join(runDir, "artifacts.json")]);
       await expect(readYuureiRun(runDir)).rejects.toMatchObject({
         code: "invalid-shape",
       });

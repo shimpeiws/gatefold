@@ -1037,7 +1037,25 @@ export async function runCli(args: readonly string[]): Promise<string> {
     : formatHuman(filtered, options.minConfidence, options.minConfidenceText);
 }
 
+let stdoutEpipeHandled = false;
+
+/**
+ * A piped consumer that exits early (`gatefold … | head`) raises an 'error'
+ * event on process.stdout, not a rejection; with no listener Node crashes
+ * with a stack trace. A truncated consumer is a normal termination, so
+ * EPIPE exits quietly. Installed once per process.
+ */
+function handleStdoutEpipe(): void {
+  if (stdoutEpipeHandled) return;
+  stdoutEpipeHandled = true;
+  process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EPIPE") process.exit(0);
+    throw error;
+  });
+}
+
 export async function main(args: readonly string[]): Promise<number> {
+  handleStdoutEpipe();
   try {
     process.stdout.write(`${await runCli(args)}\n`);
     process.exitCode = 0;

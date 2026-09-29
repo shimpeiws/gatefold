@@ -24,6 +24,14 @@ Gatefold reads at most three members of the directory:
 | `artifacts.json` | Required. The artifact manifest defined below; a directory without a readable, well-formed manifest is rejected. |
 | `patch.diff` | Read only when the manifest lists it. The one artifact whose bytes Gatefold interprets in v0.6. |
 
+The two fixed-name members are resolved on the filesystem before they are
+opened, under the same rule the manifest applies to `patch.diff`: the
+resolved real path of `trace.json` and `artifacts.json` must stay inside
+the run directory's own real path and must name a regular file. A symlink
+escape or a non-regular target (a FIFO, a device, a directory) is rejected
+as `invalid-shape`; a member that cannot be read at all is
+`unreadable-file`.
+
 Everything else in the directory is outside this contract's boundary:
 `stdout.log`, `stderr.log`, `resolved-profile.json`, `workspace/`, and any
 other member are never opened. `workspace/` is not an artifact — yuurei never
@@ -190,7 +198,7 @@ A run directory is untrusted input; the reader enforces resource ceilings:
 | --- | --- | --- |
 | Argument is not a readable directory, or `trace.json`/`artifacts.json` cannot be read | `unreadable-file` | 3 |
 | `artifacts.json` is not valid JSON | `invalid-json` | 3 |
-| Manifest shape violation, unconfined entry path, symlink escape, non-regular artifact target, or limit violation | `invalid-shape` | 3 |
+| Manifest shape violation, unconfined entry path, symlink escape, non-regular artifact target (manifest entry or fixed-name member), or limit violation | `invalid-shape` | 3 |
 | `trace.json` violations | the trace contract's codes | 3 |
 
 External strings — including directory and manifest paths — are sanitized

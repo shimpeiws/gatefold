@@ -2,6 +2,7 @@ import { sanitizeText } from "../domain/sanitize.js";
 import {
   InputTooLargeError,
   MAX_INPUT_BYTES,
+  NotRegularFileError,
   readBounded,
   readBoundedStdin,
 } from "./bounded.js";
@@ -1001,6 +1002,11 @@ export async function readYuureiTrace(path: string): Promise<YuureiTrace> {
       throw new PflExportError(
         "invalid-shape",
         `input file exceeds the ${MAX_INPUT_BYTES}-byte limit: ${path}`,
+      );
+    if (error instanceof NotRegularFileError)
+      throw new PflExportError(
+        "unreadable-file",
+        `input file is not a regular file: ${path}`,
       );
     throw new PflExportError(
       "unreadable-file",

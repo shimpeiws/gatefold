@@ -23,7 +23,9 @@ and runtime. Other commands (`inspect`, `list`, `show`,
 The document reaches Gatefold as a file argument or on standard input
 (`gatefold -`). Stdin is an additional transport for the same document, not a
 new document kind: identical byte limit, JSON validation, and contract checks
-apply, and claims record `<stdin>` as `provenance.sourceFile`.
+apply, and claims record `<stdin>` as `provenance.sourceFile`. A file
+argument must name a regular file; a FIFO, device, or directory is rejected
+with `unreadable-file`, so piped input always goes through `-`.
 
 ## Envelope
 
@@ -189,8 +191,8 @@ to elements; only display paths escape it.
 ## Limits
 
 pfl exports are untrusted input, so the reader enforces resource ceilings:
-input files larger than 16 MiB (measured in bytes; regular files are rejected
-by size before reading, and pipes are cut off at the limit), more than 1,000 `diagnostics`, more than
+input files larger than 16 MiB (measured in bytes; files are rejected
+by size before reading), more than 1,000 `diagnostics`, more than
 10,000 `findings`, more than 1,000 `elementIds` per finding, more than
 10,000 `elementIds` in total across all findings, or more than
 1,000 `byFacet` keys are rejected with `invalid-shape` errors. Export

@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 
 /**
@@ -10,17 +11,23 @@ export const MAX_INPUT_BYTES = 16 * 1024 * 1024;
 /** Thrown by the readers below when the input exceeds MAX_INPUT_BYTES. */
 export class InputTooLargeError extends Error {}
 
+/** Thrown when `path` does not name a regular file. */
+export class NotRegularFileError extends Error {}
+
 /**
- * Reads at most MAX_INPUT_BYTES bytes. Regular files are rejected by size
- * before reading; pipes and devices are read in chunks and cut off at the
- * limit, so an oversized or endless input never has to fit in memory.
+ * Reads at most MAX_INPUT_BYTES bytes from a regular file. The file is
+ * opened non-blocking and its descriptor is checked before any read, so a
+ * FIFO or device (for example `/dev/tty`) is rejected immediately instead
+ * of blocking on a writer that never comes; oversized files are rejected
+ * by size. Standard input is the one pipe-like input and goes through
+ * readBoundedStdin below.
  */
 export async function readBounded(path: string): Promise<Buffer> {
-  const handle = await open(path, "r");
+  const handle = await open(path, constants.O_RDONLY | constants.O_NONBLOCK);
   try {
     const info = await handle.stat();
-    if (info.isFile() && info.size > MAX_INPUT_BYTES)
-      throw new InputTooLargeError();
+    if (!info.isFile()) throw new NotRegularFileError(path);
+    if (info.size > MAX_INPUT_BYTES) throw new InputTooLargeError();
     const chunks: Buffer[] = [];
     let total = 0;
     for (;;) {

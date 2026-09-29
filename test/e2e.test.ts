@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -1015,6 +1015,67 @@ describe("gatefold e2e (real process)", () => {
       }
     },
   );
+
+  it("exits quietly when the stdout consumer closes early (EPIPE)", async () => {
+    // An export large enough that stdout cannot drain into one pipe buffer.
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-e2e-"));
+    try {
+      const input = join(dir, "big-export.json");
+      writeFileSync(
+        input,
+        JSON.stringify({
+          pflVersion: "1.0.0",
+          command: "report",
+          ok: true,
+          completeness: "complete",
+          diagnostics: [],
+          data: {
+            runtime: "claude-code",
+            runtimeName: "Claude Code",
+            project: {
+              id: "git-0f214d60555919a5",
+              displayName: "example-project",
+            },
+            observedSnapshotId: "obs-abc123",
+            resolvedSnapshotId: "res-def456",
+            confidence: "verified",
+            stats: {
+              observed: 5000,
+              effective: 5000,
+              shadowed: 0,
+              conditional: 0,
+              opaque: 0,
+              byFacet: {},
+            },
+            findings: Array.from({ length: 5000 }, (_, i) => ({
+              rule: "shadowed-element",
+              message: `element ${"x".repeat(200)} is shadowed ${i}`,
+              elementIds: [`claude-code:user:rules/${i}.md`],
+            })),
+            interpretation: { classifierVersion: "1", origin: "stored" },
+          },
+        }),
+      );
+      const { code, stderr } = await new Promise<{
+        code: number | null;
+        stderr: string;
+      }>((resolve, reject) => {
+        const child = spawn(process.execPath, [bin, input], { cwd: root });
+        let stderr = "";
+        child.stderr.on("data", (d: Buffer) => {
+          stderr += d.toString("utf8");
+        });
+        // Mimic `| head`: close the read end after the first chunk.
+        child.stdout.once("data", () => child.stdout.destroy());
+        child.on("error", reject);
+        child.on("close", (code) => resolve({ code, stderr }));
+      });
+      expect(code).toBe(0);
+      expect(stderr).toBe("");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
 
   it("package.json ci:all is exactly the documented clean-install gate", () => {
     const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
