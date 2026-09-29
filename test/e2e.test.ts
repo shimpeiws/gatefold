@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  cpSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -2537,4 +2538,254 @@ describe("gatefold e2e: report-cells", () => {
     expect(otherSource.code).toBe(3);
     expect(otherSource.stdout).toBe("");
   });
+});
+
+describe("human output escapes untrusted text at the boundary (#96)", () => {
+  /**
+   * The hostile payload from the issue's reproduction: a C0 escape
+   * introducing an ANSI sequence, a bidi override that reorders terminal
+   * text, and an assigned supplementary-plane tag character that a
+   * BMP-only pattern would miss.
+   */
+  const INJECTED = "x\u001b[31mRED\u001b[0m\u202e\u{e0065}";
+
+  /** The display contract: every unsafe character class is absent. */
+  const UNSAFE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+
+  /** Human output uses `\n` legitimately; nothing else unsafe may survive. */
+  function expectEscapedOutput(stdout: string): void {
+    expect(stdout.replace(/\n/g, "")).not.toMatch(UNSAFE);
+    expect(stdout).toContain("\\u001b");
+    expect(stdout).toContain("\\u202e");
+    expect(stdout).toContain("\\u{e0065}");
+  }
+
+  const withTempDir = <T>(fn: (dir: string) => Promise<T>): Promise<T> => {
+    const dir = mkdtempSync(join(tmpdir(), "gatefold-sanitize-"));
+    return fn(dir).finally(() => rmSync(dir, { recursive: true, force: true }));
+  };
+
+  const mutateJsonFile = (
+    source: string,
+    target: string,
+    mutate: (doc: any) => void,
+  ): string => {
+    const doc = JSON.parse(readFileSync(source, "utf8"));
+    mutate(doc);
+    writeFileSync(target, JSON.stringify(doc));
+    return target;
+  };
+
+  const copyRunDir = (source: string, target: string): string => {
+    cpSync(source, target, { recursive: true });
+    return target;
+  };
+
+  const mutateJsonInDir = (
+    dir: string,
+    name: string,
+    mutate: (doc: any) => void,
+  ): void => {
+    const file = join(dir, name);
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    mutate(doc);
+    writeFileSync(file, JSON.stringify(doc));
+  };
+
+  it("analyze escapes a hostile stats.byFacet key in evidence pointers", () =>
+    withTempDir(async (dir) => {
+      const input = mutateJsonFile(
+        fixture("valid-report.json"),
+        join(dir, "report.json"),
+        (doc) => {
+          doc.data.stats.byFacet[INJECTED] = 1;
+        },
+      );
+      const run = await gatefold([input]);
+      expect(run.code, run.stderr).toBe(0);
+      expectEscapedOutput(run.stdout);
+    }));
+
+  it("analyze --format json keeps the document value verbatim", () =>
+    withTempDir(async (dir) => {
+      const input = mutateJsonFile(
+        fixture("valid-report.json"),
+        join(dir, "report.json"),
+        (doc) => {
+          doc.data.stats.byFacet[INJECTED] = 1;
+        },
+      );
+      const run = await gatefold([input, "--format", "json"]);
+      expect(run.code, run.stderr).toBe(0);
+      const result = JSON.parse(run.stdout);
+      const pointers = result.claims.flatMap(
+        (c: { evidence: { pointer: string }[] }) =>
+          c.evidence.map((e) => e.pointer),
+      );
+      expect(
+        pointers.some((p: string) => p.includes(INJECTED)),
+        "JSON keeps the raw pointer",
+      ).toBe(true);
+    }));
+
+  it("compare escapes a hostile diff label in the provenance line", () =>
+    withTempDir(async (dir) => {
+      const diff = join(dir, `diff-${INJECTED}.json`);
+      writeFileSync(diff, readFileSync(compareFixture("diff.json"), "utf8"));
+      const run = await gatefold([
+        "compare",
+        "--before",
+        compareFixture("before.json"),
+        "--after",
+        compareFixture("after.json"),
+        "--diff",
+        diff,
+      ]);
+      expect(run.code, run.stderr).toBe(0);
+      expectEscapedOutput(run.stdout);
+    }));
+
+  it("compare-traces escapes a hostile usage key in evidence pointers", () =>
+    withTempDir(async (dir) => {
+      const before = mutateJsonFile(
+        traceFixture("a.json"),
+        join(dir, "a.json"),
+        (doc) => {
+          doc.usage[INJECTED] = 42;
+        },
+      );
+      const run = await gatefold([
+        "compare-traces",
+        "--before",
+        before,
+        "--after",
+        traceFixture("b.json"),
+      ]);
+      expect(run.code, run.stderr).toBe(0);
+      expectEscapedOutput(run.stdout);
+    }));
+
+  it("compare-runs escapes a hostile usage key in evidence pointers", () =>
+    withTempDir(async (dir) => {
+      const run = copyRunDir(runFixture("run-a"), join(dir, "run-a-usage"));
+      mutateJsonInDir(run, "trace.json", (doc) => {
+        doc.usage[INJECTED] = 42;
+      });
+      const result = await gatefold([
+        "compare-runs",
+        "--before",
+        run,
+        "--after",
+        runFixture("run-b"),
+      ]);
+      expect(result.code, result.stderr).toBe(0);
+      expectEscapedOutput(result.stdout);
+    }));
+
+  it("evaluate-run escapes a hostile criterion id in the criterion line", () =>
+    withTempDir(async (dir) => {
+      const spec = mutateJsonFile(
+        evalFixture("task-spec.json"),
+        join(dir, "task-spec.json"),
+        (doc) => {
+          doc.criteria[0].id = `crit-${INJECTED}`;
+        },
+      );
+      const run = await gatefold([
+        "evaluate-run",
+        "--run",
+        runFixture("seeded-a"),
+        "--spec",
+        spec,
+        "--check-report",
+        evalFixture("check-report-a.json"),
+      ]);
+      expect(run.code, run.stderr).toBe(0);
+      expectEscapedOutput(run.stdout);
+    }));
+
+  it("compare-evaluations escapes a hostile yuurei_version in caveat text", () =>
+    withTempDir(async (dir) => {
+      const before = copyRunDir(
+        runFixture("seeded-a"),
+        join(dir, "seeded-a-yv"),
+      );
+      mutateJsonInDir(before, "trace.json", (doc) => {
+        doc.yuurei_version = `0.3.0-${INJECTED}`;
+      });
+      const run = await gatefold([
+        "compare-evaluations",
+        "--before",
+        before,
+        "--after",
+        runFixture("seeded-b"),
+        "--spec",
+        evalFixture("task-spec.json"),
+        "--before-check-report",
+        evalFixture("check-report-a.json"),
+        "--after-check-report",
+        evalFixture("check-report-b.json"),
+      ]);
+      expect(run.code, run.stderr).toBe(0);
+      expectEscapedOutput(run.stdout);
+    }));
+
+  it("audit-run escapes a hostile run-directory label", () =>
+    withTempDir(async (dir) => {
+      const run = copyRunDir(
+        runFixture("run-a"),
+        join(dir, `run-a-${INJECTED}`),
+      );
+      const result = await gatefold(["audit-run", "--run", run]);
+      expect(result.code, result.stderr).toBe(0);
+      expectEscapedOutput(result.stdout);
+    }));
+
+  it("report-cell escapes a hostile run_id in the input descriptor", () =>
+    withTempDir(async (dir) => {
+      const run = copyRunDir(cellFixture("cell-a"), join(dir, "cell-a"));
+      mutateJsonInDir(run, "trace.json", (doc) => {
+        doc.run_id = `run-${INJECTED}`;
+      });
+      const result = await gatefold(["report-cell", "--run", run]);
+      expect(result.code, result.stderr).toBe(0);
+      expectEscapedOutput(result.stdout);
+    }));
+
+  it("compare-cells escapes a hostile run_id in the input descriptors", () =>
+    withTempDir(async (dir) => {
+      const run = copyRunDir(cellFixture("cell-a"), join(dir, "cell-a"));
+      mutateJsonInDir(run, "trace.json", (doc) => {
+        doc.run_id = `run-${INJECTED}`;
+      });
+      const result = await gatefold([
+        "compare-cells",
+        "--before",
+        run,
+        "--after",
+        cellFixture("cell-b"),
+      ]);
+      expect(result.code, result.stderr).toBe(0);
+      expectEscapedOutput(result.stdout);
+    }));
+
+  it("report-cells escapes a hostile run_id in the input descriptors", () =>
+    withTempDir(async (dir) => {
+      const run = copyRunDir(
+        cellFixture("cell-real-run-a"),
+        join(dir, "cell-real-a"),
+      );
+      mutateJsonInDir(run, "trace.json", (doc) => {
+        doc.run_id = `run-${INJECTED}`;
+      });
+      const result = await gatefold([
+        "report-cells",
+        "--run",
+        run,
+        "--run",
+        cellFixture("cell-real-run-b"),
+      ]);
+      expect(result.code, result.stderr).toBe(0);
+      expectEscapedOutput(result.stdout);
+    }));
 });

@@ -40,6 +40,28 @@ Each evidence item carries:
   encoding escapes control characters).
 - `note` (optional) — a human-readable clarification.
 
+### Display versus machine output
+
+Claims and evidence carry document values verbatim: pointers, element ids,
+run ids, and metadata keys keep the bytes the input recorded so consumers
+can resolve them against the input. How each output mode renders those
+values is a display decision, not part of the contract:
+
+- **Human output** (`--format human`, the default) escapes every rendered
+  line at the output boundary: Unicode general categories Cc, Cf, Zl, and
+  Zp — C0/C1 controls, DEL, zero-width and bidi formatting characters,
+  line/paragraph separators, the BOM, and the supplementary tag block —
+  are written as literal `\uXXXX` so no escape sequence or invisible
+  reordering character reaches a terminal. Escaping applies to the whole
+  line, so pointer segments, caveats, and run ids need no per-field
+  handling; values a rule already sanitized at construction pass through
+  unchanged because the escape is idempotent.
+- **JSON output** (`--format json`) is the contract surface and keeps
+  document values verbatim, encoded by `JSON.stringify`. That encoding
+  escapes C0 controls but not C1 controls, bidi marks, or tag characters:
+  a parsed string is intact bytes, and a consumer that prints JSON fields
+  directly to a terminal must apply its own escaping.
+
 ### Provenance
 
 - `sourceFile` (required) — the path of the input export file, or `<stdin>`

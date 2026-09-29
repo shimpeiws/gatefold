@@ -32,7 +32,7 @@ export function formatHuman(
         .map((entry) =>
           entry.elementId === undefined
             ? entry.pointer
-            : `${entry.pointer} (${sanitizeText(entry.elementId)})`,
+            : `${entry.pointer} (${entry.elementId})`,
         )
         .join(", ");
       const version = claim.provenance.exportVersion
@@ -42,8 +42,10 @@ export function formatHuman(
         `${index + 1}. ${claim.claim}`,
         `   confidence: ${claim.confidence.toFixed(2)}`,
         `   evidence: ${evidence}`,
-        `   provenance: ${sanitizeText(claim.provenance.sourceFile)}${version} · ${claim.provenance.transform.join(" → ")}`,
-      ].join("\n");
+        `   provenance: ${claim.provenance.sourceFile}${version} · ${claim.provenance.transform.join(" → ")}`,
+      ]
+        .map(sanitizeText)
+        .join("\n");
     })
     .join("\n");
 }
@@ -58,16 +60,16 @@ export function formatComparisonHuman(
       ? `No claims found at or above confidence ${minConfidenceDisplay}.`
       : "No claims found.";
   const labels =
-    `${sanitizeText(result.inputs.before.label)} → ` +
-    `${sanitizeText(result.inputs.after.label)} ` +
-    `(diff: ${sanitizeText(result.inputs.diff.label)})`;
+    `${result.inputs.before.label} → ` +
+    `${result.inputs.after.label} ` +
+    `(diff: ${result.inputs.diff.label})`;
   return result.claims
     .map((claim, index) => {
       const evidence = claim.evidence
         .map((entry) =>
           entry.elementId === undefined
             ? `${entry.source}:${entry.pointer}`
-            : `${entry.source}:${entry.pointer} (${sanitizeText(entry.elementId)})`,
+            : `${entry.source}:${entry.pointer} (${entry.elementId})`,
         )
         .join(", ");
       return [
@@ -75,7 +77,9 @@ export function formatComparisonHuman(
         `   confidence: ${claim.confidence.toFixed(2)}`,
         `   evidence: ${evidence}`,
         `   provenance: ${labels} · ${claim.provenance.transform.join(" → ")}`,
-      ].join("\n");
+      ]
+        .map(sanitizeText)
+        .join("\n");
     })
     .join("\n");
 }
@@ -90,8 +94,8 @@ export function formatTraceComparisonHuman(
       ? `No claims found at or above confidence ${minConfidenceDisplay}.`
       : "No claims found.";
   const labels =
-    `${sanitizeText(result.inputs.beforeTrace.label)} → ` +
-    `${sanitizeText(result.inputs.afterTrace.label)}`;
+    `${result.inputs.beforeTrace.label} → ` +
+    `${result.inputs.afterTrace.label}`;
   return result.claims
     .map((claim, index) => {
       const evidence = claim.evidence
@@ -99,7 +103,7 @@ export function formatTraceComparisonHuman(
           const detail = entry.elementId ?? entry.note;
           return detail === undefined
             ? `${entry.source}:${entry.pointer}`
-            : `${entry.source}:${entry.pointer} (${sanitizeText(detail)})`;
+            : `${entry.source}:${entry.pointer} (${detail})`;
         })
         .join(", ");
       return [
@@ -107,7 +111,9 @@ export function formatTraceComparisonHuman(
         `   confidence: ${claim.confidence.toFixed(2)}`,
         `   evidence: ${evidence}`,
         `   provenance: ${labels} · ${claim.provenance.transform.join(" → ")}`,
-      ].join("\n");
+      ]
+        .map(sanitizeText)
+        .join("\n");
     })
     .join("\n");
 }
@@ -117,14 +123,13 @@ function formatEvaluationEvidence(
 ): string {
   return evidence
     .map((entry) => {
-      const path =
-        entry.path === undefined ? "" : ` '${sanitizeText(entry.path)}'`;
+      const path = entry.path === undefined ? "" : ` '${entry.path}'`;
       const range =
         entry.lines === undefined
           ? ""
           : ` lines ${entry.lines.start}-${entry.lines.end}`;
       const detail = entry.elementId ?? entry.note;
-      const suffix = detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+      const suffix = detail === undefined ? "" : ` (${detail})`;
       return `${entry.source}:${entry.pointer}${path}${range}${suffix}`;
     })
     .join(", ");
@@ -140,16 +145,17 @@ export function formatEvaluationHuman(
       ? `No evaluations found at or above confidence ${minConfidenceDisplay}.`
       : "No evaluations found.";
   const labels =
-    `${sanitizeText(result.inputs.run.label)} ` +
-    `(spec: ${sanitizeText(result.inputs.spec.label)})`;
+    `${result.inputs.run.label} ` + `(spec: ${result.inputs.spec.label})`;
   return result.evaluations
     .map((entry, index) => {
       return [
-        `${index + 1}. [${entry.verdict}] criterion '${sanitizeText(entry.criterionId)}' (${entry.kind}): ${entry.reason}`,
+        `${index + 1}. [${entry.verdict}] criterion '${entry.criterionId}' (${entry.kind}): ${entry.reason}`,
         `   confidence: ${entry.confidence.toFixed(2)}`,
         `   evidence: ${formatEvaluationEvidence(entry.evidence)}`,
         `   provenance: ${labels} · ${entry.provenance.transform.join(" → ")}`,
-      ].join("\n");
+      ]
+        .map(sanitizeText)
+        .join("\n");
     })
     .join("\n");
 }
@@ -164,21 +170,24 @@ export function formatEvaluationComparisonHuman(
       ? `No transitions found at or above confidence ${minConfidenceDisplay}.`
       : "No transitions found.";
   const labels =
-    `${sanitizeText(result.inputs.beforeRun.label)} → ` +
-    `${sanitizeText(result.inputs.afterRun.label)} ` +
-    `(spec: ${sanitizeText(result.inputs.spec.label)})`;
+    `${result.inputs.beforeRun.label} → ` +
+    `${result.inputs.afterRun.label} ` +
+    `(spec: ${result.inputs.spec.label})`;
   const lines = result.transitions.map((entry, index) => {
     return [
-      `${index + 1}. criterion '${sanitizeText(entry.criterionId)}' (${entry.kind}): ${entry.before} → ${entry.after}${entry.changed ? "" : " (unchanged)"}`,
+      `${index + 1}. criterion '${entry.criterionId}' (${entry.kind}): ${entry.before} → ${entry.after}${entry.changed ? "" : " (unchanged)"}`,
       `   ${entry.reason}`,
       `   confidence: ${entry.confidence.toFixed(2)}`,
       `   evidence: ${formatEvaluationEvidence(entry.evidence)}`,
       `   provenance: ${labels} · ${entry.provenance.transform.join(" → ")}`,
-    ].join("\n");
+    ]
+      .map(sanitizeText)
+      .join("\n");
   });
   if (result.caveats.length === 0) return lines.join("\n");
   const caveatLines = result.caveats.map(
-    (caveat) => `   caveat ${caveat.field}: ${caveat.text}`,
+    (caveat) =>
+      `   caveat ${sanitizeText(caveat.field)}: ${sanitizeText(caveat.text)}`,
   );
   return `${lines.join("\n")}\n\nCaveats (a transition does not establish which harness change caused it):\n${caveatLines.join("\n")}`;
 }
@@ -193,14 +202,12 @@ export function formatRunComparisonHuman(
       ? `No claims found at or above confidence ${minConfidenceDisplay}.`
       : "No claims found.";
   const labels =
-    `${sanitizeText(result.inputs.beforeRun.label)} → ` +
-    `${sanitizeText(result.inputs.afterRun.label)}`;
+    `${result.inputs.beforeRun.label} → ` + `${result.inputs.afterRun.label}`;
   return result.claims
     .map((claim, index) => {
       const evidence = claim.evidence
         .map((entry) => {
-          const path =
-            entry.path === undefined ? "" : ` '${sanitizeText(entry.path)}'`;
+          const path = entry.path === undefined ? "" : ` '${entry.path}'`;
           const range =
             entry.lines === undefined
               ? ""
@@ -212,8 +219,7 @@ export function formatRunComparisonHuman(
           const digest =
             entry.digest === undefined ? "" : ` digest ${entry.digest}`;
           const detail = entry.elementId ?? entry.note;
-          const suffix =
-            detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+          const suffix = detail === undefined ? "" : ` (${detail})`;
           return `${entry.source}:${entry.pointer}${path}${range}${byteRange}${digest}${suffix}`;
         })
         .join(", ");
@@ -222,7 +228,9 @@ export function formatRunComparisonHuman(
         `   confidence: ${claim.confidence.toFixed(2)}`,
         `   evidence: ${evidence}`,
         `   provenance: ${labels} · ${claim.provenance.transform.join(" → ")}`,
-      ].join("\n");
+      ]
+        .map(sanitizeText)
+        .join("\n");
     })
     .join("\n");
 }
@@ -232,8 +240,7 @@ function formatAuditEvidence(
 ): string {
   return evidence
     .map((entry) => {
-      const path =
-        entry.path === undefined ? "" : ` '${sanitizeText(entry.path)}'`;
+      const path = entry.path === undefined ? "" : ` '${entry.path}'`;
       const range =
         entry.lines === undefined
           ? ""
@@ -245,7 +252,7 @@ function formatAuditEvidence(
       const digest =
         entry.digest === undefined ? "" : ` digest ${entry.digest}`;
       const detail = entry.elementId ?? entry.note;
-      const suffix = detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+      const suffix = detail === undefined ? "" : ` (${detail})`;
       return `${entry.source}:${entry.pointer}${path}${range}${byteRange}${digest}${suffix}`;
     })
     .join(", ");
@@ -257,23 +264,22 @@ function formatAuditEvidence(
  * fact state plus a completeness, never a verdict or a score.
  */
 export function formatAuditHuman(result: AuditResult): string {
-  const lines: string[] = [`Audit of ${sanitizeText(result.inputs.run.label)}`];
+  const lines: string[] = [`Audit of ${result.inputs.run.label}`];
   if (result.inputs.checkReports.length > 0)
     lines.push(
       `check reports: ${result.inputs.checkReports
-        .map((r) => `${sanitizeText(r.label)} (${r.state})`)
+        .map((r) => `${r.label} (${r.state})`)
         .join(", ")}`,
     );
   for (const entry of result.facts) {
-    const subject =
-      entry.subject === undefined ? "" : ` [${sanitizeText(entry.subject)}]`;
+    const subject = entry.subject === undefined ? "" : ` [${entry.subject}]`;
     lines.push(
       `${entry.id}${subject}: ${entry.state}; ${entry.completeness}`,
       `   ${entry.reason}`,
       `   evidence: ${formatAuditEvidence(entry.evidence)}`,
     );
   }
-  return lines.join("\n") + "\n";
+  return lines.map(sanitizeText).join("\n") + "\n";
 }
 
 function formatCellEvidence(
@@ -281,8 +287,7 @@ function formatCellEvidence(
 ): string {
   return evidence
     .map((entry) => {
-      const path =
-        entry.path === undefined ? "" : ` '${sanitizeText(entry.path)}'`;
+      const path = entry.path === undefined ? "" : ` '${entry.path}'`;
       const range =
         entry.lines === undefined
           ? ""
@@ -294,7 +299,7 @@ function formatCellEvidence(
       const digest =
         entry.digest === undefined ? "" : ` digest ${entry.digest}`;
       const detail = entry.elementId ?? entry.note;
-      const suffix = detail === undefined ? "" : ` (${sanitizeText(detail)})`;
+      const suffix = detail === undefined ? "" : ` (${detail})`;
       return `${entry.source}:${entry.pointer}${path}${range}${byteRange}${digest}${suffix}`;
     })
     .join(", ");
@@ -310,10 +315,10 @@ function formatCellInput(descriptor: CellRunInputDescriptor): string {
       ? "absent"
       : reason === null
         ? descriptor.observationStatus
-        : `${descriptor.observationStatus} (reason '${sanitizeText(reason)}')`;
+        : `${descriptor.observationStatus} (reason '${reason}')`;
   return (
-    `${sanitizeText(descriptor.label)}: run ${descriptor.runId},` +
-    ` cell ${sanitizeText(cell)}, observation ${observation}`
+    `${descriptor.label}: run ${descriptor.runId},` +
+    ` cell ${cell}, observation ${observation}`
   );
 }
 
@@ -327,13 +332,13 @@ export function formatCellHuman(result: CellReportResult): string {
   const lines: string[] = [];
   if (result.source.command === "report-cell") {
     const run = result.inputs.run;
-    lines.push(`Cell report of ${sanitizeText(run?.label ?? "")}`);
+    lines.push(`Cell report of ${run?.label ?? ""}`);
     if (run !== undefined) lines.push(`  ${formatCellInput(run)}`);
   } else {
     const before = result.inputs.before;
     const after = result.inputs.after;
     lines.push(
-      `Cell comparison of ${sanitizeText(before?.label ?? "")} → ${sanitizeText(after?.label ?? "")}`,
+      `Cell comparison of ${before?.label ?? ""} → ${after?.label ?? ""}`,
     );
     if (before !== undefined)
       lines.push(`  before: ${formatCellInput(before)}`);
@@ -341,17 +346,17 @@ export function formatCellHuman(result: CellReportResult): string {
   }
   if (result.inputs.evaluation !== undefined)
     lines.push(
-      `  evaluation: ${sanitizeText(result.inputs.evaluation.label)} (schema v${result.inputs.evaluation.schemaVersion})`,
+      `  evaluation: ${result.inputs.evaluation.label} (schema v${result.inputs.evaluation.schemaVersion})`,
     );
   for (const entry of result.entries) lines.push(...formatCellEntry(entry));
-  return lines.join("\n") + "\n";
+  return lines.map(sanitizeText).join("\n") + "\n";
 }
 
 function formatCellEntry(entry: CellEntry): string[] {
   const subject = entry.subject === undefined ? "" : ` [${entry.subject}]`;
   return [
     `${entry.id}${subject}: ${entry.state}; ${entry.completeness}`,
-    `   ${sanitizeText(entry.statement)}`,
+    `   ${entry.statement}`,
     `   evidence: ${formatCellEvidence(entry.evidence)}`,
   ];
 }
@@ -369,5 +374,5 @@ export function formatCellsHuman(result: CellsReportResult): string {
   for (const run of result.inputs.runs)
     lines.push(`  ${run.name}: ${formatCellInput(run)}`);
   for (const entry of result.entries) lines.push(...formatCellEntry(entry));
-  return lines.join("\n") + "\n";
+  return lines.map(sanitizeText).join("\n") + "\n";
 }
