@@ -23,7 +23,7 @@
     "./schema/*": "./schema/*"
   },
   "bin": {
-    "gatefold": "./bin/gatefold.js"
+    "gatefold": "bin/gatefold.js"
   },
   "files": [
     "bin",
