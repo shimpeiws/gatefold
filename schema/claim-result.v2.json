@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v2.json",
+  "$id": "https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.v2.json",
   "title": "Gatefold analysis result",
   "description": "Machine-readable claim collection emitted by gatefold --format json. Version 2 adds the source discriminator identifying which input document produced the result.",
   "type": "object",

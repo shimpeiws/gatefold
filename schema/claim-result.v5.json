@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v5.json",
+  "$id": "https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.v5.json",
   "title": "Gatefold run-comparison result",
   "description": "Machine-readable claim collection emitted by gatefold compare-runs --format json. Version 5 describes a two-run-directory A -> B comparison: evidence references name which document of which run they resolve against (trace, artifact manifest, or verified patch bytes), and per-run metadata lives in the inputs map.",
   "type": "object",

@@ -53,6 +53,30 @@ Also confirm in `package.json`:
 - `license` is `MIT` and `publishConfig.access` is `public` (required for the
   first publish of a scoped package)
 
+## 3.5. Visibility decision (recorded, issue #98)
+
+**Decision: the repository is public before the first publish.** A
+private repository would 404 every GitHub link on the npm page, break
+the README hero image (a relative path npm resolves against the
+repository), and block `npm publish --provenance`. Before flipping
+visibility:
+
+- Scan the full history for secrets (`gitleaks git .` — committed
+  dot-paths are only `.github/workflows/ci.yml` and `.gitignore`;
+  `AGENTS.md` and the review-loop notes become public deliberately).
+- Confirm `package.json` `repository.url` is
+  `git+https://github.com/shimpeiws/gatefold.git` so npm renders the
+  README's relative links and `docs/assets/gatefold-top.jpg` against
+  the public repository.
+- Schema `$id` scheme (frozen by the 1.0 contract): resolvable raw URLs
+  `https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.vN.json`.
+  Schema files are frozen append-only artifacts, so the `main`-anchored
+  URL dereferences permanently; `$id` values are identifiers first and
+  never encode a release tag.
+- Publish account check: `npm whoami` returns `shimpeiws` and 2FA is
+  enabled for publish; publish with `--provenance` when supported by
+  the publishing runner.
+
 ## 4. Publish dry-run
 
 ```text

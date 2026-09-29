@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v8.json",
+  "$id": "https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.v8.json",
   "title": "Gatefold run audit result",
   "description": "Machine-readable evidence audit emitted by gatefold audit-run --format json. Version 8 audits one yuurei run directory's stored records: each fact reports a state (verified, inconsistent, unverifiable, not-recorded) and a completeness (complete, partial, unknown) with evidence references into the run's bounded inputs and any supplied external check reports. This is a factual verification report — no task-quality judgement, no rubric verdicts, no aggregate score, and no claim about runtime behavior.",
   "type": "object",
