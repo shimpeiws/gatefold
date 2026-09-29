@@ -27,6 +27,20 @@ and which could not be checked. It emits descriptive claims, each
 with evidence, provenance, and confidence. It does not score or rank
 harnesses.
 
+## Install
+
+Requires Node.js 22.12.0 or later.
+
+```text
+npm install -g @shimpeiws/gatefold    # install the CLI
+npx @shimpeiws/gatefold --help        # or run it without installing
+```
+
+The 1.x line's stability promise — stable commands, schemas, and
+package exports, plus the deprecated `evaluate-run` /
+`compare-evaluations` surface — is defined in
+[the 1.0 contract](docs/1.0-contract.md).
+
 ## CLI usage
 
 ```text
@@ -196,6 +210,14 @@ pnpm ci:all    # typecheck, lint, format check, tests, build
 - [yuurei seeded-run contract](docs/yuurei-seeded-run-contract.md)
 - [Descriptive rules](docs/rules.md)
 - [Release checklist](docs/release-checklist.md)
+- [v1.0.0 release notes](docs/release-notes/1.0.0.md)
+
+## Security
+
+Gatefold treats all inputs as untrusted: it never executes or fetches
+anything named by an input, and every file and stdin read is bounded to
+16 MiB. See [SECURITY.md](SECURITY.md) for supported versions and how to
+report a vulnerability.
 
 ## License
 

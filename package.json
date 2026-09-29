@@ -30,7 +30,8 @@
     "dist",
     "docs",
     "schema",
-    "README.md"
+    "README.md",
+    "SECURITY.md"
   ],
   "engines": {
     "node": ">=22.12.0"

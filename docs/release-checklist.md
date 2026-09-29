@@ -33,7 +33,8 @@ npm pack --dry-run --json
 `prepack` runs `npm run build`, so the tarball always carries a fresh `dist/`
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
-`.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
+`.d.ts` files), `docs/` (including `docs/release-notes/`),
+`SECURITY.md`, `schema/` (`claim-result.v1.json` through
 `claim-result.v10.json`, including `schema/examples/` and the v4
 trace-comparison, v5 run-comparison, v6 evaluation, v7
 evaluation-comparison, v8 audit, v9 cell, v9 cell-comparison, and v10

@@ -385,7 +385,9 @@ describe("gatefold e2e (real process)", () => {
       "schema/examples/valid-run-comparison-result.json",
       "schema/examples/valid-evaluation-result.json",
       "schema/examples/valid-evaluation-comparison-result.json",
+      "docs/release-notes/1.0.0.md",
       "README.md",
+      "SECURITY.md",
       "package.json",
     ]) {
       expect(names, required).toContain(required);
