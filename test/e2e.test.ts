@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import Ajv2020 from "ajv/dist/2020.js";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -84,17 +84,6 @@ const schema = JSON.parse(
   readFileSync(`${root}schema/claim-result.v2.json`, "utf8"),
 );
 const validate = new Ajv2020().compile(schema);
-
-beforeAll(async () => {
-  // bin/gatefold.js runs dist/; build so e2e never tests a stale artifact.
-  const pm = process.env.npm_execpath ?? "pnpm";
-  const isScript = pm.endsWith(".js") || pm.endsWith(".cjs");
-  await execFileAsync(
-    isScript ? process.execPath : pm,
-    [...(isScript ? [pm] : []), "build"],
-    { cwd: root, timeout: 90_000 },
-  );
-}, 120_000);
 
 describe("gatefold e2e (real process)", () => {
   it("valid export exits 0 with schema-valid JSON on stdout", async () => {
@@ -350,7 +339,7 @@ describe("gatefold e2e (real process)", () => {
   it("npm pack --dry-run ships the CLI, dist, docs, and schema only", async () => {
     const { stdout } = await execFileAsync(
       "npm",
-      ["pack", "--dry-run", "--json"],
+      ["pack", "--dry-run", "--json", "--ignore-scripts"],
       { cwd: root, timeout: 60_000 },
     );
     const [{ files }] = JSON.parse(stdout);
@@ -831,7 +820,7 @@ describe("gatefold e2e (real process)", () => {
       try {
         const packed = await execFileAsync(
           "npm",
-          ["pack", "--json", `--pack-destination=${dir}`],
+          ["pack", "--json", `--pack-destination=${dir}`, "--ignore-scripts"],
           { cwd: root, timeout: 120_000 },
         );
         const [{ filename }] = JSON.parse(packed.stdout);
@@ -1043,7 +1032,7 @@ describe("gatefold e2e (real process)", () => {
       try {
         const packed = await execFileAsync(
           "npm",
-          ["pack", "--json", `--pack-destination=${dir}`],
+          ["pack", "--json", `--pack-destination=${dir}`, "--ignore-scripts"],
           { cwd: root, timeout: 120_000 },
         );
         const [{ filename }] = JSON.parse(packed.stdout);

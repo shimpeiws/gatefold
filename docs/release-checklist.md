@@ -147,6 +147,24 @@ records.
 
 ## 6. Tag and publish
 
-Only after steps 1–5 pass: tag the release commit and run the real publish
-from a clean checkout. No manual build is needed first: `prepack` builds
-`dist/` before the tarball is created.
+Only after steps 1–5 pass. Publishing runs in CI
+(`.github/workflows/release.yml`) so the tagged commit is always the
+published commit and the package carries npm provenance:
+
+```text
+git checkout main && git pull          # release commit = the merge of the version-bump PR
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+The workflow re-runs `pnpm ci:all` on the tagged commit, refuses the tag
+when `vX.Y.Z` does not match `package.json` `version`, and runs
+`npm publish --provenance --access public`.
+
+One-time registry setup: on npmjs.com under the package's
+Settings → Trusted Publishing, add GitHub Actions as the publisher with
+repository `shimpeiws/gatefold` and workflow filename `release.yml`.
+With that configured no `NODE_AUTH_TOKEN` secret is needed; without it
+the publish step needs a granular automation token as `NODE_AUTH_TOKEN`.
+Local `npm publish` cannot attach provenance (`provider: null`) — run
+publishes through the tag, not from a checkout.
