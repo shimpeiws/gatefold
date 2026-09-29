@@ -259,6 +259,46 @@ export interface LoadedRunDirectory {
 }
 
 /**
+ * Resolves one fixed-name member of the run directory (`trace.json`,
+ * `artifacts.json`) under the same rule the manifest enforces on artifact
+ * paths: the resolved real path must stay inside the run directory's own
+ * real path and must name a regular file. A missing or unreadable member
+ * is `unreadable-file`; a symlink escape or a non-regular target is
+ * `invalid-shape`, because such a directory is not a trustworthy run
+ * description.
+ */
+async function resolveRunMember(
+  runDir: string,
+  realRunDir: string,
+  name: string,
+  kind: string,
+): Promise<string> {
+  const fullPath = join(runDir, name);
+  let real: string;
+  try {
+    real = await realpath(fullPath);
+  } catch {
+    throw new PflExportError(
+      "unreadable-file",
+      `cannot read ${kind}: ${fullPath}`,
+    );
+  }
+  if (real !== realRunDir && !real.startsWith(realRunDir + sep))
+    throw shapeError(`${name} resolves outside the run directory`);
+  let info;
+  try {
+    info = await stat(real);
+  } catch {
+    throw new PflExportError(
+      "unreadable-file",
+      `cannot read ${kind}: ${fullPath}`,
+    );
+  }
+  if (!info.isFile()) throw shapeError(`${name} does not name a regular file`);
+  return real;
+}
+
+/**
  * Reads the directory argument, its `trace.json` (per the trace contract),
  * and its `artifacts.json` manifest (per the run-directory contract):
  * lexical confinement for every entry, no artifact bytes touched. Shared by
@@ -284,10 +324,17 @@ export async function loadRunDirectory(
     );
   const realRunDir = await realpath(dirPath);
 
-  const trace = await readYuureiTrace(join(dirPath, "trace.json"));
+  const trace = await readYuureiTrace(
+    await resolveRunMember(dirPath, realRunDir, "trace.json", "input file"),
+  );
 
   let manifestText: string;
-  const manifestPath = join(dirPath, "artifacts.json");
+  const manifestPath = await resolveRunMember(
+    dirPath,
+    realRunDir,
+    "artifacts.json",
+    "artifact manifest",
+  );
   try {
     manifestText = (await readBounded(manifestPath)).toString("utf8");
   } catch (error) {

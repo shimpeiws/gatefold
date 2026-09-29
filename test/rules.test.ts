@@ -378,7 +378,7 @@ describe("descriptive rules", () => {
     };
     const result = analyze(parsePflExport(doc, "inline"));
     for (const claim of result.claims) {
-      expect(claim.claim).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
+      expect(claim.claim).not.toMatch(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u);
     }
     const [runtime] = byRule(result, "runtime-described");
     expect(runtime.claim).toContain("\\u001b");

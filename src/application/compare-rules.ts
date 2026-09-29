@@ -10,7 +10,6 @@ import type {
 import type {
   ComparisonView,
   ElementReconciliation,
-  FindingReconciliation,
   RelationReconciliation,
 } from "./reconcile.js";
 

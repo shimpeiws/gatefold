@@ -6,21 +6,7 @@ export { compareDocuments } from "./application/compare.js";
 export { compareEvaluations } from "./application/compare-evaluations.js";
 export { compareRuns } from "./application/compare-runs.js";
 export { compareTraces } from "./application/compare-traces.js";
-export {
-  bindCheckReport,
-  loadCheckReports,
-  type BoundCheckReport,
-  type BoundVerdict,
-  type LoadedCheckReport,
-} from "./application/check-report-binding.js";
-export {
-  AFTER_SOURCES,
-  BEFORE_SOURCES,
-  evaluateCriterion,
-  evaluateRun,
-  SINGLE_SOURCES,
-  type SideSources,
-} from "./application/evaluate-run.js";
+export { evaluateRun } from "./application/evaluate-run.js";
 export {
   AUDIT_SCHEMA_VERSION,
   type AuditCheckReportDescriptor,
@@ -119,7 +105,6 @@ export type {
 export {
   isSupportedPflVersion,
   PflExportError,
-  parsePflExport,
   readPflExport,
   readPflExportStdin,
   STDIN_SOURCE,
@@ -147,14 +132,6 @@ export type {
   PflSnapshotResolved,
 } from "./input/pfl-export.js";
 export {
-  parsePatchDiff,
-  PatchParseError,
-  type ParsedPatch,
-  type PatchContentLine,
-  type PatchFile,
-} from "./input/yuurei-patch.js";
-export {
-  PATCH_ARTIFACT_PATH,
   readYuureiRun,
   type ArtifactState,
   type ManifestEntry,
@@ -162,19 +139,11 @@ export {
   type YuureiRun,
 } from "./input/yuurei-run.js";
 export {
-  parseSeededPatchDiff,
-  type ParsedSeededPatch,
-  type SeededChangeKind,
-  type SeededPatchContentLine,
-  type SeededPatchFile,
-} from "./input/yuurei-seeded-patch.js";
-export {
   readAuditedRun,
   type AuditedArtifactRecord,
   type AuditedRun,
 } from "./input/yuurei-audit-run.js";
 export {
-  OBSERVATION_EXPORT_PATH,
   readCellRun,
   type CellObservation,
   type CellRun,
@@ -185,11 +154,7 @@ export {
   type SuppliedEvaluation,
 } from "./input/cell-evaluation.js";
 export {
-  BASELINE_MANIFEST_ARTIFACT_PATH,
-  CHANGES_ARTIFACT_PATH,
-  normalizeResultText,
   readEvaluatedRun,
-  RESULT_ARTIFACT_PATH,
   type EvaluatedRun,
   type FinalResultState,
   type OutputFile,
@@ -198,7 +163,6 @@ export {
 } from "./input/yuurei-seeded-run.js";
 export {
   CHECK_REPORT_VERSION,
-  parseCheckReport,
   readCheckReport,
   type CheckReport,
   type CheckResultRow,
@@ -206,7 +170,6 @@ export {
 } from "./input/check-report.js";
 export {
   EXTERNAL_CHECK_KIND,
-  parseTaskSpec,
   readTaskSpec,
   TASK_SPEC_VERSION,
   type CriterionKind,
@@ -214,7 +177,6 @@ export {
   type TaskSpec,
 } from "./input/task-spec.js";
 export {
-  parseYuureiTrace,
   readYuureiTrace,
   readYuureiTraceStdin,
   TRACE_SCHEMA_VERSION,

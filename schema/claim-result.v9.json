@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v9.json",
+  "$id": "https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.v9.json",
   "title": "Gatefold cell report",
   "description": "Machine-readable cell report emitted by gatefold report-cell or compare-cells --format json. Version 9 describes one yuurei cell — its trace and manifest records, the verified pre-run pfl export the observation record declares, the v0.8 audit facts, and an optional supplied evaluation — or a directional A -> B account of two compatible cells. Every entry names its evidence lane and carries a state and a completeness. This is a descriptive evidence report: no causal attribution, no ranking, and no new quality judgement.",
   "type": "object",

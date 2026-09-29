@@ -33,7 +33,8 @@ npm pack --dry-run --json
 `prepack` runs `npm run build`, so the tarball always carries a fresh `dist/`
 even from a clean checkout. Confirm the tarball contains `LICENSE`,
 `bin/gatefold.js`, `dist/` (compiled output and
-`.d.ts` files), `docs/`, `schema/` (`claim-result.v1.json` through
+`.d.ts` files), `docs/` (including `docs/release-notes/`),
+`SECURITY.md`, `schema/` (`claim-result.v1.json` through
 `claim-result.v10.json`, including `schema/examples/` and the v4
 trace-comparison, v5 run-comparison, v6 evaluation, v7
 evaluation-comparison, v8 audit, v9 cell, v9 cell-comparison, and v10
@@ -51,6 +52,30 @@ Also confirm in `package.json`:
   22.12 is the minimum the locked dev tooling supports)
 - `license` is `MIT` and `publishConfig.access` is `public` (required for the
   first publish of a scoped package)
+
+## 3.5. Visibility decision (recorded, issue #98)
+
+**Decision: the repository is public before the first publish.** A
+private repository would 404 every GitHub link on the npm page, break
+the README hero image (a relative path npm resolves against the
+repository), and block `npm publish --provenance`. Before flipping
+visibility:
+
+- Scan the full history for secrets (`gitleaks git .` — committed
+  dot-paths are only `.github/workflows/ci.yml` and `.gitignore`;
+  `AGENTS.md` and the review-loop notes become public deliberately).
+- Confirm `package.json` `repository.url` is
+  `git+https://github.com/shimpeiws/gatefold.git` so npm renders the
+  README's relative links and `docs/assets/gatefold-top.jpg` against
+  the public repository.
+- Schema `$id` scheme (frozen by the 1.0 contract): resolvable raw URLs
+  `https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.vN.json`.
+  Schema files are frozen append-only artifacts, so the `main`-anchored
+  URL dereferences permanently; `$id` values are identifiers first and
+  never encode a release tag.
+- Publish account check: `npm whoami` returns `shimpeiws` and 2FA is
+  enabled for publish; publish with `--provenance` when supported by
+  the publishing runner.
 
 ## 4. Publish dry-run
 

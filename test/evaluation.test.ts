@@ -10,6 +10,7 @@ import { compareEvaluations } from "../src/application/compare-evaluations.js";
 import { loadCheckReports } from "../src/application/check-report-binding.js";
 import { evaluateRun } from "../src/application/evaluate-run.js";
 import { parseTaskSpec, readTaskSpec } from "../src/input/task-spec.js";
+import { PflExportError } from "../src/input/pfl-export.js";
 import {
   parseSeededPatchDiff,
   PatchParseError,
@@ -723,6 +724,34 @@ describe("task spec parsing", () => {
       "test",
     );
     expect(spec.baselineDigest).toBeUndefined();
+  });
+
+  it("rejects an equals value nested beyond the reader's depth cap", () => {
+    // jsonEquals recurses on this value; a container beyond 12 nesting
+    // levels must fail as an input error (invalid-shape), not a RangeError
+    // (internal error).
+    const nested = (levels: number): unknown =>
+      levels === 0 ? "leaf" : { a: nested(levels - 1) };
+    const spec = (equals: unknown) => ({
+      specVersion: 1,
+      rubricId: "r",
+      task: { digest: "sha256:t" },
+      criteria: [
+        {
+          id: "x",
+          kind: "final-result-json-field",
+          pointer: "/a",
+          equals,
+        },
+      ],
+    });
+    expect(() => parseTaskSpec(spec(nested(13)), "test")).not.toThrow();
+    expect(() => parseTaskSpec(spec(nested(14)), "test")).toThrowError(
+      /nested no deeper/,
+    );
+    expect(() => parseTaskSpec(spec(nested(14)), "test")).toThrowError(
+      PflExportError,
+    );
   });
 });
 

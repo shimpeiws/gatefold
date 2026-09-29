@@ -1,4 +1,9 @@
-import { InputTooLargeError, MAX_INPUT_BYTES, readBounded } from "./bounded.js";
+import {
+  InputTooLargeError,
+  MAX_INPUT_BYTES,
+  NotRegularFileError,
+  readBounded,
+} from "./bounded.js";
 import { PflExportError } from "./pfl-export.js";
 
 /**
@@ -179,6 +184,11 @@ export async function readCheckReport(path: string): Promise<CheckReport> {
       throw new PflExportError(
         "invalid-shape",
         `check report exceeds the ${MAX_INPUT_BYTES}-byte limit: ${path}`,
+      );
+    if (error instanceof NotRegularFileError)
+      throw new PflExportError(
+        "unreadable-file",
+        `check report is not a regular file: ${path}`,
       );
     throw new PflExportError(
       "unreadable-file",

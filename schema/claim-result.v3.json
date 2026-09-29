@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v3.json",
+  "$id": "https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.v3.json",
   "title": "Gatefold comparison result",
   "description": "Machine-readable claim collection emitted by gatefold compare --format json. Version 3 describes a three-document A -> B comparison: every evidence reference names which input document its pointer resolves against, and per-document metadata moves to the inputs map.",
   "type": "object",

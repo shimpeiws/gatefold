@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v4.json",
+  "$id": "https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.v4.json",
   "title": "Gatefold trace-comparison result",
   "description": "Machine-readable claim collection emitted by gatefold compare-traces --format json. Version 4 describes a two-trace A -> B comparison: every evidence reference names which input trace its pointer resolves against, and per-trace metadata lives in the inputs map.",
   "type": "object",

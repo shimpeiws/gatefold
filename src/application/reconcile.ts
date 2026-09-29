@@ -746,14 +746,14 @@ export function reconcileDocuments(
   // at most one removed finding. Both the queue and the removed indexes are
   // sorted by message before pairing so the assignment cannot depend on the
   // diff's array order; `index` breaks ties between identical messages.
-  const addedFindingQueues = new Map<string, number[]>();
+  const addedFindingIndexes = new Map<string, number[]>();
   diff.data.findings.added.forEach((finding, index) => {
     const key = JSON.stringify([finding.rule, [...finding.elementIds].sort()]);
-    const queue = addedFindingQueues.get(key);
-    if (queue === undefined) addedFindingQueues.set(key, [index]);
+    const queue = addedFindingIndexes.get(key);
+    if (queue === undefined) addedFindingIndexes.set(key, [index]);
     else queue.push(index);
   });
-  for (const queue of addedFindingQueues.values())
+  for (const queue of addedFindingIndexes.values())
     queue.sort(
       (a, b) =>
         byString(
@@ -761,6 +761,38 @@ export function reconcileDocuments(
           diff.data.findings.added[b].message,
         ) || a - b,
     );
+  // Each queue's sorted order groups equal messages; linking the groups
+  // lets a removed finding take the first added entry with a differing
+  // message (the head group, or the one after it when the head shares the
+  // message) without rescanning and splicing the queue every time.
+  interface FindingGroup {
+    message: string;
+    items: number[];
+    head: number;
+    next: FindingGroup | null;
+  }
+  const addedFindingQueues = new Map<string, FindingGroup | null>();
+  for (const [key, queue] of addedFindingIndexes) {
+    let head: FindingGroup | null = null;
+    let tail: FindingGroup | null = null;
+    for (const index of queue) {
+      const message = diff.data.findings.added[index].message;
+      if (tail !== null && tail.message === message) {
+        tail.items.push(index);
+      } else {
+        const group: FindingGroup = {
+          message,
+          items: [index],
+          head: 0,
+          next: null,
+        };
+        if (tail !== null) tail.next = group;
+        else head = group;
+        tail = group;
+      }
+    }
+    addedFindingQueues.set(key, head);
+  }
   const counterpartOf = new Map<number, number>();
   const removedIndexes = diff.data.findings.removed
     .map((_, index) => index)
@@ -773,14 +805,16 @@ export function reconcileDocuments(
     );
   for (const index of removedIndexes) {
     const finding = diff.data.findings.removed[index];
-    const queue =
-      addedFindingQueues.get(
-        JSON.stringify([finding.rule, [...finding.elementIds].sort()]),
-      ) ?? [];
-    const position = queue.findIndex(
-      (i) => diff.data.findings.added[i].message !== finding.message,
-    );
-    if (position !== -1) counterpartOf.set(index, queue.splice(position, 1)[0]);
+    const key = JSON.stringify([finding.rule, [...finding.elementIds].sort()]);
+    const head = addedFindingQueues.get(key) ?? null;
+    let pick = head;
+    if (pick !== null && pick.message === finding.message) pick = pick.next;
+    if (pick === null) continue;
+    counterpartOf.set(index, pick.items[pick.head++]);
+    if (pick.head === pick.items.length) {
+      if (pick === head) addedFindingQueues.set(key, pick.next);
+      else head!.next = pick.next;
+    }
   }
   // Finding presence is checked on the full identity (rule, message,
   // element ids): a reworded message is a different finding, not a

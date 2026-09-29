@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shimpeiws/gatefold/schema/claim-result.v10.json",
+  "$id": "https://raw.githubusercontent.com/shimpeiws/gatefold/main/schema/claim-result.v10.json",
   "title": "Gatefold repeated-cell report",
   "description": "Machine-readable repeated-cell report emitted by gatefold report-cells --format json. Version 10 describes a bounded set of comparable yuurei cells: every supplied run's trace/manifest/export/audit lanes under a runN subject, plus a set lane stating which configuration records each run observed, which differed, and which could not be checked — counts over eligible (bound-export) observations only. This is a descriptive evidence report: no stability verdict, no causal attribution, no ranking, and no generalization beyond the supplied runs.",
   "type": "object",

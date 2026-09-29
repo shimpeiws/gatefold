@@ -19,7 +19,9 @@ ignored, a `trace show --json` line is also an acceptable trace (its added
 The document reaches Gatefold as a file argument or on standard input.
 Stdin is an additional transport for the same document, not a new document
 kind: identical byte limit, JSON validation, and contract checks apply, and
-the result records `<stdin>` as the input label.
+the result records `<stdin>` as the input label. A file argument must name
+a regular file; a FIFO, device, or directory is rejected with
+`unreadable-file`, so piped input always goes through `-`.
 
 Gatefold reads only the trace document itself. It never opens the run
 directory the trace came from, never reads `stdout.log`, `stderr.log`,
@@ -148,8 +150,8 @@ parent object (`/model`, `/requested_cell` when present, or `""`) with a
 ## Limits
 
 yuurei traces are untrusted input, so the reader enforces resource ceilings:
-input documents larger than 16 MiB (measured in bytes; regular files are
-rejected by size before reading, and pipes are cut off at the limit), more
+input documents larger than 16 MiB (measured in bytes; files are
+rejected by size before reading), more
 than 10,000 `artifacts` items, more than 10,000 `diagnostics` entries, more
 than 1,000 `usage` keys, more than 1,000 `definition.cli_overrides` entries,
 more than 1,000 `execution_options.runtime` keys, or any scalar string

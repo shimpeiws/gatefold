@@ -16,6 +16,10 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
+    "./internal": {
+      "types": "./dist/src/internal.d.ts",
+      "default": "./dist/src/internal.js"
+    },
     "./schema/*": "./schema/*"
   },
   "bin": {
@@ -26,7 +30,8 @@
     "dist",
     "docs",
     "schema",
-    "README.md"
+    "README.md",
+    "SECURITY.md"
   ],
   "engines": {
     "node": ">=22.12.0"
@@ -49,6 +54,6 @@
     "oxfmt": "^0.14.0",
     "oxlint": "^1.0.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.11"
   }
 }

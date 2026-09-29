@@ -9,6 +9,8 @@
  * write and read paths so a record pfl would never persist is rejected
  * here as well.
  */
+import { UNSAFE_CHARACTER_CLASS } from "../domain/sanitize.js";
+
 export const SOURCE_PROJECT_KINDS = ["git-remote", "local-path"] as const;
 
 export type SourceProjectKind = (typeof SOURCE_PROJECT_KINDS)[number];
@@ -33,10 +35,13 @@ export const SOURCE_PROJECT_HEAD_MAX_CHARS = 128;
 /**
  * Asserted free text must not carry C0/C1 controls, DEL, or invisible
  * formatting characters — the values are echoed in reports, where escapes
- * could inject terminal sequences or reorder output.
+ * could inject terminal sequences or reorder output. The class is shared
+ * with domain/sanitize.ts so validation and display escaping agree.
  */
-export const SOURCE_PROJECT_CONTROL_CHARS_PATTERN =
-  /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+export const SOURCE_PROJECT_CONTROL_CHARS_PATTERN = new RegExp(
+  `[${UNSAFE_CHARACTER_CLASS}]`,
+  "u",
+);
 
 /** The only declaration contract version pfl writes and reads. */
 export const SOURCE_PROJECT_CONTRACT_VERSION = 1;
