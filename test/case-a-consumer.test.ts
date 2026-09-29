@@ -184,7 +184,7 @@ beforeAll(async () => {
   workDir = mkdtempSync(join(tmpdir(), "gatefold-casea-pack-"));
   const { stdout: packOut } = await execFileAsync(
     "npm",
-    ["pack", "--pack-destination", workDir],
+    ["pack", "--pack-destination", workDir, "--ignore-scripts"],
     { cwd: root, timeout: 180_000 },
   );
   const filename = packOut.trim().split("\n").pop()!;
