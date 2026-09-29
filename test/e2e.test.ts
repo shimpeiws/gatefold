@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import Ajv2020 from "ajv/dist/2020.js";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -342,6 +342,7 @@ describe("gatefold e2e (real process)", () => {
     expect(pkg.publishConfig.access).toBe("public");
     expect(pkg.scripts.prepack).toBe("npm run build");
     expect(pkg.exports["."].default).toBe("./dist/src/index.js");
+    expect(pkg.exports["./internal"].default).toBe("./dist/src/internal.js");
     const binSource = readFileSync(`${root}bin/gatefold.js`, "utf8");
     expect(binSource.startsWith("#!/usr/bin/env node")).toBe(true);
   });
@@ -360,6 +361,8 @@ describe("gatefold e2e (real process)", () => {
       "dist/src/cli.js",
       "dist/src/index.js",
       "dist/src/index.d.ts",
+      "dist/src/internal.js",
+      "dist/src/internal.d.ts",
       "docs/overview.md",
       "docs/release-checklist.md",
       "docs/v0.3-scope.md",
@@ -1024,6 +1027,91 @@ describe("gatefold e2e (real process)", () => {
         ).toBe(true);
         expect(cellsReport.schemaVersion).toBe(10);
         expect(cellsReport.entries.length).toBeGreaterThan(0);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it(
+    "frozen export surface: packed dist/src/index.js exports exactly the documented names",
+    { timeout: 180_000 },
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "gatefold-exports-"));
+      try {
+        const packed = await execFileAsync(
+          "npm",
+          ["pack", "--json", `--pack-destination=${dir}`],
+          { cwd: root, timeout: 120_000 },
+        );
+        const [{ filename }] = JSON.parse(packed.stdout);
+        await execFileAsync("tar", ["-xzf", join(dir, filename), "-C", dir]);
+        const index = await import(
+          pathToFileURL(join(dir, "package", "dist", "src", "index.js")).href
+        );
+        const internal = await import(
+          pathToFileURL(join(dir, "package", "dist", "src", "internal.js")).href
+        );
+        // Frozen 1.0 root surface (docs/1.0-contract.md "Package and module
+        // surface"). Adding a name is a minor; removing one is a major.
+        // Update this list and the contract together.
+        expect(Object.keys(index).sort()).toEqual([
+          "AUDIT_SCHEMA_VERSION",
+          "CELLS_MAX_RUNS",
+          "CELLS_SCHEMA_VERSION",
+          "CELL_SCHEMA_VERSION",
+          "CHECK_REPORT_VERSION",
+          "CLAIM_SCHEMA_VERSION",
+          "COMPARISON_SCHEMA_VERSION",
+          "EVALUATION_COMPARISON_SCHEMA_VERSION",
+          "EVALUATION_SCHEMA_VERSION",
+          "EXTERNAL_CHECK_KIND",
+          "PflExportError",
+          "RUN_COMPARISON_SCHEMA_VERSION",
+          "STDIN_SOURCE",
+          "TASK_SPEC_VERSION",
+          "TRACE_COMPARISON_SCHEMA_VERSION",
+          "TRACE_SCHEMA_VERSION",
+          "analyze",
+          "auditRun",
+          "compareCells",
+          "compareDocuments",
+          "compareEvaluations",
+          "compareRuns",
+          "compareTraces",
+          "evaluateRun",
+          "formatAuditHuman",
+          "formatCellHuman",
+          "formatCellsHuman",
+          "formatComparisonHuman",
+          "formatEvaluationComparisonHuman",
+          "formatEvaluationHuman",
+          "formatHuman",
+          "formatJson",
+          "formatRunComparisonHuman",
+          "formatTraceComparisonHuman",
+          "isSupportedPflVersion",
+          "readAuditedRun",
+          "readCellEvaluation",
+          "readCellRun",
+          "readCheckReport",
+          "readEvaluatedRun",
+          "readPflExport",
+          "readPflExportStdin",
+          "readTaskSpec",
+          "readYuureiRun",
+          "readYuureiTrace",
+          "readYuureiTraceStdin",
+          "reportCell",
+          "reportCells",
+        ]);
+        expect(Object.keys(internal).length).toBeGreaterThan(0);
+        for (const name of Object.keys(internal)) {
+          expect(
+            index[name],
+            `${name} must not leak into the stable root surface`,
+          ).toBeUndefined();
+        }
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
