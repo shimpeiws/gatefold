@@ -271,6 +271,7 @@ async function resolveRunMember(
   runDir: string,
   realRunDir: string,
   name: string,
+  kind: string,
 ): Promise<string> {
   const fullPath = join(runDir, name);
   let real: string;
@@ -279,7 +280,7 @@ async function resolveRunMember(
   } catch {
     throw new PflExportError(
       "unreadable-file",
-      `cannot read ${name}: ${fullPath}`,
+      `cannot read ${kind}: ${fullPath}`,
     );
   }
   if (real !== realRunDir && !real.startsWith(realRunDir + sep))
@@ -290,7 +291,7 @@ async function resolveRunMember(
   } catch {
     throw new PflExportError(
       "unreadable-file",
-      `cannot read ${name}: ${fullPath}`,
+      `cannot read ${kind}: ${fullPath}`,
     );
   }
   if (!info.isFile()) throw shapeError(`${name} does not name a regular file`);
@@ -324,7 +325,7 @@ export async function loadRunDirectory(
   const realRunDir = await realpath(dirPath);
 
   const trace = await readYuureiTrace(
-    await resolveRunMember(dirPath, realRunDir, "trace.json"),
+    await resolveRunMember(dirPath, realRunDir, "trace.json", "input file"),
   );
 
   let manifestText: string;
@@ -332,6 +333,7 @@ export async function loadRunDirectory(
     dirPath,
     realRunDir,
     "artifacts.json",
+    "artifact manifest",
   );
   try {
     manifestText = (await readBounded(manifestPath)).toString("utf8");
