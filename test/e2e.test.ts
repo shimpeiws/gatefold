@@ -336,7 +336,7 @@ describe("gatefold e2e (real process)", () => {
   it("package metadata exposes the gatefold binary and library entry", () => {
     const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8"));
     expect(pkg.name).toBe("@shimpeiws/gatefold");
-    expect(pkg.bin.gatefold).toBe("./bin/gatefold.js");
+    expect(pkg.bin.gatefold).toBe("bin/gatefold.js");
     expect(pkg.engines.node).toBe(">=22.12.0");
     expect(pkg.license).toBe("MIT");
     expect(pkg.publishConfig.access).toBe("public");
