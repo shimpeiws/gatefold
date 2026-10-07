@@ -8,3 +8,6 @@ coverage/
 
 # graft local graph cache (regenerable)
 /graft/
+
+# Per-developer Devin hook wiring (installed locally, not committed)
+.devin/
